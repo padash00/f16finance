@@ -51,6 +51,9 @@ import { readApiCache, writeApiCache } from '@/lib/client/use-api-cache'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { downloadReportPdf } from '@/lib/client/download-pdf'
 import type { BalanceAnchor, CashflowReport, ChannelFlows, MonthProjection, UpcomingPayment } from '@/lib/domain/cashflow-report'
+import { SortableTh } from '@/components/ui/sortable-th'
+import { useTableSort } from '@/lib/client/use-table-sort'
+import type { SortColumns, SortState } from '@/lib/core/table-sort'
 
 type Report = CashflowReport & { balanceAvailable: boolean }
 type Outlook = { today: string; payments: UpcomingPayment[]; projection: MonthProjection | null; balanceToday: { cash: number; cashless: number; total: number } | null; anchor: BalanceAnchor | null }
@@ -95,10 +98,24 @@ const tone = (v: number) => (Math.round(v) < 0 ? 'text-rose-600 dark:text-rose-4
 const pct = (cur: number, prev: number) => (prev ? ((cur - prev) / Math.abs(prev)) * 100 : null)
 
 const CHART_TOOLTIP = { background: 'var(--popover)', color: 'var(--popover-foreground)', border: '1px solid var(--border)', borderRadius: 10, fontSize: 12 }
-const th = 'px-3 py-2 text-left text-xs font-medium text-muted-foreground'
-const thr = 'px-3 py-2 text-right text-xs font-medium text-muted-foreground'
 const td = 'px-3 py-2 text-sm tabular-nums'
 const tdr = 'px-3 py-2 text-right text-sm tabular-nums'
+// Заголовки сортировки: общий класс без text-left/right — выравнивание задаёт align
+const ths = 'px-3 py-2 text-xs font-medium text-muted-foreground'
+
+// ─── Сортировка таблиц ──────────────────────────────────────────────────────
+
+type DaySortKey = 'day' | 'cashIn' | 'cashOut' | 'cashlessIn' | 'cashlessOut' | 'cashEnd' | 'cashlessEnd'
+type PaymentSortKey = 'date' | 'name' | 'company' | 'method' | 'amount'
+type PointSortKey = 'name' | 'in' | 'out' | 'net' | 'delta' | 'cashNet' | 'cashlessNet'
+type CategorySortKey = 'name' | 'activity' | 'amount' | 'cash' | 'cashless' | 'previous' | 'delta'
+type LargeExpenseSortKey = 'date' | 'company' | 'category' | 'payee' | 'amount'
+
+const DAY_SORT_INITIAL: SortState<DaySortKey> = { key: 'day', dir: 'asc' }
+const PAYMENT_SORT_INITIAL: SortState<PaymentSortKey> = { key: 'date', dir: 'asc' }
+const POINT_SORT_INITIAL: SortState<PointSortKey> = { key: 'net', dir: 'desc' }
+const CATEGORY_SORT_INITIAL: SortState<CategorySortKey> = { key: 'amount', dir: 'desc' }
+const LARGE_EXPENSE_SORT_INITIAL: SortState<LargeExpenseSortKey> = { key: 'amount', dir: 'desc' }
 
 // ─── Мелкие компоненты ──────────────────────────────────────────────────────
 
@@ -601,6 +618,24 @@ function ChannelCard({ title, icon, flow, previous, start, end }: { title: strin
 
 function ChannelsTab({ report }: { report: Report }) {
   const b = report.balance
+  const daySortColumns = useMemo<SortColumns<Report['days'][number], DaySortKey>>(
+    () => ({
+      day: { get: (d) => d.date, defaultDir: 'desc' },
+      cashIn: { get: (d) => d.cashIn || null, defaultDir: 'desc' },
+      cashOut: { get: (d) => d.cashOut || null, defaultDir: 'desc' },
+      cashlessIn: { get: (d) => d.cashlessIn || null, defaultDir: 'desc' },
+      cashlessOut: { get: (d) => d.cashlessOut || null, defaultDir: 'desc' },
+      cashEnd: { get: (d) => (d.onHand ? d.onHand.cash : d.cashIn - d.cashOut), defaultDir: 'desc' },
+      cashlessEnd: { get: (d) => (d.onHand ? d.onHand.cashless : d.cashlessIn - d.cashlessOut), defaultDir: 'desc' },
+    }),
+    [],
+  )
+  const { sort: daySort, toggle: toggleDaySort, sortedRows: sortedDays } = useTableSort<Report['days'][number], DaySortKey>({
+    storageKey: 'cashflow.daysSort',
+    columns: daySortColumns,
+    initial: DAY_SORT_INITIAL,
+    rows: report.days,
+  })
   const chartData = report.days.map((d) => ({
     label: shortDay(d.date),
     'Наличные': Math.round(d.onHand ? d.onHand.cash : 0),
@@ -659,17 +694,17 @@ function ChannelsTab({ report }: { report: Report }) {
           <table className="w-full min-w-[760px]">
             <thead className="bg-surface-muted">
               <tr>
-                <th className={th}>День</th>
-                <th className={thr}>Нал пришло</th>
-                <th className={thr}>Нал ушло</th>
-                <th className={thr}>Безнал пришло</th>
-                <th className={thr}>Безнал ушло</th>
-                <th className={thr}>{b ? 'Остаток нал' : 'Поток нал'}</th>
-                <th className={thr}>{b ? 'Остаток безнал' : 'Поток безнал'}</th>
+                <SortableTh label="День" sortKey="day" sort={daySort} onSort={toggleDaySort} className={ths} />
+                <SortableTh label="Нал пришло" sortKey="cashIn" sort={daySort} onSort={toggleDaySort} align="right" className={ths} />
+                <SortableTh label="Нал ушло" sortKey="cashOut" sort={daySort} onSort={toggleDaySort} align="right" className={ths} />
+                <SortableTh label="Безнал пришло" sortKey="cashlessIn" sort={daySort} onSort={toggleDaySort} align="right" className={ths} />
+                <SortableTh label="Безнал ушло" sortKey="cashlessOut" sort={daySort} onSort={toggleDaySort} align="right" className={ths} />
+                <SortableTh label={b ? 'Остаток нал' : 'Поток нал'} sortKey="cashEnd" sort={daySort} onSort={toggleDaySort} align="right" className={ths} />
+                <SortableTh label={b ? 'Остаток безнал' : 'Поток безнал'} sortKey="cashlessEnd" sort={daySort} onSort={toggleDaySort} align="right" className={ths} />
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {report.days.map((d) => (
+              {sortedDays.map((d) => (
                 <tr key={d.date}>
                   <td className={td}>{dayLabel(d.date)}</td>
                   <td className={tdr}>{money(d.cashIn)}</td>
@@ -691,6 +726,25 @@ function ChannelsTab({ report }: { report: Report }) {
 // ─── Платежи ────────────────────────────────────────────────────────────────
 
 function PaymentsTab({ outlook, loading, onReload, onSetBalance }: { outlook: Outlook | null; loading: boolean; onReload: () => void; onSetBalance: () => void }) {
+  // Хуки — до ранних выходов: React требует одинакового порядка на каждый рендер
+  const paymentSortColumns = useMemo<SortColumns<UpcomingPayment, PaymentSortKey>>(
+    () => ({
+      date: { get: (p) => p.date, defaultDir: 'desc' },
+      name: { get: (p) => p.name || null },
+      company: { get: (p) => p.company || null },
+      method: { get: (p) => (p.cashless ? 'Безналичный' : 'Наличные') },
+      amount: { get: (p) => p.amount || null, defaultDir: 'desc' },
+    }),
+    [],
+  )
+  const paymentRows = useMemo(() => outlook?.payments || [], [outlook?.payments])
+  const { sort: paymentSort, toggle: togglePaymentSort, sortedRows: sortedPayments } = useTableSort<UpcomingPayment, PaymentSortKey>({
+    storageKey: 'cashflow.paymentsSort',
+    columns: paymentSortColumns,
+    initial: PAYMENT_SORT_INITIAL,
+    rows: paymentRows,
+  })
+
   if (loading && !outlook) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-20 text-muted-foreground">
@@ -786,15 +840,15 @@ function PaymentsTab({ outlook, loading, onReload, onSetBalance }: { outlook: Ou
             <table className="w-full min-w-[640px]">
               <thead className="bg-surface-muted">
                 <tr>
-                  <th className={th}>Дата</th>
-                  <th className={th}>Платёж</th>
-                  <th className={th}>Точка</th>
-                  <th className={th}>Как платим</th>
-                  <th className={thr}>Сумма</th>
+                  <SortableTh label="Дата" sortKey="date" sort={paymentSort} onSort={togglePaymentSort} className={ths} />
+                  <SortableTh label="Платёж" sortKey="name" sort={paymentSort} onSort={togglePaymentSort} className={ths} />
+                  <SortableTh label="Точка" sortKey="company" sort={paymentSort} onSort={togglePaymentSort} className={ths} />
+                  <SortableTh label="Как платим" sortKey="method" sort={paymentSort} onSort={togglePaymentSort} className={ths} />
+                  <SortableTh label="Сумма" sortKey="amount" sort={paymentSort} onSort={togglePaymentSort} align="right" className={ths} />
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {outlook.payments.map((p) => (
+                {sortedPayments.map((p) => (
                   <tr key={`${p.templateId}-${p.date}`}>
                     <td className={td}>{dayLabel(p.date)}</td>
                     <td className={`${td} font-medium`}>
@@ -818,23 +872,41 @@ function PaymentsTab({ outlook, loading, onReload, onSetBalance }: { outlook: Ou
 // ─── Точки ──────────────────────────────────────────────────────────────────
 
 function PointsTab({ report }: { report: Report }) {
+  const pointSortColumns = useMemo<SortColumns<Report['companies'][number], PointSortKey>>(
+    () => ({
+      name: { get: (c) => c.name || null },
+      in: { get: (c) => c.flows.total.in || null, defaultDir: 'desc' },
+      out: { get: (c) => c.flows.total.out || null, defaultDir: 'desc' },
+      net: { get: (c) => c.flows.total.net, defaultDir: 'desc' },
+      delta: { get: (c) => (c.previousNet ? c.flows.total.net - c.previousNet : null), defaultDir: 'desc' },
+      cashNet: { get: (c) => c.flows.cash.net, defaultDir: 'desc' },
+      cashlessNet: { get: (c) => c.flows.cashless.net, defaultDir: 'desc' },
+    }),
+    [],
+  )
+  const { sort: pointSort, toggle: togglePointSort, sortedRows: sortedPoints } = useTableSort<Report['companies'][number], PointSortKey>({
+    storageKey: 'cashflow.pointsSort',
+    columns: pointSortColumns,
+    initial: POINT_SORT_INITIAL,
+    rows: report.companies,
+  })
   return (
     <Section title="Точки" subtitle="Поток каждой точки за период. Изменение — к прошлому периоду такой же длины.">
       <div className="overflow-x-auto rounded-xl border border-border">
         <table className="w-full min-w-[820px]">
           <thead className="bg-surface-muted">
             <tr>
-              <th className={th}>Точка</th>
-              <th className={thr}>Пришло</th>
-              <th className={thr}>Ушло</th>
-              <th className={thr}>Поток</th>
-              <th className={thr}>Изм.</th>
-              <th className={thr}>Поток нал</th>
-              <th className={thr}>Поток безнал</th>
+              <SortableTh label="Точка" sortKey="name" sort={pointSort} onSort={togglePointSort} className={ths} />
+              <SortableTh label="Пришло" sortKey="in" sort={pointSort} onSort={togglePointSort} align="right" className={ths} />
+              <SortableTh label="Ушло" sortKey="out" sort={pointSort} onSort={togglePointSort} align="right" className={ths} />
+              <SortableTh label="Поток" sortKey="net" sort={pointSort} onSort={togglePointSort} align="right" className={ths} />
+              <SortableTh label="Изм." sortKey="delta" sort={pointSort} onSort={togglePointSort} align="right" className={ths} />
+              <SortableTh label="Поток нал" sortKey="cashNet" sort={pointSort} onSort={togglePointSort} align="right" className={ths} />
+              <SortableTh label="Поток безнал" sortKey="cashlessNet" sort={pointSort} onSort={togglePointSort} align="right" className={ths} />
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {report.companies.map((c) => (
+            {sortedPoints.map((c) => (
               <tr key={c.id} className={c.inTotals ? '' : 'text-muted-foreground'}>
                 <td className={`${td} font-medium`}>
                   {c.name}
@@ -859,6 +931,41 @@ function PointsTab({ report }: { report: Report }) {
 
 function ExpensesTab({ report }: { report: Report }) {
   const labelOf = Object.fromEntries(report.activities.map((a) => [a.key, a.label]))
+  const categorySortColumns = useMemo<SortColumns<Report['categories'][number], CategorySortKey>>(
+    () => ({
+      name: { get: (c) => c.name || null },
+      activity: { get: (c) => c.activity || null },
+      amount: { get: (c) => c.amount || null, defaultDir: 'desc' },
+      cash: { get: (c) => c.cash || null, defaultDir: 'desc' },
+      cashless: { get: (c) => c.cashless || null, defaultDir: 'desc' },
+      previous: { get: (c) => c.previous || null, defaultDir: 'desc' },
+      delta: { get: (c) => c.amount - c.previous, defaultDir: 'desc' },
+    }),
+    [],
+  )
+  const { sort: categorySort, toggle: toggleCategorySort, sortedRows: sortedCategories } = useTableSort<Report['categories'][number], CategorySortKey>({
+    storageKey: 'cashflow.categoriesSort',
+    columns: categorySortColumns,
+    initial: CATEGORY_SORT_INITIAL,
+    rows: report.categories,
+  })
+
+  const largeExpenseSortColumns = useMemo<SortColumns<Report['largestExpenses'][number], LargeExpenseSortKey>>(
+    () => ({
+      date: { get: (e) => e.date, defaultDir: 'desc' },
+      company: { get: (e) => e.company || null },
+      category: { get: (e) => e.category || null },
+      payee: { get: (e) => e.payee || null },
+      amount: { get: (e) => e.amount || null, defaultDir: 'desc' },
+    }),
+    [],
+  )
+  const { sort: largeExpenseSort, toggle: toggleLargeExpenseSort, sortedRows: sortedLargeExpenses } = useTableSort<Report['largestExpenses'][number], LargeExpenseSortKey>({
+    storageKey: 'cashflow.largestExpensesSort',
+    columns: largeExpenseSortColumns,
+    initial: LARGE_EXPENSE_SORT_INITIAL,
+    rows: report.largestExpenses,
+  })
   return (
     <div className="space-y-5">
       <Section title="Статьи" subtitle={`Назначение — по группам справочника статей. «Было» — прошлый период такой же длины.${report.pending.count ? ` Ждут согласования: ${report.pending.count} на ${money(report.pending.total)}.` : ''}`}>
@@ -869,17 +976,17 @@ function ExpensesTab({ report }: { report: Report }) {
             <table className="w-full min-w-[760px]">
               <thead className="bg-surface-muted">
                 <tr>
-                  <th className={th}>Статья</th>
-                  <th className={th}>Назначение</th>
-                  <th className={thr}>Сумма</th>
-                  <th className={thr}>Нал</th>
-                  <th className={thr}>Безнал</th>
-                  <th className={thr}>Было</th>
-                  <th className={thr}>Изм.</th>
+                  <SortableTh label="Статья" sortKey="name" sort={categorySort} onSort={toggleCategorySort} className={ths} />
+                  <SortableTh label="Назначение" sortKey="activity" sort={categorySort} onSort={toggleCategorySort} className={ths} />
+                  <SortableTh label="Сумма" sortKey="amount" sort={categorySort} onSort={toggleCategorySort} align="right" className={ths} />
+                  <SortableTh label="Нал" sortKey="cash" sort={categorySort} onSort={toggleCategorySort} align="right" className={ths} />
+                  <SortableTh label="Безнал" sortKey="cashless" sort={categorySort} onSort={toggleCategorySort} align="right" className={ths} />
+                  <SortableTh label="Было" sortKey="previous" sort={categorySort} onSort={toggleCategorySort} align="right" className={ths} />
+                  <SortableTh label="Изм." sortKey="delta" sort={categorySort} onSort={toggleCategorySort} align="right" className={ths} />
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {report.categories.map((c) => (
+                {sortedCategories.map((c) => (
                   <tr key={c.name}>
                     <td className={`${td} font-medium`}>{c.name}</td>
                     <td className={`${td} text-muted-foreground`}>{labelOf[c.activity] || c.activity}</td>
@@ -904,16 +1011,16 @@ function ExpensesTab({ report }: { report: Report }) {
             <table className="w-full min-w-[720px]">
               <thead className="bg-surface-muted">
                 <tr>
-                  <th className={th}>Дата</th>
-                  <th className={th}>Точка</th>
-                  <th className={th}>Статья</th>
-                  <th className={th}>Кому / комментарий</th>
-                  <th className={thr}>Сумма</th>
+                  <SortableTh label="Дата" sortKey="date" sort={largeExpenseSort} onSort={toggleLargeExpenseSort} className={ths} />
+                  <SortableTh label="Точка" sortKey="company" sort={largeExpenseSort} onSort={toggleLargeExpenseSort} className={ths} />
+                  <SortableTh label="Статья" sortKey="category" sort={largeExpenseSort} onSort={toggleLargeExpenseSort} className={ths} />
+                  <SortableTh label="Кому / комментарий" sortKey="payee" sort={largeExpenseSort} onSort={toggleLargeExpenseSort} className={ths} />
+                  <SortableTh label="Сумма" sortKey="amount" sort={largeExpenseSort} onSort={toggleLargeExpenseSort} align="right" className={ths} />
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {report.largestExpenses.map((e, i) => (
-                  <tr key={i}>
+                {sortedLargeExpenses.map((e, i) => (
+                  <tr key={`${e.date}|${e.company}|${e.category}|${e.amount}|${i}`}>
                     <td className={td}>{dayLabel(e.date)}</td>
                     <td className={td}>{e.company}</td>
                     <td className={td}>

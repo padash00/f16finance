@@ -945,6 +945,7 @@ type TelegramPhotoSize = {
 }
 
 type TelegramUpdate = {
+  update_id?: number
   callback_query?: {
     id: string
     data?: string
@@ -3142,6 +3143,25 @@ export async function POST(req: Request) {
     const update = (await req.json().catch(() => null)) as TelegramUpdate | null
     if (!update) return json({ ok: true })
 
+    // ── Дедуп по update_id ────────────────────────────────────────────────
+    // Telegram повторяет доставку, пока не получит 2xx. Без отметки повтор
+    // прогонял обработчик заново: ответ на экзамене засчитывался дважды,
+    // расход с чека создавался дважды, callback срабатывал дважды.
+    // Вставка упала на первичном ключе — этот апдейт уже разбирали.
+    const updateId = Number(update.update_id)
+    if (Number.isFinite(updateId) && updateId > 0) {
+      const { error: dedupError } = await supabase
+        .from('telegram_processed_updates')
+        .insert([{ update_id: updateId }])
+      if (dedupError) {
+        // 23505 — дубль; таблицы ещё нет (миграция не применена) — работаем как раньше
+        if (String((dedupError as any)?.code || '') === '23505') return json({ ok: true, duplicate: true })
+        if (!String(dedupError.message || '').includes('telegram_processed_updates')) {
+          throw dedupError
+        }
+      }
+    }
+
     // ── Callback queries (unchanged) ──
     if (update.callback_query?.data) {
       const callbackData = update.callback_query.data.trim()
@@ -4300,6 +4320,9 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error('Telegram webhook error', error)
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/telegram/webhook', message: error?.message || 'Telegram webhook error' })
-    return json({ error: error?.message || 'Webhook error' }, 500)
+    // 200, а не 500: на 500 Telegram шлёт тот же апдейт снова, и обработчик
+    // отрабатывает повторно — это и было источником задвоений. Ошибка уже
+    // записана в журнал системных ошибок, повторять доставку нечем помочь.
+    return json({ ok: false, error: error?.message || 'Webhook error' }, 200)
   }
 }

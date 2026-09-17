@@ -7,8 +7,8 @@
  * Запускать через Vercel Cron в vercel.json:
  *   { "path": "/api/cron/hr-daily-digest", "schedule": "0 6 * * *" }  // 9:00 UTC+3 = 6:00 UTC
  *
- * Защита: header `x-cron-secret` или query `?secret=` должен совпасть с
- * env CRON_SECRET. Иначе 401.
+ * Защита: заголовок `authorization: Bearer <CRON_SECRET>` или `x-cron-secret`.
+ * Иначе 401. Секрет в строке запроса не принимается — он утекает в логи.
  */
 
 import { NextResponse } from 'next/server'

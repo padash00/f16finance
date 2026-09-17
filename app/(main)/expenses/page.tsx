@@ -16,6 +16,8 @@ import type { SortColumns } from '@/lib/core/table-sort'
 import { isCountedExpense } from '@/lib/domain/expense-status'
 import { SortableTh } from '@/components/ui/sortable-th'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
+import { toast } from '@/hooks/use-toast'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
 import { useCompanies } from '@/hooks/use-companies'
 import { useExpenses, type ExpenseRow } from '@/hooks/use-expenses'
 import { useOperators, type OperatorWithProfile } from '@/hooks/use-operators'
@@ -350,7 +352,6 @@ export default function ExpensesPage() {
   const searchDebounced = useDebouncedValue(searchTerm.trim(), 350)
   const [includeExtraInTotals, setIncludeExtraInTotals] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   const [activeTab, setActiveTab] = usePersistentState<'overview' | 'analytics' | 'list'>('expenses.activeTab', 'overview')
   const [editingExpense, setEditingExpense] = useState<ExpenseRow | null>(null)
@@ -377,6 +378,8 @@ export default function ExpensesPage() {
   const [templatesTableExists, setTemplatesTableExists] = useState(true)
   const [showAddTemplate, setShowAddTemplate] = useState(false)
   const [newTemplate, setNewTemplate] = useState({name:'',category:'',amount:'',payment_type:'cash'})
+  const [savingTemplate, setSavingTemplate] = useState(false)
+  const [removingAttachments, setRemovingAttachments] = useState(false)
 
   useEffect(() => {
     setIsClient(true)
@@ -979,8 +982,18 @@ export default function ExpensesPage() {
     e.target.value = ''
   }
 
+  // Сносит сразу ВСЕ документы расхода — поэтому спрашиваем и не глотаем отказ сервера
   const handleRemoveAttachment = async () => {
-    if (!editingExpense) return
+    if (!editingExpense || removingAttachments) return
+    const count = editingExpense.attachments?.length || (editingExpense.attachment_url ? 1 : 0)
+    const ok = await confirmDialog({
+      title: count > 1 ? `Удалить все документы (${count})?` : 'Удалить документ?',
+      description: 'Файлы будут откреплены от расхода, вернуть их можно только повторной загрузкой.',
+      confirmLabel: 'Удалить',
+      destructive: true,
+    })
+    if (!ok) return
+    setRemovingAttachments(true)
     try {
       const res = await fetch('/api/admin/expenses', {
         method: 'POST',
@@ -990,25 +1003,27 @@ export default function ExpensesPage() {
           expenseId: editingExpense.id,
         }),
       })
-      if (res.ok) {
-        setRows((prev) =>
-          prev.map((row) => (row.id === editingExpense.id ? { ...row, attachment_url: null, attachments: [] } : row)),
-        )
-        setEditingExpense((prev) => (prev ? { ...prev, attachment_url: null, attachments: [] } : prev))
-      }
-    } catch {
-      // ignore
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || `Ошибка запроса (${res.status})`)
+      setRows((prev) =>
+        prev.map((row) => (row.id === editingExpense.id ? { ...row, attachment_url: null, attachments: [] } : row)),
+      )
+      setEditingExpense((prev) => (prev ? { ...prev, attachment_url: null, attachments: [] } : prev))
+      toast({ title: count > 1 ? 'Документы удалены' : 'Документ удалён' })
+    } catch (err: any) {
+      toast({ title: 'Не удалось удалить документы', description: err?.message, variant: 'destructive' })
+    } finally {
+      setRemovingAttachments(false)
     }
   }
 
   const saveExpenseEdit = async () => {
-    if (!editingExpense) return
+    if (!editingExpense || savingExpenseEdit) return
 
     const cashAmount = parseMoneyInput(editExpenseCashDraft)
     const kaspiAmount = parseMoneyInput(editExpenseKaspiDraft)
 
     setSavingExpenseEdit(true)
-    setError(null)
 
     try {
       const response = await fetch('/api/admin/expenses', {
@@ -1048,25 +1063,39 @@ export default function ExpensesPage() {
         ),
       )
       closeExpenseEditor()
+      toast({ title: 'Расход обновлён' })
     } catch (err: any) {
-      setError(err?.message || 'Не удалось обновить расход')
+      // Ошибка поверх окна: карточка вверху страницы пряталась за открытой модалкой
+      toast({ title: 'Не удалось обновить расход', description: err?.message, variant: 'destructive' })
     } finally {
       setSavingExpenseEdit(false)
     }
   }
 
   const handleSaveTemplate = async () => {
-    if (!newTemplate.name || !newTemplate.category || !newTemplate.amount) return
-    const res = await fetch('/api/admin/expense-templates', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({...newTemplate, amount: Number(newTemplate.amount)})
-    })
-    const data = await res.json()
-    if (data.data) {
+    if (savingTemplate) return
+    // Молчаливый выход по пустым полям читался как «кнопка не работает»
+    if (!newTemplate.name || !newTemplate.category || !newTemplate.amount) {
+      toast({ title: 'Заполните название, категорию и сумму', variant: 'destructive' })
+      return
+    }
+    setSavingTemplate(true)
+    try {
+      const res = await fetch('/api/admin/expense-templates', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({...newTemplate, amount: Number(newTemplate.amount)})
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data?.data) throw new Error(data?.error || `Ошибка запроса (${res.status})`)
       setTemplates(prev => [...prev, data.data])
       setNewTemplate({name:'',category:'',amount:'',payment_type:'cash'})
       setShowAddTemplate(false)
+      toast({ title: 'Шаблон сохранён' })
+    } catch (err: any) {
+      toast({ title: 'Не удалось сохранить шаблон', description: err?.message, variant: 'destructive' })
+    } finally {
+      setSavingTemplate(false)
     }
   }
 
@@ -1084,13 +1113,28 @@ export default function ExpensesPage() {
   }
 
   const handleDeleteTemplate = async (id: string) => {
-    await fetch(`/api/admin/expense-templates?id=${id}`, { method: 'DELETE' })
-    setTemplates(prev => prev.filter(t => t.id !== id))
+    const target = templates.find(t => t.id === id)
+    const ok = await confirmDialog({
+      title: 'Удалить шаблон?',
+      description: target ? `«${target.name}» пропадёт из быстрых расходов.` : undefined,
+      confirmLabel: 'Удалить',
+      destructive: true,
+    })
+    if (!ok) return
+    try {
+      const res = await fetch(`/api/admin/expense-templates?id=${id}`, { method: 'DELETE' })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || `Ошибка запроса (${res.status})`)
+      // Из списка убираем только после подтверждения сервера
+      setTemplates(prev => prev.filter(t => t.id !== id))
+      toast({ title: 'Шаблон удалён' })
+    } catch (err: any) {
+      toast({ title: 'Не удалось удалить шаблон', description: err?.message, variant: 'destructive' })
+    }
   }
 
   // Удаление с undo: строка исчезает сразу, DELETE уходит через 5 сек, тост даёт «Отменить»
   const deleteExpense = (row: ExpenseRow) => {
-    setError(null)
     deleteWithUndo({
       message: `Расход ${Formatters.moneyDetailed(rowTotal(row))} от ${DateUtils.formatDate(row.date)} удалён`,
       hide: () => setRows((prev) => prev.filter((item) => item.id !== row.id)),
@@ -1111,17 +1155,20 @@ export default function ExpensesPage() {
   }
 
   // Удаление всей серии: одна ошибка в мастере = N строк, чистить по одной больно.
-  const deleteSeries = (row: ExpenseRow) => {
+  const deleteSeries = async (row: ExpenseRow) => {
     const seriesId = row.series_id
     if (!seriesId) return
     const seriesRows = rows.filter((item) => item.series_id === seriesId)
     if (seriesRows.length === 0) return
     const seriesTotal = seriesRows.reduce((sum, item) => sum + rowTotal(item), 0)
-    if (!window.confirm(
-      `Удалить всю серию: ${seriesRows.length} расходов на ${Formatters.moneyDetailed(seriesTotal)}?`,
-    )) return
+    const ok = await confirmDialog({
+      title: 'Удалить всю серию?',
+      description: `${seriesRows.length} расходов на ${Formatters.moneyDetailed(seriesTotal)}.`,
+      confirmLabel: 'Удалить серию',
+      destructive: true,
+    })
+    if (!ok) return
 
-    setError(null)
     deleteWithUndo({
       message: `Серия из ${seriesRows.length} расходов на ${Formatters.moneyDetailed(seriesTotal)} удалена`,
       hide: () => setRows((prev) => prev.filter((item) => item.series_id !== seriesId)),
@@ -1271,11 +1318,6 @@ export default function ExpensesPage() {
                 </div>
               )}
 
-              {error ? (
-                <div className="mt-4 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-200">
-                  {error}
-                </div>
-              ) : null}
 
               {/* Filters Panel */}
               {showFilters && (
@@ -1640,7 +1682,7 @@ export default function ExpensesPage() {
                         </button>
                       ))}
                       {canImportFile && (
-                        <button onClick={handleRemoveAttachment} className="text-xs text-red-400 hover:text-red-300">Удалить все</button>
+                        <button onClick={handleRemoveAttachment} disabled={removingAttachments} className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50">{removingAttachments ? 'Удаление...' : 'Удалить все'}</button>
                       )}
                     </div>
                     {canImportFile && (

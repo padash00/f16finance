@@ -7,6 +7,9 @@ import { CalendarRange, ChevronRight, Loader2, RefreshCw } from 'lucide-react'
 import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { SortableTh } from '@/components/ui/sortable-th'
+import { useTableSort } from '@/lib/client/use-table-sort'
+import type { SortColumns, SortState } from '@/lib/core/table-sort'
 
 type ShiftRow = {
   id: string
@@ -38,6 +41,29 @@ const STATUS_LABEL: Record<string, string> = {
   voided: 'Аннулирована',
 }
 
+// Для сортировки по столбцу «Статус»: сначала открытые смены, потом закрытые, аннулированные — в конце
+const STATUS_RANK: Record<string, number> = { open: 0, closed: 1, voided: 2 }
+
+type ShiftSortKey =
+  | 'company'
+  | 'operator'
+  | 'type'
+  | 'opened'
+  | 'closed'
+  | 'duration'
+  | 'sales'
+  | 'returns'
+  | 'cash'
+  | 'status'
+
+const SHIFT_SORT_INITIAL: SortState<ShiftSortKey> = { key: 'opened', dir: 'desc' }
+
+function shiftDurationMs(row: ShiftRow) {
+  if (!row.opened_at || !row.closed_at) return null
+  const ms = new Date(row.closed_at).getTime() - new Date(row.opened_at).getTime()
+  return Number.isFinite(ms) && ms > 0 ? ms : null
+}
+
 function fmtMoney(value: number | null | undefined) {
   const v = Number(value || 0)
   return v.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₸'
@@ -49,10 +75,8 @@ function fmtDateTime(iso: string | null) {
   return d.toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })
 }
 
-function fmtDuration(opened: string | null, closed: string | null) {
-  if (!opened || !closed) return '—'
-  const ms = new Date(closed).getTime() - new Date(opened).getTime()
-  if (!Number.isFinite(ms) || ms <= 0) return '—'
+function fmtDuration(ms: number | null) {
+  if (ms === null) return '—'
   const totalMinutes = Math.floor(ms / 60000)
   const h = Math.floor(totalMinutes / 60)
   const m = totalMinutes % 60
@@ -64,6 +88,9 @@ export default function ShiftReportsPage() {
   const [status, setStatus] = useState<'closed' | 'open' | 'all'>('closed')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Сервер отдаёт максимум 500 смен за запрос. Раньше страница молча просила 200
+  // и выглядела как «вся история» — теперь лимит выбирается и подписан под таблицей.
+  const [limit, setLimit] = useState<200 | 500>(200)
 
   const load = useMemo(
     () => async (signal?: AbortSignal) => {
@@ -72,7 +99,7 @@ export default function ShiftReportsPage() {
       try {
         const url = new URL('/api/admin/shifts/reports', window.location.origin)
         url.searchParams.set('status', status)
-        url.searchParams.set('limit', '200')
+        url.searchParams.set('limit', String(limit))
         const res = await fetch(url.toString(), { signal, credentials: 'include' })
         const data = await res.json()
         if (!res.ok) throw new Error(data?.error || 'Ошибка загрузки смен')
@@ -84,7 +111,7 @@ export default function ShiftReportsPage() {
         setLoading(false)
       }
     },
-    [status],
+    [status, limit],
   )
 
   useEffect(() => {
@@ -92,6 +119,31 @@ export default function ShiftReportsPage() {
     load(ctrl.signal)
     return () => ctrl.abort()
   }, [load])
+
+  const sortColumns = useMemo<SortColumns<ShiftRow, ShiftSortKey>>(
+    () => ({
+      company: { get: (r) => r.company?.name || null },
+      operator: { get: (r) => r.operator?.short_name || r.operator?.full_name || null },
+      type: { get: (r) => SHIFT_TYPE_LABEL[r.shift_type] || r.shift_type },
+      opened: { get: (r) => r.opened_at || null, defaultDir: 'desc' },
+      closed: { get: (r) => r.closed_at || null, defaultDir: 'desc' },
+      duration: { get: (r) => shiftDurationMs(r), defaultDir: 'desc' },
+      sales: { get: (r) => Number((r.totals_json || {}).sales_total || 0) || null, defaultDir: 'desc' },
+      returns: { get: (r) => Number((r.totals_json || {}).returns_total || 0) || null, defaultDir: 'desc' },
+      cash: { get: (r) => Number(r.closing_cash || 0) || null, defaultDir: 'desc' },
+      status: { get: (r) => STATUS_RANK[r.status] ?? 99 },
+    }),
+    [],
+  )
+  const { sort, toggle, sortedRows } = useTableSort<ShiftRow, ShiftSortKey>({
+    storageKey: 'shifts.reportsSort',
+    columns: sortColumns,
+    initial: SHIFT_SORT_INITIAL,
+    rows,
+  })
+  const sortHead = (label: string, key: ShiftSortKey, align: 'left' | 'right' | 'center' = 'left') => (
+    <SortableTh label={label} sortKey={key} sort={sort} onSort={toggle} align={align} className="px-3 py-2" />
+  )
 
   return (
     <div className="app-page-wide space-y-6">
@@ -123,6 +175,21 @@ export default function ShiftReportsPage() {
                 {value === 'closed' ? 'Закрытые' : value === 'open' ? 'Открытые' : 'Все'}
               </button>
             ))}
+            <span className="ml-2 text-xs text-muted-foreground">Показать:</span>
+            {([200, 500] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setLimit(value)}
+                className={`rounded-full border px-3 py-1 text-xs transition ${
+                  limit === value
+                    ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-200'
+                    : 'border-border text-muted-foreground hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                последние {value}
+              </button>
+            ))}
           </div>
         }
       />
@@ -138,16 +205,16 @@ export default function ShiftReportsPage() {
           <table className="w-full min-w-[1100px] text-sm">
             <thead className={adminTableStickyTheadClass}>
               <tr className="text-left text-xs uppercase tracking-wide text-slate-400">
-                <th className="px-3 py-2">Точка</th>
-                <th className="px-3 py-2">Оператор</th>
-                <th className="px-3 py-2">Тип</th>
-                <th className="px-3 py-2">Открыта</th>
-                <th className="px-3 py-2">Закрыта</th>
-                <th className="px-3 py-2">Длит.</th>
-                <th className="px-3 py-2 text-right">Продажи</th>
-                <th className="px-3 py-2 text-right">Возвраты</th>
-                <th className="px-3 py-2 text-right">Касса</th>
-                <th className="px-3 py-2">Статус</th>
+                {sortHead('Точка', 'company')}
+                {sortHead('Оператор', 'operator')}
+                {sortHead('Тип', 'type')}
+                {sortHead('Открыта', 'opened')}
+                {sortHead('Закрыта', 'closed')}
+                {sortHead('Длит.', 'duration')}
+                {sortHead('Продажи', 'sales', 'right')}
+                {sortHead('Возвраты', 'returns', 'right')}
+                {sortHead('Касса', 'cash', 'right')}
+                {sortHead('Статус', 'status')}
                 <th className="px-3 py-2"></th>
               </tr>
             </thead>
@@ -165,7 +232,7 @@ export default function ShiftReportsPage() {
                   </td>
                 </tr>
               ) : (
-                rows.map((row) => {
+                sortedRows.map((row) => {
                   const totals = (row.totals_json || {}) as Record<string, any>
                   return (
                     <tr key={row.id} className="hover:bg-surface-muted">
@@ -179,7 +246,7 @@ export default function ShiftReportsPage() {
                       <td className="px-3 py-2 text-body">{fmtDateTime(row.opened_at)}</td>
                       <td className="px-3 py-2 text-body">{fmtDateTime(row.closed_at)}</td>
                       <td className="px-3 py-2 text-muted-foreground">
-                        {fmtDuration(row.opened_at, row.closed_at)}
+                        {fmtDuration(shiftDurationMs(row))}
                       </td>
                       <td className="px-3 py-2 text-right text-emerald-600 dark:text-emerald-300">
                         {fmtMoney(Number(totals.sales_total || 0))}
@@ -218,6 +285,13 @@ export default function ShiftReportsPage() {
             </tbody>
           </table>
         </AdminTableViewport>
+        {rows.length > 0 && (
+          <div className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
+            {rows.length >= limit
+              ? `Показаны последние ${rows.length} смен — это предел выборки, более ранние не загружены.`
+              : `Показаны все ${rows.length} смен по фильтру.`}
+          </div>
+        )}
       </Card>
     </div>
   )

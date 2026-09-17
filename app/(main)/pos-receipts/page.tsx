@@ -14,6 +14,9 @@ import { useApiCache } from '@/lib/client/use-api-cache'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { TableSkeleton } from '@/components/skeleton'
+import { SortableTh } from '@/components/ui/sortable-th'
+import { useTableSort } from '@/lib/client/use-table-sort'
+import type { SortColumns, SortState } from '@/lib/core/table-sort'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -113,6 +116,10 @@ function detectPaymentMethod(sale: Sale): string {
   if (nonZero.length === 1) return nonZero[0]!
   return 'mixed'
 }
+
+type ReceiptSortKey = 'number' | 'date' | 'time' | 'amount' | 'payment' | 'items'
+
+const RECEIPT_SORT_INITIAL: SortState<ReceiptSortKey> = { key: 'date', dir: 'desc' }
 
 // ─── Receipt Modal ────────────────────────────────────────────────────────────
 
@@ -410,6 +417,25 @@ function PosReceiptsPageContent({ embedded = false }: { embedded?: boolean }) {
     ? locations.filter((l) => l.company_id === filters.company_id)
     : locations
 
+  // Сортировка по заголовку — общий хук; сортируется загруженная страница чеков
+  const sortColumns = useMemo<SortColumns<Sale, ReceiptSortKey>>(
+    () => ({
+      number: { get: (s) => s.id.slice(-6).toUpperCase() },
+      date: { get: (s) => s.sold_at || null, defaultDir: 'desc' },
+      time: { get: (s) => (s.sold_at ? new Date(s.sold_at).getHours() * 60 + new Date(s.sold_at).getMinutes() : null), defaultDir: 'desc' },
+      amount: { get: (s) => Number(s.total_amount || 0) || null, defaultDir: 'desc' },
+      payment: { get: (s) => (PAYMENT_LABELS[detectPaymentMethod(s)] || PAYMENT_LABELS.mixed).label },
+      items: { get: (s) => s.items.length || null, defaultDir: 'desc' },
+    }),
+    [],
+  )
+  const { sort, toggle, sortedRows: sortedSales } = useTableSort<Sale, ReceiptSortKey>({
+    storageKey: 'posReceipts.listSort',
+    columns: sortColumns,
+    initial: RECEIPT_SORT_INITIAL,
+    rows: sales,
+  })
+
   return (
     <>
       <style>{`
@@ -587,7 +613,7 @@ function PosReceiptsPageContent({ embedded = false }: { embedded?: boolean }) {
               <>
               {/* Мобильная версия: карточки чеков вместо таблицы */}
               <div className="space-y-3 p-3 sm:hidden">
-                {sales.map((sale) => {
+                {sortedSales.map((sale) => {
                   const method = detectPaymentMethod(sale)
                   const pm = PAYMENT_LABELS[method] || PAYMENT_LABELS.mixed
                   const open = expandedId === sale.id
@@ -665,17 +691,17 @@ function PosReceiptsPageContent({ embedded = false }: { embedded?: boolean }) {
                 <table className="w-full min-w-[640px] text-sm">
                   <thead>
                     <tr className="border-b border-border">
-                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Номер</th>
-                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Дата</th>
-                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Время</th>
-                      <th className="px-4 py-3 text-right font-medium text-muted-foreground">Сумма</th>
-                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Оплата</th>
-                      <th className="px-4 py-3 text-center font-medium text-muted-foreground">Товаров</th>
+                      <SortableTh label="Номер" sortKey="number" sort={sort} onSort={toggle} className="px-4 py-3 font-medium text-muted-foreground" />
+                      <SortableTh label="Дата" sortKey="date" sort={sort} onSort={toggle} className="px-4 py-3 font-medium text-muted-foreground" />
+                      <SortableTh label="Время" sortKey="time" sort={sort} onSort={toggle} className="px-4 py-3 font-medium text-muted-foreground" />
+                      <SortableTh label="Сумма" sortKey="amount" sort={sort} onSort={toggle} align="right" className="px-4 py-3 font-medium text-muted-foreground" />
+                      <SortableTh label="Оплата" sortKey="payment" sort={sort} onSort={toggle} className="px-4 py-3 font-medium text-muted-foreground" />
+                      <SortableTh label="Товаров" sortKey="items" sort={sort} onSort={toggle} align="center" className="px-4 py-3 font-medium text-muted-foreground" />
                       <th className="px-4 py-3 text-right font-medium text-muted-foreground">Действия</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {sales.map((sale) => {
+                    {sortedSales.map((sale) => {
                       const method = detectPaymentMethod(sale)
                       const pm = PAYMENT_LABELS[method] || PAYMENT_LABELS.mixed
                       return (

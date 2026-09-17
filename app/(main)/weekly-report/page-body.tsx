@@ -68,12 +68,20 @@ import {
   buildWeeklyBalance,
   deltaPct,
   weekPlanStatus,
+  type CategoryWeek,
+  type CompanyWeek,
   type CompareMode,
+  type LargeExpense,
+  type MissingShift,
   type PeriodSums,
   type PlanRow,
+  type WeekDay,
   type WeekPlanStatus,
   type WeeklyBalance,
 } from '@/lib/reports/weekly-balance'
+import { SortableTh } from '@/components/ui/sortable-th'
+import { useTableSort } from '@/lib/client/use-table-sort'
+import type { SortColumns, SortState } from '@/lib/core/table-sort'
 
 // ─── Даты и форматирование ──────────────────────────────────────────────────
 
@@ -175,6 +183,24 @@ const th = 'px-3 py-2 text-left text-xs font-medium text-muted-foreground'
 const thr = 'px-3 py-2 text-right text-xs font-medium text-muted-foreground'
 const td = 'px-3 py-2 text-sm tabular-nums'
 const tdr = 'px-3 py-2 text-right text-sm tabular-nums'
+// Заголовок сортировки: без text-left/right — выравнивание задаёт align
+const ths = 'px-3 py-2 text-xs font-medium text-muted-foreground'
+
+// ─── Сортировка таблиц ──────────────────────────────────────────────────────
+
+type DaySortKey = 'day' | 'incomeCash' | 'incomeCashless' | 'expenseCash' | 'expenseCashless' | 'netCash' | 'netCashless'
+type MissingShiftSortKey = 'date' | 'company' | 'shift'
+type ShiftPointSortKey = 'name' | 'day' | 'dayDelta' | 'night' | 'nightDelta' | 'nightShare'
+type PointSortKey = 'name' | 'income' | 'expense' | 'profit' | 'profitDelta' | 'netCash' | 'netCashless'
+type CategorySortKey = 'name' | 'total' | 'previous' | 'delta' | 'cash' | 'cashless' | 'share'
+type LargeExpenseSortKey = 'date' | 'company' | 'category' | 'payee' | 'total'
+
+const DAY_SORT_INITIAL: SortState<DaySortKey> = { key: 'day', dir: 'asc' }
+const MISSING_SHIFT_SORT_INITIAL: SortState<MissingShiftSortKey> = { key: 'date', dir: 'asc' }
+const SHIFT_POINT_SORT_INITIAL: SortState<ShiftPointSortKey> = { key: 'day', dir: 'desc' }
+const POINT_SORT_INITIAL: SortState<PointSortKey> = { key: 'profit', dir: 'desc' }
+const CATEGORY_SORT_INITIAL: SortState<CategorySortKey> = { key: 'total', dir: 'desc' }
+const LARGE_EXPENSE_SORT_INITIAL: SortState<LargeExpenseSortKey> = { key: 'total', dir: 'desc' }
 
 /** Короткий Markdown ИИ-отчёта: заголовки, пункты, жирный. Без HTML из текста. */
 function MarkdownLite({ text }: { text: string }) {
@@ -674,6 +700,24 @@ function SummaryTab({ balance, plan, loading, onOpenShifts }: { balance: WeeklyB
 
 function CashTab({ balance }: { balance: WeeklyBalance }) {
   const { current: c } = balance
+  const daySortColumns = useMemo<SortColumns<WeekDay, DaySortKey>>(
+    () => ({
+      day: { get: (d) => d.date, defaultDir: 'desc' },
+      incomeCash: { get: (d) => d.current.income.cash || null, defaultDir: 'desc' },
+      incomeCashless: { get: (d) => d.current.income.cashless || null, defaultDir: 'desc' },
+      expenseCash: { get: (d) => d.current.expense.cash || null, defaultDir: 'desc' },
+      expenseCashless: { get: (d) => d.current.expense.cashless || null, defaultDir: 'desc' },
+      netCash: { get: (d) => (d.hasData ? d.current.netCash : null), defaultDir: 'desc' },
+      netCashless: { get: (d) => (d.hasData ? d.current.netCashless : null), defaultDir: 'desc' },
+    }),
+    [],
+  )
+  const { sort: daySort, toggle: toggleDaySort, sortedRows: sortedDays } = useTableSort<WeekDay, DaySortKey>({
+    storageKey: 'weeklyReport.daysSort',
+    columns: daySortColumns,
+    initial: DAY_SORT_INITIAL,
+    rows: balance.days,
+  })
   const shareOf = (v: number) => (c.income.total ? `${((v / c.income.total) * 100).toFixed(1)}%` : '—')
   const chartData = balance.cumulative.map((d) => ({
     label: DAY_LABELS[weekdayOf(d.date)],
@@ -765,17 +809,17 @@ function CashTab({ balance }: { balance: WeeklyBalance }) {
           <table className="w-full min-w-[720px]">
             <thead className="bg-surface-muted">
               <tr>
-                <th className={th}>День</th>
-                <th className={thr}>Доход нал</th>
-                <th className={thr}>Доход безнал</th>
-                <th className={thr}>Расход нал</th>
-                <th className={thr}>Расход безнал</th>
-                <th className={thr}>Сальдо нал</th>
-                <th className={thr}>Сальдо безнал</th>
+                <SortableTh label="День" sortKey="day" sort={daySort} onSort={toggleDaySort} className={ths} />
+                <SortableTh label="Доход нал" sortKey="incomeCash" sort={daySort} onSort={toggleDaySort} align="right" className={ths} />
+                <SortableTh label="Доход безнал" sortKey="incomeCashless" sort={daySort} onSort={toggleDaySort} align="right" className={ths} />
+                <SortableTh label="Расход нал" sortKey="expenseCash" sort={daySort} onSort={toggleDaySort} align="right" className={ths} />
+                <SortableTh label="Расход безнал" sortKey="expenseCashless" sort={daySort} onSort={toggleDaySort} align="right" className={ths} />
+                <SortableTh label="Сальдо нал" sortKey="netCash" sort={daySort} onSort={toggleDaySort} align="right" className={ths} />
+                <SortableTh label="Сальдо безнал" sortKey="netCashless" sort={daySort} onSort={toggleDaySort} align="right" className={ths} />
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {balance.days.map((d) => (
+              {sortedDays.map((d) => (
                 <tr key={d.date} className={d.future ? 'text-muted-foreground' : ''}>
                   <td className={td}>
                     {DAY_LABELS[d.weekday]} <span className="text-xs text-muted-foreground">{dm(d.date)}</span>
@@ -801,6 +845,44 @@ function CashTab({ balance }: { balance: WeeklyBalance }) {
 
 function ShiftsTab({ balance }: { balance: WeeklyBalance }) {
   const { current: c, compared, previous: p } = balance
+  const missingSortColumns = useMemo<SortColumns<MissingShift, MissingShiftSortKey>>(
+    () => ({
+      date: { get: (m) => m.date, defaultDir: 'desc' },
+      company: { get: (m) => m.company || null },
+      shift: { get: (m) => (m.shift === 'night' ? 'Ночь' : 'День') },
+    }),
+    [],
+  )
+  const { sort: missingSort, toggle: toggleMissingSort, sortedRows: sortedMissing } = useTableSort<MissingShift, MissingShiftSortKey>({
+    storageKey: 'weeklyReport.missingShiftsSort',
+    columns: missingSortColumns,
+    initial: MISSING_SHIFT_SORT_INITIAL,
+    rows: balance.missingShifts,
+  })
+
+  // «По точкам»: фильтр пустых точек — до сортировки
+  const shiftPointRows = useMemo(
+    () => balance.companies.filter((co) => co.current.income.total || co.previous.income.total),
+    [balance.companies],
+  )
+  const shiftPointSortColumns = useMemo<SortColumns<CompanyWeek, ShiftPointSortKey>>(
+    () => ({
+      name: { get: (co) => co.name || null },
+      day: { get: (co) => co.current.income.day || null, defaultDir: 'desc' },
+      dayDelta: { get: (co) => (balance.compareUntil ? co.currentCompared.income.day - co.previous.income.day : null), defaultDir: 'desc' },
+      night: { get: (co) => co.current.income.night || null, defaultDir: 'desc' },
+      nightDelta: { get: (co) => (balance.compareUntil ? co.currentCompared.income.night - co.previous.income.night : null), defaultDir: 'desc' },
+      nightShare: { get: (co) => (co.current.income.total ? (co.current.income.night / co.current.income.total) * 100 : null), defaultDir: 'desc' },
+    }),
+    [balance.compareUntil],
+  )
+  const { sort: shiftPointSort, toggle: toggleShiftPointSort, sortedRows: sortedShiftPoints } = useTableSort<CompanyWeek, ShiftPointSortKey>({
+    storageKey: 'weeklyReport.shiftPointsSort',
+    columns: shiftPointSortColumns,
+    initial: SHIFT_POINT_SORT_INITIAL,
+    rows: shiftPointRows,
+  })
+
   const nightShare = c.income.total ? (c.income.night / c.income.total) * 100 : 0
   const chartData = balance.days.map((d) => ({
     label: DAY_LABELS[d.weekday],
@@ -835,13 +917,13 @@ function ShiftsTab({ balance }: { balance: WeeklyBalance }) {
             <table className="w-full min-w-[420px]">
               <thead className="bg-surface-muted">
                 <tr>
-                  <th className={th}>День</th>
-                  <th className={th}>Точка</th>
-                  <th className={th}>Смена</th>
+                  <SortableTh label="День" sortKey="date" sort={missingSort} onSort={toggleMissingSort} className={ths} />
+                  <SortableTh label="Точка" sortKey="company" sort={missingSort} onSort={toggleMissingSort} className={ths} />
+                  <SortableTh label="Смена" sortKey="shift" sort={missingSort} onSort={toggleMissingSort} className={ths} />
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {balance.missingShifts.map((m) => (
+                {sortedMissing.map((m) => (
                   <tr key={`${m.companyId}-${m.date}-${m.shift}`}>
                     <td className={td}>
                       {DAY_LABELS[weekdayOf(m.date)]} {dm(m.date)}
@@ -883,31 +965,29 @@ function ShiftsTab({ balance }: { balance: WeeklyBalance }) {
           <table className="w-full min-w-[640px]">
             <thead className="bg-surface-muted">
               <tr>
-                <th className={th}>Точка</th>
-                <th className={thr}>День</th>
-                <th className={thr}>Изм.</th>
-                <th className={thr}>Ночь</th>
-                <th className={thr}>Изм.</th>
-                <th className={thr}>Доля ночи</th>
+                <SortableTh label="Точка" sortKey="name" sort={shiftPointSort} onSort={toggleShiftPointSort} className={ths} />
+                <SortableTh label="День" sortKey="day" sort={shiftPointSort} onSort={toggleShiftPointSort} align="right" className={ths} />
+                <SortableTh label="Изм." sortKey="dayDelta" sort={shiftPointSort} onSort={toggleShiftPointSort} align="right" className={ths} title="Изменение дневной выручки к базе сравнения" />
+                <SortableTh label="Ночь" sortKey="night" sort={shiftPointSort} onSort={toggleShiftPointSort} align="right" className={ths} />
+                <SortableTh label="Изм." sortKey="nightDelta" sort={shiftPointSort} onSort={toggleShiftPointSort} align="right" className={ths} title="Изменение ночной выручки к базе сравнения" />
+                <SortableTh label="Доля ночи" sortKey="nightShare" sort={shiftPointSort} onSort={toggleShiftPointSort} align="right" className={ths} />
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {balance.companies
-                .filter((co) => co.current.income.total || co.previous.income.total)
-                .map((co) => {
-                  const dayDiff = co.currentCompared.income.day - co.previous.income.day
-                  const nightDiff = co.currentCompared.income.night - co.previous.income.night
-                  return (
-                    <tr key={co.id} className={co.inTotals ? '' : 'text-muted-foreground'}>
-                      <td className={`${td} font-medium`}>{co.name}</td>
-                      <td className={tdr}>{money(co.current.income.day)}</td>
-                      <td className={`${tdr} ${balance.compareUntil ? tone(dayDiff) : ''}`}>{balance.compareUntil ? signed(dayDiff) : '—'}</td>
-                      <td className={tdr}>{money(co.current.income.night)}</td>
-                      <td className={`${tdr} ${balance.compareUntil ? tone(nightDiff) : ''}`}>{balance.compareUntil ? signed(nightDiff) : '—'}</td>
-                      <td className={tdr}>{co.current.income.total ? `${((co.current.income.night / co.current.income.total) * 100).toFixed(0)}%` : '—'}</td>
-                    </tr>
-                  )
-                })}
+              {sortedShiftPoints.map((co) => {
+                const dayDiff = co.currentCompared.income.day - co.previous.income.day
+                const nightDiff = co.currentCompared.income.night - co.previous.income.night
+                return (
+                  <tr key={co.id} className={co.inTotals ? '' : 'text-muted-foreground'}>
+                    <td className={`${td} font-medium`}>{co.name}</td>
+                    <td className={tdr}>{money(co.current.income.day)}</td>
+                    <td className={`${tdr} ${balance.compareUntil ? tone(dayDiff) : ''}`}>{balance.compareUntil ? signed(dayDiff) : '—'}</td>
+                    <td className={tdr}>{money(co.current.income.night)}</td>
+                    <td className={`${tdr} ${balance.compareUntil ? tone(nightDiff) : ''}`}>{balance.compareUntil ? signed(nightDiff) : '—'}</td>
+                    <td className={tdr}>{co.current.income.total ? `${((co.current.income.night / co.current.income.total) * 100).toFixed(0)}%` : '—'}</td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -922,6 +1002,30 @@ function PointsTab({ balance }: { balance: WeeklyBalance }) {
   const [open, setOpen] = useState<string | null>(null)
   const inTotals = balance.companies.filter((c) => c.inTotals)
   const sum = (key: (s: PeriodSums) => number) => inTotals.reduce((s, c) => s + key(c.current), 0)
+  const pointSortColumns = useMemo<SortColumns<CompanyWeek, PointSortKey>>(
+    () => ({
+      name: { get: (co) => co.name || null },
+      income: { get: (co) => co.current.income.total || null, defaultDir: 'desc' },
+      expense: { get: (co) => co.current.expense.total || null, defaultDir: 'desc' },
+      profit: { get: (co) => co.current.profit, defaultDir: 'desc' },
+      profitDelta: {
+        get: (co) =>
+          balance.compareUntil && (co.previous.income.total || co.previous.expense.total)
+            ? co.currentCompared.profit - co.previous.profit
+            : null,
+        defaultDir: 'desc',
+      },
+      netCash: { get: (co) => co.current.netCash, defaultDir: 'desc' },
+      netCashless: { get: (co) => co.current.netCashless, defaultDir: 'desc' },
+    }),
+    [balance.compareUntil],
+  )
+  const { sort: pointSort, toggle: togglePointSort, sortedRows: sortedPoints } = useTableSort<CompanyWeek, PointSortKey>({
+    storageKey: 'weeklyReport.pointsSort',
+    columns: pointSortColumns,
+    initial: POINT_SORT_INITIAL,
+    rows: balance.companies,
+  })
 
   return (
     <SectionCard title="Точки" subtitle={`Нажмите на точку, чтобы увидеть расходы по статьям. Изменение прибыли — к базе: ${balance.compareLabel}.`}>
@@ -929,17 +1033,17 @@ function PointsTab({ balance }: { balance: WeeklyBalance }) {
         <table className="w-full min-w-[860px]">
           <thead className="bg-surface-muted">
             <tr>
-              <th className={th}>Точка</th>
-              <th className={thr}>Выручка</th>
-              <th className={thr}>Расходы</th>
-              <th className={thr}>Прибыль</th>
-              <th className={thr}>Изм. прибыли</th>
-              <th className={thr}>Сальдо нал</th>
-              <th className={thr}>Сальдо безнал</th>
+              <SortableTh label="Точка" sortKey="name" sort={pointSort} onSort={togglePointSort} className={ths} />
+              <SortableTh label="Выручка" sortKey="income" sort={pointSort} onSort={togglePointSort} align="right" className={ths} />
+              <SortableTh label="Расходы" sortKey="expense" sort={pointSort} onSort={togglePointSort} align="right" className={ths} />
+              <SortableTh label="Прибыль" sortKey="profit" sort={pointSort} onSort={togglePointSort} align="right" className={ths} />
+              <SortableTh label="Изм. прибыли" sortKey="profitDelta" sort={pointSort} onSort={togglePointSort} align="right" className={ths} />
+              <SortableTh label="Сальдо нал" sortKey="netCash" sort={pointSort} onSort={togglePointSort} align="right" className={ths} />
+              <SortableTh label="Сальдо безнал" sortKey="netCashless" sort={pointSort} onSort={togglePointSort} align="right" className={ths} />
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {balance.companies.map((co) => {
+            {sortedPoints.map((co) => {
               const expanded = open === co.id
               const change = co.currentCompared.profit - co.previous.profit
               return (
@@ -1022,6 +1126,41 @@ function PointsTab({ balance }: { balance: WeeklyBalance }) {
 
 function ExpensesTab({ balance }: { balance: WeeklyBalance }) {
   const maxTotal = Math.max(1, ...balance.categories.map((c) => c.total))
+  const categorySortColumns = useMemo<SortColumns<CategoryWeek, CategorySortKey>>(
+    () => ({
+      name: { get: (cat) => cat.name || null },
+      total: { get: (cat) => cat.total || null, defaultDir: 'desc' },
+      previous: { get: (cat) => (balance.compareUntil ? cat.previous || null : null), defaultDir: 'desc' },
+      delta: { get: (cat) => (balance.compareUntil ? cat.compared - cat.previous : null), defaultDir: 'desc' },
+      cash: { get: (cat) => cat.cash || null, defaultDir: 'desc' },
+      cashless: { get: (cat) => cat.cashless || null, defaultDir: 'desc' },
+      share: { get: (cat) => cat.share || null, defaultDir: 'desc' },
+    }),
+    [balance.compareUntil],
+  )
+  const { sort: categorySort, toggle: toggleCategorySort, sortedRows: sortedCategories } = useTableSort<CategoryWeek, CategorySortKey>({
+    storageKey: 'weeklyReport.categoriesSort',
+    columns: categorySortColumns,
+    initial: CATEGORY_SORT_INITIAL,
+    rows: balance.categories,
+  })
+
+  const largeExpenseSortColumns = useMemo<SortColumns<LargeExpense, LargeExpenseSortKey>>(
+    () => ({
+      date: { get: (e) => e.date, defaultDir: 'desc' },
+      company: { get: (e) => e.company || null },
+      category: { get: (e) => e.category || null },
+      payee: { get: (e) => e.payee || null },
+      total: { get: (e) => e.total || null, defaultDir: 'desc' },
+    }),
+    [],
+  )
+  const { sort: largeExpenseSort, toggle: toggleLargeExpenseSort, sortedRows: sortedLargeExpenses } = useTableSort<LargeExpense, LargeExpenseSortKey>({
+    storageKey: 'weeklyReport.largestExpensesSort',
+    columns: largeExpenseSortColumns,
+    initial: LARGE_EXPENSE_SORT_INITIAL,
+    rows: balance.largestExpenses,
+  })
   return (
     <div className="space-y-5">
       <SectionCard
@@ -1040,17 +1179,17 @@ function ExpensesTab({ balance }: { balance: WeeklyBalance }) {
             <table className="w-full min-w-[760px]">
               <thead className="bg-surface-muted">
                 <tr>
-                  <th className={th}>Статья</th>
-                  <th className={thr}>Неделя</th>
-                  <th className={thr}>База</th>
-                  <th className={thr}>Изменение</th>
-                  <th className={thr}>Нал</th>
-                  <th className={thr}>Безнал</th>
-                  <th className={`${th} w-40`}>Доля</th>
+                  <SortableTh label="Статья" sortKey="name" sort={categorySort} onSort={toggleCategorySort} className={ths} />
+                  <SortableTh label="Неделя" sortKey="total" sort={categorySort} onSort={toggleCategorySort} align="right" className={ths} />
+                  <SortableTh label="База" sortKey="previous" sort={categorySort} onSort={toggleCategorySort} align="right" className={ths} />
+                  <SortableTh label="Изменение" sortKey="delta" sort={categorySort} onSort={toggleCategorySort} align="right" className={ths} />
+                  <SortableTh label="Нал" sortKey="cash" sort={categorySort} onSort={toggleCategorySort} align="right" className={ths} />
+                  <SortableTh label="Безнал" sortKey="cashless" sort={categorySort} onSort={toggleCategorySort} align="right" className={ths} />
+                  <SortableTh label="Доля" sortKey="share" sort={categorySort} onSort={toggleCategorySort} className={`${ths} w-40`} />
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {balance.categories.map((cat) => {
+                {sortedCategories.map((cat) => {
                   const diff = cat.compared - cat.previous
                   return (
                     <tr key={cat.name}>
@@ -1085,16 +1224,16 @@ function ExpensesTab({ balance }: { balance: WeeklyBalance }) {
             <table className="w-full min-w-[720px]">
               <thead className="bg-surface-muted">
                 <tr>
-                  <th className={th}>Дата</th>
-                  <th className={th}>Точка</th>
-                  <th className={th}>Статья</th>
-                  <th className={th}>Кому / комментарий</th>
-                  <th className={thr}>Сумма</th>
+                  <SortableTh label="Дата" sortKey="date" sort={largeExpenseSort} onSort={toggleLargeExpenseSort} className={ths} />
+                  <SortableTh label="Точка" sortKey="company" sort={largeExpenseSort} onSort={toggleLargeExpenseSort} className={ths} />
+                  <SortableTh label="Статья" sortKey="category" sort={largeExpenseSort} onSort={toggleLargeExpenseSort} className={ths} />
+                  <SortableTh label="Кому / комментарий" sortKey="payee" sort={largeExpenseSort} onSort={toggleLargeExpenseSort} className={ths} />
+                  <SortableTh label="Сумма" sortKey="total" sort={largeExpenseSort} onSort={toggleLargeExpenseSort} align="right" className={ths} />
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {balance.largestExpenses.map((e, i) => (
-                  <tr key={i}>
+                {sortedLargeExpenses.map((e, i) => (
+                  <tr key={`${e.date}|${e.company}|${e.category}|${e.total}|${i}`}>
                     <td className={td}>{dm(e.date)}</td>
                     <td className={td}>{e.company}</td>
                     <td className={td}>

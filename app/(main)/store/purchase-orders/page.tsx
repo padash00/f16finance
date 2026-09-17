@@ -8,6 +8,8 @@ import { Card } from '@/components/ui/card'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { toast } from '@/hooks/use-toast'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
@@ -89,7 +91,8 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
   const [orders, setOrders] = useState<OrderRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
+  // Ошибки действий — тостами: карточка ошибки остаётся за модалкой и не видна
+  const notifyError = (message: string) => toast({ title: message, variant: 'destructive' })
   const [statusFilter, setStatusFilter] = useState<'all' | OrderStatus>('all')
 
   // create dialog
@@ -107,6 +110,11 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
   const [detailLoading, setDetailLoading] = useState(false)
   const [statusBusy, setStatusBusy] = useState(false)
   useModalEscape(!!detail, () => { if (!statusBusy) setDetail(null) })
+
+  // Причина отмены — своим окном: в prompt() текст пропадал при любой осечке
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
+  useModalEscape(cancelOpen, () => { if (!statusBusy) setCancelOpen(false) })
 
   const ordersUrl = storeUrl(
     statusFilter === 'all'
@@ -174,26 +182,26 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось загрузить заявку')
       setDetail(json.data.order)
     } catch (err: any) {
-      setError(err?.message || 'Ошибка')
+      notifyError(err?.message || 'Не удалось загрузить заявку')
     } finally {
       setDetailLoading(false)
     }
   }
 
   const submitCreate = async () => {
+    if (saving) return
     if (!formSupplier) {
-      setError('Выберите поставщика')
+      notifyError('Выберите поставщика')
       return
     }
     const items = formLines
       .map((l) => ({ item_id: l.item_id, suggested_qty: Number(String(l.qty).replace(',', '.')) }))
       .filter((l) => l.item_id && Number.isFinite(l.suggested_qty) && l.suggested_qty > 0)
     if (items.length === 0) {
-      setError('Добавьте хотя бы одну позицию с количеством')
+      notifyError('Добавьте хотя бы одну позицию с количеством')
       return
     }
     setSaving(true)
-    setError(null)
     try {
       const response = await fetch('/api/admin/store/purchase-orders', {
         method: 'POST',
@@ -202,7 +210,7 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
       })
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось создать заявку')
-      setSuccess('Заявка создана')
+      toast({ title: 'Заявка создана' })
       setCreateOpen(false)
       setFormSupplier('')
       setFormComment('')
@@ -210,7 +218,7 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
       invalidateStoreCaches()
       await load({ fresh: true })
     } catch (err: any) {
-      setError(err?.message || 'Ошибка')
+      notifyError(err?.message || 'Не удалось создать заявку')
     } finally {
       setSaving(false)
     }
@@ -229,10 +237,10 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
   }
 
   const sendWhatsApp = async () => {
-    if (!detail) return
+    if (!detail || statusBusy) return
     const phone = (detail.supplier?.sales_rep_phone || '').replace(/\D/g, '')
     if (!phone) {
-      setError('У поставщика не указан WhatsApp торгпреда — заполните в карточке поставщика')
+      notifyError('У поставщика не указан WhatsApp торгпреда — заполните в карточке поставщика')
       return
     }
     const url = `https://wa.me/${phone}?text=${encodeURIComponent(buildWhatsAppText(detail))}`
@@ -241,24 +249,25 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
     await changeStatus('sent')
   }
 
-  const changeStatus = async (next: OrderStatus, cancelReason?: string) => {
-    if (!detail) return
+  const changeStatus = async (next: OrderStatus, reason?: string) => {
+    if (!detail || statusBusy) return
     setStatusBusy(true)
-    setError(null)
     try {
       const response = await fetch(`/api/admin/store/purchase-orders/${detail.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: next, cancel_reason: cancelReason || null }),
+        body: JSON.stringify({ status: next, cancel_reason: reason || null }),
       })
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось обновить статус')
-      setSuccess('Статус обновлён')
+      toast({ title: `Статус: ${STATUS_META[next].label}` })
+      setCancelOpen(false)
+      setCancelReason('')
       setDetail(null)
       invalidateStoreCaches()
       await load({ fresh: true })
     } catch (err: any) {
-      setError(err?.message || 'Ошибка')
+      notifyError(err?.message || 'Не удалось обновить статус')
     } finally {
       setStatusBusy(false)
     }
@@ -312,7 +321,6 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
       })()}
 
       {error ? <Card className="p-3 border-red-500/30 bg-red-500/10 text-sm text-red-700 dark:text-red-200">{error}</Card> : null}
-      {success ? <Card className="p-3 border-emerald-500/30 bg-emerald-500/10 text-sm text-emerald-700 dark:text-emerald-200">{success}</Card> : null}
 
       {loading ? (
         <div className="flex items-center justify-center py-16">
@@ -362,7 +370,7 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
           >
             <div className="flex items-start justify-between">
               <h2 className="text-lg font-semibold">Новая заявка поставщику</h2>
-              <button onClick={() => setCreateOpen(false)} className="text-muted-foreground hover:text-slate-900 dark:hover:text-white"><X className="w-5 h-5" /></button>
+              <button onClick={() => { if (!saving) setCreateOpen(false) }} className="text-muted-foreground hover:text-slate-900 dark:hover:text-white"><X className="w-5 h-5" /></button>
             </div>
 
             <div className="space-y-3 mt-4">
@@ -531,14 +539,45 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
                   variant="outline"
                   className="border-rose-500/40 text-rose-700 dark:text-rose-200 hover:bg-rose-500/10"
                   disabled={statusBusy}
-                  onClick={() => {
-                    const reason = window.prompt('Причина отмены (необязательно):') ?? undefined
-                    void changeStatus('cancelled', reason || undefined)
-                  }}
+                  onClick={() => { setCancelReason(''); setCancelOpen(true) }}
                 >
                   Отменить
                 </Button>
               ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Отмена заявки: причина в поле, а не в prompt() */}
+      {cancelOpen ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" onClick={() => { if (!statusBusy) setCancelOpen(false) }}>
+          <div
+            className="w-full max-w-md rounded-3xl border border-border bg-white dark:bg-slate-950/95 p-4 sm:p-6 text-foreground shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between">
+              <h2 className="text-lg font-semibold">Отменить заявку</h2>
+              <button onClick={() => { if (!statusBusy) setCancelOpen(false) }} className="text-muted-foreground hover:text-slate-900 dark:hover:text-white"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="mt-4 space-y-1.5">
+              <Label>Причина отмены (опц.)</Label>
+              <Textarea
+                rows={3}
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="Например: поставщик поднял цену"
+              />
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setCancelOpen(false)} disabled={statusBusy}>Назад</Button>
+              <Button
+                className="bg-rose-600 hover:bg-rose-700"
+                disabled={statusBusy}
+                onClick={() => void changeStatus('cancelled', cancelReason.trim() || undefined)}
+              >
+                {statusBusy ? <><Loader2 className="w-4 h-4 animate-spin mr-1" />Отменяю...</> : 'Отменить заявку'}
+              </Button>
             </div>
           </div>
         </div>

@@ -6,6 +6,8 @@ import { ArrowDown, ArrowUp, AlertCircle, CheckSquare, ChevronDown, ChevronRight
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { confirmDialog } from '@/components/ui/confirm-dialog'
+import { AppModal } from '@/components/ui/app-modal'
+import { toast } from '@/hooks/use-toast'
 import { DatePicker } from '@/components/ui/date-picker'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useCapabilities } from '@/lib/client/use-capabilities'
@@ -143,6 +145,9 @@ export default function HrPage() {
   const [historyOpen, setHistoryOpen] = useState<Record<string, boolean>>({})
   const [historyData, setHistoryData] = useState<Record<string, HistoryEntry[]>>({})
   const [historyLoading, setHistoryLoading] = useState<Record<string, boolean>>({})
+  // Причина массового увольнения — в окне, а не в window.prompt
+  const [bulkDismissOpen, setBulkDismissOpen] = useState(false)
+  const [bulkDismissReason, setBulkDismissReason] = useState('')
 
   async function load() {
     setLoading(true)
@@ -249,6 +254,10 @@ export default function HrPage() {
     return { noLogin, hybrid, total: inActiveTab.length }
   }, [items, tab])
 
+  // Имя сотрудника по ключу выделения — для внятных сообщений о частичных отказах
+  const employeeLabel = (kind: string, id: string) =>
+    items.find((e) => e.kind === kind && e.id === id)?.full_name || id
+
   // Inline-смена роли
   const changeRoleInline = async (emp: HrEmployee, newRole: string) => {
     setEditingRoleKey(null)
@@ -258,17 +267,18 @@ export default function HrPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ kind: emp.kind, id: emp.id, action: 'changeRole', payload: { role: newRole } }),
       })
-      const data = await res.json()
-      if (!res.ok || !data.ok) throw new Error(data.error || 'Ошибка')
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.ok) throw new Error(data.error || `Ошибка запроса (${res.status})`)
       await load()
+      toast({ title: 'Должность изменена' })
     } catch (e: any) {
-      setError(e?.message || 'Ошибка смены роли')
+      toast({ title: 'Не удалось сменить должность', description: e?.message, variant: 'destructive' })
     }
   }
 
   // Bulk-смена роли
   const bulkChangeRole = async (newRole: string) => {
-    if (selectedIds.size === 0) return
+    if (selectedIds.size === 0 || bulkBusy) return
     const ok = await confirmDialog({
       title: `Сменить должность на "${newRole}"?`,
       description: `Новая должность будет назначена ${selectedIds.size} сотрудникам.`,
@@ -276,22 +286,38 @@ export default function HrPage() {
     })
     if (!ok) return
     setBulkBusy(true)
-    setError(null)
+    // Считаем отказы по каждому запросу: раньше цикл игнорировал ответы
+    // и рапортовал об успехе, даже когда не прошёл ни один
+    const failures: string[] = []
     try {
       for (const key of selectedIds) {
         const idx = key.indexOf('-')
         const kind = key.slice(0, idx)
         const id = key.slice(idx + 1)
-        await fetch('/api/admin/hr/update', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ kind, id, action: 'changeRole', payload: { role: newRole } }),
-        })
+        try {
+          const res = await fetch('/api/admin/hr/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ kind, id, action: 'changeRole', payload: { role: newRole } }),
+          })
+          const json = await res.json().catch(() => ({}))
+          if (!res.ok || !json.ok) throw new Error(json.error || `HTTP ${res.status}`)
+        } catch (e: any) {
+          failures.push(`${employeeLabel(kind, id)}: ${e?.message || 'ошибка'}`)
+        }
       }
       clearSelection()
       await load()
-    } catch (e: any) {
-      setError(e?.message || 'Ошибка bulk-смены роли')
+      const okCount = selectedIds.size - failures.length
+      if (failures.length) {
+        toast({
+          title: `Должность сменена у ${okCount} из ${selectedIds.size}`,
+          description: failures.slice(0, 3).join('; '),
+          variant: 'destructive',
+        })
+      } else {
+        toast({ title: `Должность сменена у ${okCount} сотрудников` })
+      }
     } finally {
       setBulkBusy(false)
     }
@@ -322,13 +348,13 @@ export default function HrPage() {
   }
 
   async function confirmDismiss() {
-    if (!dismissTarget) return
+    if (!dismissTarget || busyId) return
     if (dismissReason.trim().length < 5) {
-      setError('Причина обязательна (≥ 5 символов)')
+      // Уведомлением, а не карточкой вверху страницы: за открытым окном её не видно
+      toast({ title: 'Причина обязательна', description: 'Минимум 5 символов.', variant: 'destructive' })
       return
     }
     setBusyId(dismissTarget.id)
-    setError(null)
     try {
       const res = await fetch('/api/admin/hr/dismiss', {
         method: 'POST',
@@ -344,6 +370,7 @@ export default function HrPage() {
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error || 'Не удалось уволить')
+      toast({ title: `${dismissTarget.full_name} уволен` })
       setDismissTarget(null)
       setDismissReason('')
       setPairedRecord(null)
@@ -355,7 +382,7 @@ export default function HrPage() {
       })
       await load()
     } catch (e: any) {
-      setError(e?.message || 'Ошибка')
+      toast({ title: 'Не удалось уволить', description: e?.message, variant: 'destructive' })
     } finally {
       setBusyId(null)
     }
@@ -377,7 +404,7 @@ export default function HrPage() {
       if (!res.ok) throw new Error(json.error || 'Не удалось загрузить историю')
       setHistoryData((s) => ({ ...s, [key]: json.data || [] }))
     } catch (e: any) {
-      setError(e?.message || 'Ошибка истории')
+      toast({ title: 'Не удалось загрузить историю', description: e?.message, variant: 'destructive' })
     } finally {
       setHistoryLoading((s) => ({ ...s, [key]: false }))
     }
@@ -391,7 +418,6 @@ export default function HrPage() {
     })
     if (!ok) return
     setBusyId(emp.id)
-    setError(null)
     try {
       const res = await fetch('/api/admin/hr/restore', {
         method: 'POST',
@@ -401,8 +427,9 @@ export default function HrPage() {
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error || 'Не удалось восстановить')
       await load()
+      toast({ title: `${emp.full_name} восстановлен` })
     } catch (e: any) {
-      setError(e?.message || 'Ошибка')
+      toast({ title: 'Не удалось восстановить', description: e?.message, variant: 'destructive' })
     } finally {
       setBusyId(null)
     }
@@ -428,37 +455,55 @@ export default function HrPage() {
   }, [tab, kindFilter])
 
   const bulkDismiss = async () => {
-    const reason = window.prompt('Причина увольнения (≥ 5 символов):')
-    if (!reason || reason.trim().length < 5) return
-    const ok = await confirmDialog({
-      title: `Уволить ${selectedIds.size} ${selectedIds.size === 1 ? 'сотрудника' : 'сотрудников'}?`,
-      confirmLabel: 'Уволить',
-      destructive: true,
-    })
-    if (!ok) return
+    if (bulkBusy) return
+    const reason = bulkDismissReason.trim()
+    if (reason.length < 5) {
+      toast({ title: 'Причина обязательна', description: 'Минимум 5 символов.', variant: 'destructive' })
+      return
+    }
     setBulkBusy(true)
-    setError(null)
+    // Ответ каждого запроса проверяем: раньше об успехе сообщали даже когда
+    // сервер отказал по всем
+    const failures: string[] = []
+    const total = selectedIds.size
     try {
       for (const key of selectedIds) {
-        const [kind, id] = key.split('-', 2)
-        // безопасный split: id может содержать дефисы
-        const realId = key.slice(kind.length + 1)
-        await fetch('/api/admin/hr/dismiss', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            kind,
-            id: realId,
-            reason: reason.trim(),
-            dismissal_date: new Date().toISOString().slice(0, 10),
-            dismissal_type: 'voluntary',
-          }),
-        })
+        const idx = key.indexOf('-')
+        const kind = key.slice(0, idx)
+        // безопасный срез: id может содержать дефисы
+        const realId = key.slice(idx + 1)
+        try {
+          const res = await fetch('/api/admin/hr/dismiss', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              kind,
+              id: realId,
+              reason,
+              dismissal_date: new Date().toISOString().slice(0, 10),
+              dismissal_type: 'voluntary',
+            }),
+          })
+          const json = await res.json().catch(() => ({}))
+          if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`)
+        } catch (e: any) {
+          failures.push(`${employeeLabel(kind, realId)}: ${e?.message || 'ошибка'}`)
+        }
       }
       clearSelection()
+      setBulkDismissOpen(false)
+      setBulkDismissReason('')
       await load()
-    } catch (e: any) {
-      setError(e?.message || 'Ошибка bulk-увольнения')
+      const okCount = total - failures.length
+      if (failures.length) {
+        toast({
+          title: `Уволено ${okCount} из ${total}`,
+          description: failures.slice(0, 3).join('; '),
+          variant: 'destructive',
+        })
+      } else {
+        toast({ title: `Уволено ${okCount} ${okCount === 1 ? 'сотрудник' : 'сотрудников'}` })
+      }
     } finally {
       setBulkBusy(false)
     }
@@ -723,7 +768,7 @@ export default function HrPage() {
                 </select>
               )}
               {selectedIds.size > 0 && tab === 'active' && canDismiss && (
-                <Button size="sm" variant="destructive" onClick={bulkDismiss} disabled={bulkBusy}>
+                <Button size="sm" variant="destructive" onClick={() => { setBulkDismissReason(''); setBulkDismissOpen(true) }} disabled={bulkBusy}>
                   {bulkBusy ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <UserMinus className="w-3 h-3 mr-1" />}
                   Уволить {selectedIds.size}
                 </Button>
@@ -1062,7 +1107,7 @@ export default function HrPage() {
       )}
 
       {dismissTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={() => setDismissTarget(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={() => { if (!busyId) setDismissTarget(null) }}>
           <div className="bg-card border border-border rounded-2xl p-5 w-full max-w-md max-h-[calc(100vh-2rem)] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold mb-1 text-foreground">Уволить сотрудника</h3>
             <p className="text-sm text-muted-foreground mb-4">
@@ -1117,7 +1162,7 @@ export default function HrPage() {
               </label>
             ) : null}
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setDismissTarget(null)}>Отмена</Button>
+              <Button variant="outline" onClick={() => setDismissTarget(null)} disabled={!!busyId}>Отмена</Button>
               <Button variant="destructive" onClick={confirmDismiss} disabled={busyId === dismissTarget.id}>
                 {busyId === dismissTarget.id ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <UserMinus className="w-4 h-4 mr-2" />}
                 Уволить
@@ -1126,6 +1171,36 @@ export default function HrPage() {
           </div>
         </div>
       )}
+
+      <AppModal
+        open={bulkDismissOpen}
+        onClose={() => { if (!bulkBusy) { setBulkDismissOpen(false); setBulkDismissReason('') } }}
+        title={`Уволить ${selectedIds.size} ${selectedIds.size === 1 ? 'сотрудника' : 'сотрудников'}?`}
+        maxWidth="max-w-md"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => { setBulkDismissOpen(false); setBulkDismissReason('') }} disabled={bulkBusy}>
+              Отмена
+            </Button>
+            <Button variant="destructive" onClick={bulkDismiss} disabled={bulkBusy}>
+              {bulkBusy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <UserMinus className="w-4 h-4 mr-2" />}
+              Уволить
+            </Button>
+          </div>
+        }
+      >
+        <label className="block text-sm font-medium mb-1 text-foreground">Причина увольнения</label>
+        <textarea
+          value={bulkDismissReason}
+          onChange={(e) => setBulkDismissReason(e.target.value)}
+          placeholder="Укажите причину (минимум 5 символов)"
+          rows={4}
+          className="w-full px-3 py-2 rounded-lg border border-border bg-card text-sm"
+        />
+        <p className="mt-2 text-xs text-muted-foreground">
+          Причина будет записана всем выбранным сотрудникам, дата увольнения — сегодняшняя.
+        </p>
+      </AppModal>
 
       <EmployeePanel
         employee={selectedEmp}

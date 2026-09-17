@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { requiredEnv } from '@/lib/server/env'
+import { verifyCronRequest } from '@/lib/server/cron-auth'
 import { sendSystemEmail } from '@/lib/server/mailer'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { escapeTelegramHtml } from '@/lib/telegram/message-kit'
@@ -32,9 +32,8 @@ function outboxMessageText(payload: Record<string, unknown>) {
 }
 
 export async function GET(req: Request) {
-  const auth = req.headers.get('authorization') || ''
-  const cronSecret = requiredEnv('CRON_SECRET')
-  if (auth !== `Bearer ${cronSecret}`) {
+  // verifyCronRequest: 401 вместо 500 без CRON_SECRET и сравнение без утечки времени
+  if (!verifyCronRequest(req)) {
     return json({ ok: false, error: 'unauthorized' }, 401)
   }
 

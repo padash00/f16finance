@@ -11,6 +11,7 @@ import {
   Receipt,
   RefreshCw,
   Square,
+  X,
 } from 'lucide-react'
 
 import {
@@ -21,6 +22,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { confirmDialog } from '@/components/ui/confirm-dialog'
+import { toast } from '@/hooks/use-toast'
 import { Skeleton, TableSkeleton } from '@/components/skeleton'
 import { addDaysISO, formatRuDate, weekStartUtcISO } from '@/lib/core/date'
 import { formatMoney } from '@/lib/core/format'
@@ -133,11 +135,9 @@ export default function PointDebtsPage() {
     void load()
   }, [load])
 
-  useEffect(() => {
-    if (!error) return
-    const t = setTimeout(() => setError(null), 7000)
-    return () => clearTimeout(t)
-  }, [error])
+  // Раньше баннер сам гас через 7 секунд — вместе с ним пропадала и причина
+  // пустой страницы, и предупреждение «частично не списано». Теперь закрывает
+  // только человек крестиком.
 
   const items = data?.items || []
   const legacyRows = data?.legacyAggregates ?? []
@@ -277,8 +277,9 @@ export default function PointDebtsPage() {
   }
 
   const markPaidSelected = async () => {
+    if (settling) return
     if (!selectedIds.length) {
-      setError('Отметьте галочками позиции для списания')
+      toast({ title: 'Отметьте галочками позиции для списания', variant: 'destructive' })
       return
     }
     const ok = await confirmDialog({
@@ -298,12 +299,17 @@ export default function PointDebtsPage() {
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json?.error || `Ошибка ${res.status}`)
       const skipped = json?.data?.skipped as { id: string; reason: string }[] | undefined
-      if (skipped?.length) {
-        setError(`Частично: не списано ${skipped.length}. Обновите страницу.`)
-      }
       await load()
+      // load() сбрасывает error — предупреждение о недосписанных ставим после него,
+      // иначе оно исчезало вместе с перезагрузкой списка
+      if (skipped?.length) {
+        setError(`Частично: не списано ${skipped.length} из ${selectedIds.length}. Позиции остались в списке.`)
+        toast({ title: `Списано частично: ${selectedIds.length - skipped.length} из ${selectedIds.length}`, variant: 'destructive' })
+      } else {
+        toast({ title: `Списано ${selectedIds.length} поз.` })
+      }
     } catch (e: any) {
-      setError(e?.message || 'Не удалось списать')
+      toast({ title: 'Не удалось списать', description: e?.message, variant: 'destructive' })
     } finally {
       setSettling(false)
     }
@@ -461,7 +467,14 @@ export default function PointDebtsPage() {
         }
       />
 
-      {error ? <Card className="border-red-500/30 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-200">{error}</Card> : null}
+      {error ? (
+        <Card className="flex items-start gap-3 border-red-500/30 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-200">
+          <div className="flex-1">{error}</div>
+          <button type="button" onClick={() => setError(null)} aria-label="Закрыть" className="shrink-0 rounded p-1 hover:bg-red-500/10">
+            <X className="h-4 w-4" />
+          </button>
+        </Card>
+      ) : null}
 
       {data?.pointClientAggregateHint ? (
         <Card className="border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-700 dark:text-amber-100">

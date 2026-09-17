@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
-import { requiredEnv } from '@/lib/server/env'
+import { verifyCronRequest } from '@/lib/server/cron-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { kzTodayISO, kzWeekday, spawnTaskFromTemplate, type TaskTemplateRow } from '@/lib/server/task-templates'
 import { escapeTelegramHtml } from '@/lib/telegram/message-kit'
@@ -37,9 +37,8 @@ function taskKeyboard(taskId: string) {
 }
 
 export async function GET(req: Request) {
-  const auth = req.headers.get('authorization') || ''
-  const cronSecret = requiredEnv('CRON_SECRET')
-  if (auth !== `Bearer ${cronSecret}`) {
+  // verifyCronRequest: 401 вместо 500 без CRON_SECRET и сравнение без утечки времени
+  if (!verifyCronRequest(req)) {
     return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 })
   }
 
@@ -69,11 +68,20 @@ export async function GET(req: Request) {
     let failed = 0
 
     for (const template of dueTemplates) {
+      // Сначала занимаем день, только потом создаём задачу. Раньше отметка
+      // ставилась после создания и её ошибка игнорировалась — повтор крона или
+      // параллельный запуск порождал две одинаковые задачи за день.
+      const { data: claimed, error: claimError } = await supabase
+        .from('task_templates')
+        .update({ last_spawned_on: today })
+        .eq('id', template.id)
+        .or(`last_spawned_on.is.null,last_spawned_on.neq.${today}`)
+        .select('id')
+      if (claimError || !claimed || claimed.length === 0) continue
+
       try {
         const task = await spawnTaskFromTemplate(supabase, template, template.created_by || null)
         created += 1
-
-        await supabase.from('task_templates').update({ last_spawned_on: today }).eq('id', template.id)
 
         await writeAuditLog(supabase, {
           entityType: 'task',
@@ -141,6 +149,12 @@ export async function GET(req: Request) {
         }
       } catch (spawnError: any) {
         failed += 1
+        // Задача не родилась — снимаем отметку, чтобы следующий запуск попробовал снова
+        await supabase
+          .from('task_templates')
+          .update({ last_spawned_on: template.last_spawned_on ?? null })
+          .eq('id', template.id)
+          .then(() => null, () => null)
         await writeSystemErrorLogSafe({
           scope: 'server',
           area: 'api/cron/recurring-tasks',

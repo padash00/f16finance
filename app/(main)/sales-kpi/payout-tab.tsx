@@ -11,9 +11,11 @@
 import { useState } from 'react'
 import { AlertCircle, Check, Coins, Loader2, Sparkles, Wallet } from 'lucide-react'
 
+import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { toast } from '@/hooks/use-toast'
 import { formatMoney } from '@/lib/core/format'
 import { useApi } from '@/lib/hooks/use-api'
 
@@ -129,8 +131,11 @@ export function PayoutTab(props: { companyId: string; month: string; canManage: 
   const [editing, setEditing] = useState<string | null>(null)
   const [amount, setAmount] = useState('')
   const [reason, setReason] = useState('')
+  const [cancelTarget, setCancelTarget] = useState<PayoutRow | null>(null)
+  const [cancelReason, setCancelReason] = useState('')
 
   async function pay(row: PayoutRow, override?: { amount: number; reason: string }) {
+    if (busy) return
     setBusy(row.cashier_id)
     setProblem(null)
     try {
@@ -159,18 +164,25 @@ export function PayoutTab(props: { companyId: string; month: string; canManage: 
       setEditing(null)
       setReason('')
       await refresh()
+      toast({ title: 'Бонус начислен', description: row.name })
     } catch (e) {
-      setProblem(e instanceof Error ? e.message : 'Не удалось начислить')
+      toast({ title: 'Не удалось начислить', description: e instanceof Error ? e.message : undefined, variant: 'destructive' })
     } finally {
       setBusy(null)
     }
   }
 
-  async function cancel(row: PayoutRow) {
-    const reason = window.prompt('Причина отмены (минимум 5 символов):')
-    if (!reason || reason.trim().length < 5) return
+  // Причина отмены — в окне: window.prompt на коротком тексте просто молчал,
+  // и набранная причина пропадала
+  async function cancel() {
+    if (!cancelTarget || busy) return
+    const reason = cancelReason.trim()
+    if (reason.length < 5) {
+      toast({ title: 'Причина обязательна', description: 'Минимум 5 символов.', variant: 'destructive' })
+      return
+    }
+    const row = cancelTarget
     setBusy(row.cashier_id)
-    setProblem(null)
     try {
       const res = await fetch('/api/admin/sales-kpi/quality', {
         method: 'POST',
@@ -180,14 +192,17 @@ export function PayoutTab(props: { companyId: string; month: string; canManage: 
           action: 'void_monthly',
           month,
           cashier_id: row.cashier_id,
-          reason: reason.trim(),
+          reason,
         }),
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json?.error || `HTTP ${res.status}`)
+      setCancelTarget(null)
+      setCancelReason('')
       await refresh()
+      toast({ title: 'Начисление отменено', description: row.name })
     } catch (e) {
-      setProblem(e instanceof Error ? e.message : 'Не удалось отменить')
+      toast({ title: 'Не удалось отменить', description: e instanceof Error ? e.message : undefined, variant: 'destructive' })
     } finally {
       setBusy(null)
     }
@@ -320,7 +335,7 @@ export function PayoutTab(props: { companyId: string; month: string; canManage: 
                         variant="outline"
                         size="sm"
                         disabled={busy === r.cashier_id}
-                        onClick={() => void cancel(r)}
+                        onClick={() => { setCancelTarget(r); setCancelReason('') }}
                       >
                         Отменить
                       </Button>
@@ -480,6 +495,40 @@ export function PayoutTab(props: { companyId: string; month: string; canManage: 
           ) : null}
         </ul>
       </Card>
+
+      <AppModal
+        open={!!cancelTarget}
+        onClose={() => { if (!busy) { setCancelTarget(null); setCancelReason('') } }}
+        title="Отменить начисление"
+        maxWidth="max-w-md"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => { setCancelTarget(null); setCancelReason('') }} disabled={!!busy}>
+              Закрыть
+            </Button>
+            <Button variant="destructive" onClick={() => void cancel()} disabled={!!busy}>
+              {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Отменить начисление
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          <div className="text-sm text-body">
+            {cancelTarget?.name} · {formatMoney(cancelTarget?.amount || 0)}
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground">Причина отмены (минимум 5 символов)</label>
+            <textarea
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              rows={3}
+              className="mt-1 w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+              placeholder="Причина останется в журнале"
+            />
+          </div>
+        </div>
+      </AppModal>
     </div>
   )
 }

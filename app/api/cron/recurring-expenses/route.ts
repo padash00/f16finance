@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { requiredEnv } from '@/lib/server/env'
+import { verifyCronRequest } from '@/lib/server/cron-auth'
 import { listOrgReportTargets } from '@/lib/server/report-targets'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { escapeTelegramHtml } from '@/lib/telegram/message-kit'
@@ -22,9 +22,8 @@ function fmtMoney(v: number) {
 }
 
 export async function GET(req: Request) {
-  const auth = req.headers.get('authorization') || ''
-  const cronSecret = requiredEnv('CRON_SECRET')
-  if (auth !== `Bearer ${cronSecret}`) {
+  // verifyCronRequest: 401 вместо 500 без CRON_SECRET и сравнение без утечки времени
+  if (!verifyCronRequest(req)) {
     return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 })
   }
 
@@ -50,11 +49,24 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: true, created: 0 })
   }
 
+  const monthStart = `${monthKey}-01`
   const created: Array<{ template_id: string; expense_id: string; amount: number; name: string; company_id: string }> = []
   for (const t of due as any[]) {
     if (!t.company_id) continue
     const amount = Number(t.amount || 0)
     if (amount <= 0) continue
+
+    // Сначала занимаем месяц, только потом создаём расход. Раньше было наоборот,
+    // и ошибка/гонка на отметке давала два одинаковых расхода за один месяц:
+    // повтор крона (или параллельный запуск) снова видел шаблон «не отмеченным».
+    // Условие lt(monthStart) — это и есть замок: занять сможет только один.
+    const { data: claimed, error: claimError } = await supabase
+      .from('expense_templates')
+      .update({ recurring_last_run_at: today })
+      .eq('id', t.id)
+      .or(`recurring_last_run_at.is.null,recurring_last_run_at.lt.${monthStart}`)
+      .select('id')
+    if (claimError || !claimed || claimed.length === 0) continue
 
     const expensePayload: Record<string, unknown> = {
       date: today,
@@ -72,12 +84,14 @@ export async function GET(req: Request) {
       .insert([expensePayload])
       .select('id')
       .single()
-    if (insertError || !inserted?.id) continue
-
-    await supabase
-      .from('expense_templates')
-      .update({ recurring_last_run_at: today })
-      .eq('id', t.id)
+    if (insertError || !inserted?.id) {
+      // Расход не создан — возвращаем отметку назад, иначе шаблон молча пропустит месяц
+      await supabase
+        .from('expense_templates')
+        .update({ recurring_last_run_at: t.recurring_last_run_at ?? null })
+        .eq('id', t.id)
+      continue
+    }
 
     created.push({ template_id: t.id, expense_id: String(inserted.id), amount, name: t.name, company_id: String(t.company_id) })
   }

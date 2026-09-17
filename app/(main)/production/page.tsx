@@ -5,6 +5,9 @@ import { useToday } from '@/lib/client/use-today'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { TableSkeleton } from '@/components/skeleton'
 import { DatePicker } from '@/components/ui/date-picker'
+import { AppModal } from '@/components/ui/app-modal'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
+import { toast } from '@/hooks/use-toast'
 import { ChefHat, Loader2, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useStoreScope } from '@/components/store/store-scope'
@@ -27,6 +30,13 @@ type Recipe = {
 type SaleItem = { id: string; name: string; sale_price: number | null }
 
 const money = (n: number) => Number(n || 0).toLocaleString('ru-RU') + ' ₸'
+// «1,5» — обычная запись в РФ/КЗ раскладке. Number('1,5') даёт NaN, поэтому парсим сами.
+function parseDecimal(raw: string): number | null {
+  const clean = raw.replace(/\s/g, '').replace(',', '.')
+  if (!clean) return null
+  const n = Number(clean)
+  return Number.isFinite(n) ? n : null
+}
 const inputCls = 'rounded-xl border border-border bg-white dark:bg-slate-900/60 px-3 py-2 text-sm text-foreground outline-none focus:border-emerald-400/40'
 // Единицы измерения — выпадающие списки вместо ручного ввода.
 const UNITS = ['г', 'кг', 'мл', 'л', 'шт', 'уп'] // сырьё и компоненты
@@ -93,6 +103,12 @@ export default function ProductionPage() {
   const [ingPrice, setIngPrice] = useState('')
   const [savingIng, setSavingIng] = useState(false)
 
+  // окно «сколько?» для прихода/ревизии
+  const [qtyPrompt, setQtyPrompt] = useState<{ kind: 'receipt' | 'count'; ing: Ingredient } | null>(null)
+  const [qtyValue, setQtyValue] = useState('')
+  const [qtyBusy, setQtyBusy] = useState(false)
+  const [writeoffBusy, setWriteoffBusy] = useState(false)
+
   const addIngredient = async () => {
     if (!ingName.trim()) { setErr('Укажите название ингредиента'); return }
     setSavingIng(true); setErr(null)
@@ -107,41 +123,93 @@ export default function ProductionPage() {
     } catch (e: any) { setErr(e?.message || 'Ошибка') } finally { setSavingIng(false) }
   }
   const deleteIngredient = async (id: string, nm: string) => {
-    if (!confirm(`Удалить ингредиент «${nm}»?`)) return
-    const res = await fetch(`/api/admin/production/ingredients?id=${id}`, { method: 'DELETE' })
-    if (res.ok) await load(); else setErr('Не удалось удалить')
+    const ok = await confirmDialog({
+      title: `Удалить ингредиент «${nm}»?`,
+      description: 'Он пропадёт из складских остатков и из подсказок в техкартах.',
+      confirmLabel: 'Удалить',
+      destructive: true,
+    })
+    if (!ok) return
+    try {
+      const res = await fetch(`/api/admin/production/ingredients?id=${id}`, { method: 'DELETE' })
+      const j = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(j?.error || `Ошибка запроса (${res.status})`)
+      await load()
+      toast({ title: 'Ингредиент удалён' })
+    } catch (e: any) {
+      toast({ title: 'Не удалось удалить ингредиент', description: e?.message, variant: 'destructive' })
+    }
   }
 
-  const stockAction = async (action: string, payload: any, okMsg?: string) => {
-    setErr(null)
+  const stockAction = async (action: string, payload: any) => {
     const res = await fetch('/api/admin/production/stock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, ...payload }) })
     const j = await res.json().catch(() => null)
-    if (!res.ok || !j?.ok) { setErr(j?.error || 'Ошибка'); return null }
+    if (!res.ok || !j?.ok) throw new Error(j?.error || `Ошибка запроса (${res.status})`)
     await load()
     return j
   }
-  const receiptIng = async (ing: Ingredient) => {
-    const v = window.prompt(`Приход «${ing.name}» — сколько ${ing.unit} поступило?`, '')
-    if (v == null) return
-    const qty = Number(v)
-    if (!(qty > 0)) { setErr('Введите число > 0'); return }
-    await stockAction('receipt', { ingredient_id: ing.id, qty })
-  }
-  const countIng = async (ing: Ingredient) => {
-    const v = window.prompt(`Ревизия «${ing.name}» — фактический остаток (${ing.unit})? Ожидаемый: ${Number(ing.stock_qty || 0)}`, String(Number(ing.stock_qty || 0)))
-    if (v == null) return
-    const counted = Number(v)
-    if (!Number.isFinite(counted)) { setErr('Введите число'); return }
-    const j = await stockAction('count', { ingredient_id: ing.id, counted })
-    if (j) {
-      const variance = Number(j.variance || 0)
-      if (variance !== 0) setErr(variance < 0 ? `Недостача ${Math.abs(variance)} ${ing.unit}` : `Излишек ${variance} ${ing.unit}`)
+
+  // Приход и ревизия — через окно с числовым полем: window.prompt терял «1,5»
+  // (Number('1,5') === NaN) и не давал ни занятости кнопки, ни внятной ошибки.
+  const openReceipt = (ing: Ingredient) => { setQtyPrompt({ kind: 'receipt', ing }); setQtyValue('') }
+  const openCount = (ing: Ingredient) => { setQtyPrompt({ kind: 'count', ing }); setQtyValue(String(Number(ing.stock_qty || 0))) }
+
+  const submitQty = async () => {
+    if (!qtyPrompt || qtyBusy) return
+    const { kind, ing } = qtyPrompt
+    const value = parseDecimal(qtyValue)
+    if (value == null) {
+      toast({ title: 'Введите число', description: 'Дробную часть можно писать через запятую: 1,5', variant: 'destructive' })
+      return
+    }
+    if (kind === 'receipt' && !(value > 0)) {
+      toast({ title: 'Количество должно быть больше 0', variant: 'destructive' })
+      return
+    }
+    setQtyBusy(true)
+    try {
+      if (kind === 'receipt') {
+        await stockAction('receipt', { ingredient_id: ing.id, qty: value })
+        toast({ title: `Приход ${value} ${ing.unit || ''}`.trim(), description: ing.name })
+      } else {
+        const j = await stockAction('count', { ingredient_id: ing.id, counted: value })
+        const variance = Number(j.variance || 0)
+        if (variance !== 0) {
+          toast({
+            title: variance < 0 ? `Недостача ${Math.abs(variance)} ${ing.unit || ''}`.trim() : `Излишек ${variance} ${ing.unit || ''}`.trim(),
+            description: ing.name,
+            variant: variance < 0 ? 'destructive' : undefined,
+          })
+        } else {
+          toast({ title: 'Ревизия без расхождений', description: ing.name })
+        }
+      }
+      setQtyPrompt(null)
+    } catch (e: any) {
+      toast({ title: 'Не удалось записать движение', description: e?.message, variant: 'destructive' })
+    } finally {
+      setQtyBusy(false)
     }
   }
+
   const writeoffSales = async () => {
-    if (!confirm(`Списать ингредиенты по продажам за ${anFrom} — ${anTo}? Остатки уменьшатся на теоретический расход.`)) return
-    const j = await stockAction('writeoff_sales', { from: anFrom, to: anTo })
-    if (j) setErr(null)
+    if (writeoffBusy) return
+    const ok = await confirmDialog({
+      title: 'Списать ингредиенты по продажам?',
+      description: `Период ${anFrom} — ${anTo}. Остатки уменьшатся на теоретический расход.`,
+      confirmLabel: 'Списать',
+      destructive: true,
+    })
+    if (!ok) return
+    setWriteoffBusy(true)
+    try {
+      await stockAction('writeoff_sales', { from: anFrom, to: anTo })
+      toast({ title: 'Списание проведено' })
+    } catch (e: any) {
+      toast({ title: 'Не удалось списать', description: e?.message, variant: 'destructive' })
+    } finally {
+      setWriteoffBusy(false)
+    }
   }
 
   const load = useCallback(async () => {
@@ -227,9 +295,22 @@ export default function ProductionPage() {
   }
 
   const remove = async (id: string, nm: string) => {
-    if (!confirm(`Удалить техкарту «${nm}»?`)) return
-    const res = await fetch(`/api/admin/production/recipes?id=${id}`, { method: 'DELETE' })
-    if (res.ok) await load(); else setErr('Не удалось удалить')
+    const ok = await confirmDialog({
+      title: `Удалить техкарту «${nm}»?`,
+      description: 'Рецептура и привязка к товару будут удалены.',
+      confirmLabel: 'Удалить',
+      destructive: true,
+    })
+    if (!ok) return
+    try {
+      const res = await fetch(`/api/admin/production/recipes?id=${id}`, { method: 'DELETE' })
+      const j = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(j?.error || `Ошибка запроса (${res.status})`)
+      await load()
+      toast({ title: 'Техкарта удалена' })
+    } catch (e: any) {
+      toast({ title: 'Не удалось удалить техкарту', description: e?.message, variant: 'destructive' })
+    }
   }
 
   const setComp = (i: number, patch: Partial<Comp>) => setComps((prev) => prev.map((c, idx) => idx === i ? { ...c, ...patch } : c))
@@ -313,8 +394,8 @@ export default function ProductionPage() {
                     <span className="tabular-nums text-muted-foreground">{money(Number(ing.purchase_price || 0))}/{ing.unit}</span>
                     <span className="text-[11px] text-slate-500">остаток</span>
                     <span className={`tabular-nums ${Number(ing.stock_qty || 0) < 0 ? 'text-rose-600 dark:text-rose-300' : 'text-foreground'}`}>{Number(ing.stock_qty || 0)} {ing.unit}</span>
-                    {can('production.stock_receipt') && <button onClick={() => receiptIng(ing)} className="rounded-lg border border-border bg-slate-100 dark:bg-white/5 px-2 py-1 text-[11px] text-emerald-700 dark:text-emerald-300 hover:bg-slate-200 dark:hover:bg-white/10">+ приход</button>}
-                    {can('production.stock_count') && <button onClick={() => countIng(ing)} className="rounded-lg border border-border bg-slate-100 dark:bg-white/5 px-2 py-1 text-[11px] text-body hover:bg-slate-200 dark:hover:bg-white/10">ревизия</button>}
+                    {can('production.stock_receipt') && <button onClick={() => openReceipt(ing)} className="rounded-lg border border-border bg-slate-100 dark:bg-white/5 px-2 py-1 text-[11px] text-emerald-700 dark:text-emerald-300 hover:bg-slate-200 dark:hover:bg-white/10">+ приход</button>}
+                    {can('production.stock_count') && <button onClick={() => openCount(ing)} className="rounded-lg border border-border bg-slate-100 dark:bg-white/5 px-2 py-1 text-[11px] text-body hover:bg-slate-200 dark:hover:bg-white/10">ревизия</button>}
                     {can('production.delete_ingredient') && <button onClick={() => deleteIngredient(ing.id, ing.name)} className="text-slate-500 hover:text-rose-600 dark:hover:text-rose-300"><Trash2 className="h-3.5 w-3.5" /></button>}
                   </div>
                 </div>
@@ -486,8 +567,8 @@ export default function ProductionPage() {
               {anLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Посчитать
             </button>
             {can('production.writeoff') && (
-              <button onClick={writeoffSales} className="inline-flex items-center gap-1.5 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-700 dark:text-amber-200 hover:bg-amber-500/20" title="Списать теоретический расход ингредиентов со склада за период">
-                Списать со склада
+              <button onClick={writeoffSales} disabled={writeoffBusy} className="inline-flex items-center gap-1.5 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-700 dark:text-amber-200 hover:bg-amber-500/20 disabled:opacity-50" title="Списать теоретический расход ингредиентов со склада за период">
+                {writeoffBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Списать со склада
               </button>
             )}
           </div>
@@ -592,6 +673,50 @@ export default function ProductionPage() {
           </div>
         )}
       </div>
+
+      <AppModal
+        open={!!qtyPrompt}
+        onClose={() => { if (!qtyBusy) setQtyPrompt(null) }}
+        title={qtyPrompt?.kind === 'receipt' ? 'Приход ингредиента' : 'Ревизия ингредиента'}
+        maxWidth="max-w-sm"
+        footer={
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => setQtyPrompt(null)}
+              disabled={qtyBusy}
+              className="rounded-xl border border-border bg-slate-100 dark:bg-white/5 px-3 py-2 text-sm text-body hover:bg-slate-200 dark:hover:bg-white/10 disabled:opacity-50"
+            >
+              Отмена
+            </button>
+            <button
+              onClick={submitQty}
+              disabled={qtyBusy}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+            >
+              {qtyBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {qtyPrompt?.kind === 'receipt' ? 'Оприходовать' : 'Записать'}
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-2">
+          <div className="text-sm text-foreground">{qtyPrompt?.ing.name}</div>
+          <label className="block text-xs text-slate-500">
+            {qtyPrompt?.kind === 'receipt'
+              ? `Сколько поступило (${qtyPrompt?.ing.unit || 'ед.'})`
+              : `Фактический остаток (${qtyPrompt?.ing.unit || 'ед.'}), ожидаемый ${Number(qtyPrompt?.ing.stock_qty || 0)}`}
+          </label>
+          <input
+            value={qtyValue}
+            onChange={(e) => setQtyValue(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') submitQty() }}
+            inputMode="decimal"
+            placeholder="например 1,5"
+            className={`${inputCls} w-full`}
+          />
+          <div className={hintCls}>Дробную часть можно писать через запятую или точку.</div>
+        </div>
+      </AppModal>
     </div>
   )
 }

@@ -29,6 +29,9 @@ import { StoreDataTableSkeleton } from '@/components/store/store-data-table-skel
 import { Skeleton } from '@/components/ui/skeleton'
 import { isAbortError } from '@/lib/is-abort-error'
 import { invalidateStoreCaches } from '@/lib/client/store-cache'
+import { SortableTh } from '@/components/ui/sortable-th'
+import { useTableSort } from '@/lib/client/use-table-sort'
+import type { SortColumns, SortState } from '@/lib/core/table-sort'
 
 type InventoryLocation = {
   id: string
@@ -89,6 +92,10 @@ type WriteoffLine = {
   quantity: string
   comment: string
 }
+
+type WriteoffSortKey = 'date' | 'location' | 'reason' | 'positions' | 'amount'
+
+const WRITEOFF_SORT_INITIAL: SortState<WriteoffSortKey> = { key: 'date', dir: 'desc' }
 
 const emptyLine = (): WriteoffLine => ({
   item_id: '',
@@ -445,6 +452,24 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
     })
   }, [data?.writeoffs, writeoffSearch])
 
+  // Сортировка по заголовку — после поиска, чтобы фильтр не сбрасывал порядок
+  const writeoffSortColumns = useMemo<SortColumns<InventoryWriteoff, WriteoffSortKey>>(
+    () => ({
+      date: { get: (w) => w.written_at || null, defaultDir: 'desc' },
+      location: { get: (w) => w.location?.company?.name || w.location?.name || null },
+      reason: { get: (w) => w.reason || null },
+      positions: { get: (w) => (w.items || []).length || null, defaultDir: 'desc' },
+      amount: { get: (w) => Number(w.total_amount || 0) || null, defaultDir: 'desc' },
+    }),
+    [],
+  )
+  const { sort: writeoffSort, toggle: toggleWriteoffSort, sortedRows: sortedWriteoffs } = useTableSort<InventoryWriteoff, WriteoffSortKey>({
+    storageKey: 'storeWriteoffs.listSort',
+    columns: writeoffSortColumns,
+    initial: WRITEOFF_SORT_INITIAL,
+    rows: filteredWriteoffs,
+  })
+
   const totalWriteoffsAmount = useMemo(() => {
     return (data?.writeoffs || [])
       .filter((w) => w.status !== 'cancelled')
@@ -579,16 +604,16 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
             <table className="w-full min-w-[680px] text-sm">
               <thead className="sticky top-0 z-10 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur">
                 <tr className="border-b border-slate-200 dark:border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
-                  <th className="w-24 py-2.5 pl-4 pr-2 font-normal">Дата</th>
-                  <th className="w-48 py-2.5 px-2 font-normal">Локация</th>
-                  <th className="py-2.5 px-2 font-normal">Причина</th>
-                  <th className="w-20 py-2.5 px-2 text-right font-normal">Позиций</th>
-                  <th className="w-32 py-2.5 px-2 pr-4 text-right font-normal text-rose-700 dark:text-rose-300/70">Сумма</th>
+                  <SortableTh label="Дата" sortKey="date" sort={writeoffSort} onSort={toggleWriteoffSort} className="w-24 py-2.5 pl-4 pr-2 font-normal" />
+                  <SortableTh label="Локация" sortKey="location" sort={writeoffSort} onSort={toggleWriteoffSort} className="w-48 py-2.5 px-2 font-normal" />
+                  <SortableTh label="Причина" sortKey="reason" sort={writeoffSort} onSort={toggleWriteoffSort} className="py-2.5 px-2 font-normal" />
+                  <SortableTh label="Позиций" sortKey="positions" sort={writeoffSort} onSort={toggleWriteoffSort} align="right" className="w-20 py-2.5 px-2 font-normal" />
+                  <SortableTh label="Сумма" sortKey="amount" sort={writeoffSort} onSort={toggleWriteoffSort} align="right" className="w-32 py-2.5 px-2 pr-4 font-normal text-rose-700 dark:text-rose-300/70" />
                   <th className="w-28 py-2.5 px-2 pr-4 text-right font-normal">Акт</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-white/[0.04]">
-                {filteredWriteoffs.map((writeoff) => (
+                {sortedWriteoffs.map((writeoff) => (
                   <tr key={writeoff.id} className="transition hover:bg-slate-50 dark:hover:bg-white/[0.02]">
                     <td className="w-24 py-2.5 pl-4 pr-2 align-middle">
                       <span className="text-xs text-muted-foreground">{formatDate(writeoff.written_at)}</span>

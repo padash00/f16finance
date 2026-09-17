@@ -15,10 +15,12 @@
 import { useState } from 'react'
 import { AlertTriangle, CheckCircle2, Loader2, Plus, ShieldCheck, Trash2, Wallet } from 'lucide-react'
 
+import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Input } from '@/components/ui/input'
+import { toast } from '@/hooks/use-toast'
 import {
   Select,
   SelectContent,
@@ -163,7 +165,9 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
   const payload = data?.data
 
   const [busy, setBusy] = useState(false)
-  const [problem, setProblem] = useState<string | null>(null)
+  // Причина отмены — в окне: window.prompt на короткой причине молча ничего не делал
+  const [cancelTarget, setCancelTarget] = useState<{ cashier_id: string; name: string; amount: number } | null>(null)
+  const [cancelReason, setCancelReason] = useState('')
   const [eventForm, setEventForm] = useState({
     starts_on: '',
     ends_on: '',
@@ -172,9 +176,9 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
     severity: 'medium' as 'low' | 'medium' | 'high',
   })
 
-  async function post(body: Record<string, unknown>) {
+  async function post(body: Record<string, unknown>, okMsg?: string) {
+    if (busy) return false
     setBusy(true)
-    setProblem(null)
     try {
       const res = await fetch('/api/admin/sales-kpi/quality', {
         method: 'POST',
@@ -184,12 +188,30 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json?.error || `HTTP ${res.status}`)
       await refresh()
+      if (okMsg) toast({ title: okMsg })
       return true
     } catch (e) {
-      setProblem(e instanceof Error ? e.message : 'Не удалось выполнить')
+      toast({ title: 'Не удалось выполнить', description: e instanceof Error ? e.message : undefined, variant: 'destructive' })
       return false
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function submitCancel() {
+    if (!cancelTarget || busy) return
+    const reason = cancelReason.trim()
+    if (reason.length < 5) {
+      toast({ title: 'Причина обязательна', description: 'Минимум 5 символов.', variant: 'destructive' })
+      return
+    }
+    const ok = await post(
+      { action: 'void_monthly', month: currentMonth, cashier_id: cancelTarget.cashier_id, reason },
+      'Начисление отменено',
+    )
+    if (ok) {
+      setCancelTarget(null)
+      setCancelReason('')
     }
   }
 
@@ -344,7 +366,7 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
                           reason: a.reason,
                           is_anomaly: true,
                           exclude_from_baseline: false,
-                        })
+                        }, 'Смена помечена')
                       }
                     >
                       Пометить
@@ -361,7 +383,7 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
                             reason: a.reason,
                             is_anomaly: true,
                             exclude_from_baseline: true,
-                          })
+                          }, 'Смена исключена из нормы')
                         }
                       >
                         Исключить из нормы
@@ -394,7 +416,7 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
                   {props.canManage ? (
                     <Button
                       onClick={() =>
-                        void post({ action: 'unflag_shift', shift_date: f.shift_date, shift: f.shift })
+                        void post({ action: 'unflag_shift', shift_date: f.shift_date, shift: f.shift }, 'Пометка снята')
                       }
                       disabled={busy}
                       variant="ghost" size="icon" className="ml-auto h-7 w-7 text-muted-foreground"
@@ -442,7 +464,7 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
                 </span>
                 {props.canManage ? (
                   <Button
-                    onClick={() => void post({ action: 'delete_event', event_id: e.id })}
+                    onClick={() => void post({ action: 'delete_event', event_id: e.id }, 'Событие удалено')}
                     disabled={busy}
                     variant="ghost" size="icon" className="ml-auto h-7 w-7 text-muted-foreground hover:text-rose-600"
                     aria-label="Удалить событие"
@@ -522,7 +544,7 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
                   action: 'add_event',
                   ...eventForm,
                   ends_on: eventForm.ends_on || eventForm.starts_on,
-                }).then((ok) => {
+                }, 'Событие добавлено').then((ok) => {
                   if (ok) setEventForm({ ...eventForm, title: '' })
                 })
               }
@@ -575,14 +597,12 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
                           className="ml-auto"
                           disabled={busy}
                           onClick={() => {
-                            const reason = window.prompt('Причина отмены начисления (минимум 5 символов):')
-                            if (!reason || reason.trim().length < 5) return
-                            void post({
-                              action: 'void_monthly',
-                              month: currentMonth,
+                            setCancelTarget({
                               cashier_id: m.cashier_id,
-                              reason: reason.trim(),
+                              name: props.cashierNames.get(m.cashier_id) || 'Без имени',
+                              amount: m.amount,
                             })
+                            setCancelReason('')
                           }}
                         >
                           Отменить
@@ -603,7 +623,7 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
                           status: m.status,
                           score: m.score,
                           shifts: m.shifts,
-                        })
+                        }, 'Бонус начислен')
                       }
                     >
                       Начислить
@@ -729,7 +749,39 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
         ) : null}
       </Card>
 
-      {problem ? <p className="text-sm text-rose-600 dark:text-rose-400">{problem}</p> : null}
+      <AppModal
+        open={!!cancelTarget}
+        onClose={() => { if (!busy) { setCancelTarget(null); setCancelReason('') } }}
+        title="Отменить начисление"
+        maxWidth="max-w-md"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => { setCancelTarget(null); setCancelReason('') }} disabled={busy}>
+              Закрыть
+            </Button>
+            <Button variant="destructive" onClick={() => void submitCancel()} disabled={busy}>
+              {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Отменить начисление
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          <div className="text-sm text-body">
+            {cancelTarget?.name} · {formatMoney(cancelTarget?.amount || 0)}
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground">Причина отмены (минимум 5 символов)</label>
+            <textarea
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              rows={3}
+              className="mt-1 w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+              placeholder="Причина останется в журнале"
+            />
+          </div>
+        </div>
+      </AppModal>
     </div>
   )
 }

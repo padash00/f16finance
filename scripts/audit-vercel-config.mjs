@@ -13,7 +13,7 @@
  * тяжёлыми запросами.
  */
 
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const ALLOWED_KEYS = new Set([
@@ -100,6 +100,40 @@ try {
   }
 } catch {
   // Файла может не быть — это нормально.
+}
+
+// ── Крон без расписания ──────────────────────────────────────────────────────
+//
+// Роут в app/api/cron/ сам себя не запускает: если его нет в crons, он просто
+// никогда не вызывается. Так очередь клиентских уведомлений
+// (client_notification_outbox) копилась месяцами — код был написан, писатели в
+// таблицу работали, а разбирать её было некому.
+//
+// Сюда вписывать только те кроны, которые дёргает кто-то внешний (другой
+// сервис, ручной вызов) — с объяснением, кто именно.
+const CRON_WITHOUT_SCHEDULE_OK = new Set([])
+
+const scheduledCronPaths = new Set(
+  (config.crons || []).map((cron) => String(cron?.path || '').replace(/\/+$/, '')),
+)
+
+try {
+  const cronRoutes = readdirSync(join('app', 'api', 'cron'), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .filter((name) => existsSync(join('app', 'api', 'cron', name, 'route.ts')))
+
+  for (const name of cronRoutes) {
+    if (scheduledCronPaths.has(`/api/cron/${name}`)) continue
+    if (CRON_WITHOUT_SCHEDULE_OK.has(name)) continue
+    problems.push(
+      `крон app/api/cron/${name} не включён в "crons" — он не запустится ни разу.\n` +
+        '      Добавьте расписание в vercel.json, удалите роут, или, если его дёргают\n' +
+        '      извне, впишите имя в CRON_WITHOUT_SCHEDULE_OK с объяснением кто.',
+    )
+  }
+} catch {
+  // Каталога кронов может не быть — это нормально.
 }
 
 const regions = config.regions || []

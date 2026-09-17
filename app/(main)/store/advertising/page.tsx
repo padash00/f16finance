@@ -17,6 +17,8 @@ import { Button } from '@/components/ui/button'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Card } from '@/components/ui/card'
 import { uploadFile } from '@/lib/client/upload-file'
+import { toast } from '@/hooks/use-toast'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
 
 
 type CompanyOption = { id: string; name: string; code?: string | null }
@@ -43,6 +45,8 @@ export default function AdvertisingPage({ embedded = false }: { embedded?: boole
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Ошибки действий — тостами, чтобы было видно у самой карточки ролика
+  const notifyError = (message: string) => toast({ title: message, variant: 'destructive' })
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const fileRef = useRef<HTMLInputElement | null>(null)
 
@@ -97,13 +101,13 @@ export default function AdvertisingPage({ embedded = false }: { embedded?: boole
         ? 'image'
         : 'image'
     if (!file.type.startsWith('video/') && !file.type.startsWith('image/')) {
-      setError('Допустимы только видео и картинки')
+      notifyError('Допустимы только видео и картинки')
       if (fileRef.current) fileRef.current.value = ''
       return
     }
+    if (uploading) return
 
     setUploading(true)
-    setError(null)
     try {
       // 1. Файл идёт в хранилище напрямую, но по разрешению сервера: тот
       //    проверяет право, тип и размер и выдаёт одноразовую ссылку. Через
@@ -126,53 +130,67 @@ export default function AdvertisingPage({ embedded = false }: { embedded?: boole
       const created = await createRes.json().catch(() => null)
       if (!createRes.ok) throw new Error(created?.error || 'Ошибка создания записи')
       setAds((prev) => [...prev, created.data as Ad])
+      toast({ title: 'Файл загружен' })
     } catch (e: any) {
-      setError(e?.message || 'Ошибка загрузки')
+      notifyError(e?.message || 'Не удалось загрузить файл')
     } finally {
       setUploading(false)
       if (fileRef.current) fileRef.current.value = ''
     }
   }
 
+  // Ответ сервера раньше не проверяли: отказ выглядел как успех, пока не обновишь страницу
+  const patchAd = async (body: Record<string, unknown>) => {
+    const res = await fetch('/api/admin/advertising', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const json = await res.json().catch(() => null)
+    if (!res.ok) throw new Error(json?.error || 'Не удалось сохранить')
+  }
+
   const toggleActive = async (ad: Ad) => {
     setAds((prev) => prev.map((a) => (a.id === ad.id ? { ...a, is_active: !a.is_active } : a)))
     try {
-      await fetch('/api/admin/advertising', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: ad.id, is_active: !ad.is_active }),
-      })
-    } catch {
+      await patchAd({ id: ad.id, is_active: !ad.is_active })
+    } catch (e: any) {
       // откат при ошибке
       setAds((prev) => prev.map((a) => (a.id === ad.id ? { ...a, is_active: ad.is_active } : a)))
+      notifyError(e?.message || 'Не удалось изменить показ')
     }
   }
 
   const updateDuration = async (ad: Ad, value: number) => {
     setAds((prev) => prev.map((a) => (a.id === ad.id ? { ...a, duration_sec: value } : a)))
     try {
-      await fetch('/api/admin/advertising', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: ad.id, duration_sec: value }),
-      })
-    } catch {
-      /* noop */
+      await patchAd({ id: ad.id, duration_sec: value })
+    } catch (e: any) {
+      setAds((prev) => prev.map((a) => (a.id === ad.id ? { ...a, duration_sec: ad.duration_sec } : a)))
+      notifyError(e?.message || 'Не удалось сохранить длительность')
     }
   }
 
   const removeAd = async (ad: Ad) => {
-    if (!confirm('Удалить этот ролик/картинку?')) return
+    const ok = await confirmDialog({
+      title: 'Удалить этот ролик/картинку?',
+      description: 'Файл перестанет крутиться на экране клиента.',
+      confirmLabel: 'Удалить',
+      destructive: true,
+    })
+    if (!ok) return
     const prev = ads
     setAds((p) => p.filter((a) => a.id !== ad.id))
     try {
       const res = await fetch(`/api/admin/advertising?id=${encodeURIComponent(ad.id)}`, {
         method: 'DELETE',
       })
-      if (!res.ok) throw new Error()
-    } catch {
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || 'Не удалось удалить')
+      toast({ title: 'Удалено' })
+    } catch (e: any) {
       setAds(prev)
-      setError('Не удалось удалить')
+      notifyError(e?.message || 'Не удалось удалить')
     }
   }
 
@@ -182,19 +200,18 @@ export default function AdvertisingPage({ embedded = false }: { embedded?: boole
       setDragIndex(null)
       return
     }
+    const prev = ads
     const reordered = [...ads]
     const [moved] = reordered.splice(dragIndex, 1)
     reordered.splice(targetIndex, 0, moved)
     setAds(reordered)
     setDragIndex(null)
     try {
-      await fetch('/api/admin/advertising', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reorder: reordered.map((a) => a.id) }),
-      })
-    } catch {
-      /* noop */
+      await patchAd({ reorder: reordered.map((a) => a.id) })
+    } catch (e: any) {
+      // сервер отказал — возвращаем прежний порядок, иначе UI врёт
+      setAds(prev)
+      notifyError(e?.message || 'Не удалось сохранить порядок')
     }
   }
 

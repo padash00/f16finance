@@ -18,6 +18,8 @@ import { useModalEscape } from '@/lib/client/use-modal-escape'
 import { useStoreApiUrl } from '@/components/store/store-scope'
 import { readApiCache, writeApiCache } from '@/lib/client/use-api-cache'
 import { invalidateStoreCaches } from '@/lib/client/store-cache'
+import { toast } from '@/hooks/use-toast'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
 
 type Supplier = {
   id: string
@@ -122,7 +124,8 @@ export default function SupplierCardPage() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
+  // Итоги действий — тостами: карточка вверху остаётся за модалкой переноса
+  const notifyError = (message: string) => toast({ title: message, variant: 'destructive' })
 
   // Форма настроек поставщика
   const [editForm, setEditForm] = useState({
@@ -177,8 +180,9 @@ export default function SupplierCardPage() {
   const openTransferReceipt = (rid: string, label: string) => { setTransferMode('receipt'); setTransferReceiptId(rid); setTransferReceiptLabel(label); setTransferTarget(''); setTransferOpen(true) }
 
   const doTransfer = async () => {
-    if (!transferTarget) { setError('Выберите поставщика-получателя'); return }
-    setTransferring(true); setError(null)
+    if (transferring) return
+    if (!transferTarget) { notifyError('Выберите поставщика-получателя'); return }
+    setTransferring(true)
     try {
       const res = await fetch(`/api/admin/store/suppliers/${supplierId}`, {
         method: 'PATCH',
@@ -192,11 +196,11 @@ export default function SupplierCardPage() {
       const j = await res.json().catch(() => null)
       if (!res.ok || !j?.ok) throw new Error(j?.error || 'Не удалось перенести')
       setTransferOpen(false); setTransferTarget(''); setTransferReceiptId(null)
-      setSuccess(transferMode === 'receipt' ? `Накладная перенесена · товаров: ${j.data?.movedItems ?? 0}` : `Перенесено товаров: ${j.data?.movedItems ?? 0}`)
+      toast({ title: transferMode === 'receipt' ? `Накладная перенесена · товаров: ${j.data?.movedItems ?? 0}` : `Перенесено товаров: ${j.data?.movedItems ?? 0}` })
       invalidateStoreCaches()
       await load({ fresh: true })
     } catch (e: any) {
-      setError(e?.message || 'Ошибка переноса')
+      notifyError(e?.message || 'Не удалось перенести')
     } finally {
       setTransferring(false)
     }
@@ -271,12 +275,12 @@ export default function SupplierCardPage() {
   }, [addAliasOpen, catalog.length])
 
   const submitAlias = async () => {
+    if (savingAlias) return
     if (!aliasName.trim() || !aliasItemId) {
-      setError('Введите имя и выберите товар каталога')
+      notifyError('Введите имя и выберите товар каталога')
       return
     }
     setSavingAlias(true)
-    setError(null)
     try {
       const response = await fetch(`/api/admin/store/suppliers/${supplierId}/aliases`, {
         method: 'POST',
@@ -290,7 +294,7 @@ export default function SupplierCardPage() {
       })
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось добавить алиас')
-      setSuccess('Алиас добавлен')
+      toast({ title: 'Алиас добавлен' })
       setAddAliasOpen(false)
       setAliasName('')
       setAliasItemId('')
@@ -299,36 +303,41 @@ export default function SupplierCardPage() {
       invalidateStoreCaches()
       await load({ fresh: true })
     } catch (err: any) {
-      setError(err?.message || 'Ошибка')
+      notifyError(err?.message || 'Не удалось добавить алиас')
     } finally {
       setSavingAlias(false)
     }
   }
 
   const deleteAlias = async (aliasId: string) => {
-    if (!confirm('Удалить этот алиас? AI-распознавание для этой строки больше не будет автоподставлять данный товар.')) return
+    const ok = await confirmDialog({
+      title: 'Удалить этот алиас?',
+      description: 'AI-распознавание для этой строки больше не будет автоподставлять данный товар.',
+      confirmLabel: 'Удалить',
+      destructive: true,
+    })
+    if (!ok) return
     try {
       const response = await fetch(`/api/admin/store/suppliers/${supplierId}/aliases?alias_id=${aliasId}`, {
         method: 'DELETE',
       })
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось удалить')
-      setSuccess('Алиас удалён')
+      toast({ title: 'Алиас удалён' })
       invalidateStoreCaches()
       await load({ fresh: true })
     } catch (err: any) {
-      setError(err?.message || 'Ошибка')
+      notifyError(err?.message || 'Не удалось удалить алиас')
     }
   }
 
   const saveSupplier = async () => {
+    if (savingSupplier) return
     if (!editForm.name.trim()) {
-      setError('Введите название поставщика')
+      notifyError('Введите название поставщика')
       return
     }
     setSavingSupplier(true)
-    setError(null)
-    setSuccess(null)
     try {
       const response = await fetch('/api/admin/inventory', {
         method: 'POST',
@@ -351,11 +360,11 @@ export default function SupplierCardPage() {
       })
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось сохранить')
-      setSuccess('Настройки поставщика сохранены')
+      toast({ title: 'Настройки поставщика сохранены' })
       invalidateStoreCaches()
       await load({ fresh: true })
     } catch (err: any) {
-      setError(err?.message || 'Ошибка сохранения')
+      notifyError(err?.message || 'Не удалось сохранить настройки')
     } finally {
       setSavingSupplier(false)
     }
@@ -405,7 +414,6 @@ export default function SupplierCardPage() {
       />
 
       {error ? <Card className="p-3 border-red-500/30 bg-red-500/10 text-sm text-red-700 dark:text-red-200">{error}</Card> : null}
-      {success ? <Card className="p-3 border-emerald-500/30 bg-emerald-500/10 text-sm text-emerald-700 dark:text-emerald-200">{success}</Card> : null}
 
       {stats ? (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { CapabilitiesPanel } from '@/components/admin/capabilities-panel'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
+import { toast } from '@/hooks/use-toast'
 import { UserOverridesPanel } from '@/components/admin/user-overrides-panel'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { CardSkeleton } from '@/components/skeleton'
@@ -202,17 +204,20 @@ export default function AccessPage() {
           copy_from_role: newPosSeed === 'copy_from' ? newPosCopyFrom : undefined,
         }),
       })
-      const data = await res.json()
-      if (data.ok) {
+      const data = await res.json().catch(() => null)
+      if (res.ok && data?.ok) {
         setPositions(prev => [...prev, data.data])
         setNewPosName('')
         setNewPosDesc('')
         setNewPosSeed('closed')
         setNewPosCopyFrom('')
+        toast({ title: 'Должность создана' })
       } else {
-        alert(data.error || 'Ошибка')
+        throw new Error(data?.error || `Ошибка запроса (${res.status})`)
       }
-    } catch { alert('Ошибка сети') }
+    } catch (e: any) {
+      toast({ title: 'Не удалось создать должность', description: e?.message, variant: 'destructive' })
+    }
     setCreatingPos(false)
   }
 
@@ -231,19 +236,28 @@ export default function AccessPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'update', id: editingPos.id, name: editName.trim(), description: editDesc.trim() || null }),
       })
-      const data = await res.json()
-      if (data.ok) {
+      const data = await res.json().catch(() => null)
+      if (res.ok && data?.ok) {
         setPositions(prev => prev.map(p => p.id === editingPos.id ? data.data : p))
         setEditingPos(null)
+        toast({ title: 'Должность сохранена' })
       } else {
-        alert(data.error || 'Ошибка')
+        throw new Error(data?.error || `Ошибка запроса (${res.status})`)
       }
-    } catch { alert('Ошибка сети') }
+    } catch (e: any) {
+      toast({ title: 'Не удалось сохранить должность', description: e?.message, variant: 'destructive' })
+    }
     setSavingEdit(false)
   }
 
   const handleDeletePosition = async (pos: Position) => {
-    if (!confirm(`Удалить должность "${posLabel(pos)}"? Все права доступа этой должности тоже удалятся.`)) return
+    const ok = await confirmDialog({
+      title: `Удалить должность «${posLabel(pos)}»?`,
+      description: 'Все права доступа этой должности тоже удалятся.',
+      confirmLabel: 'Удалить',
+      destructive: true,
+    })
+    if (!ok) return
     setDeletingId(pos.id)
     try {
       const res = await fetch('/api/admin/positions', {
@@ -251,16 +265,23 @@ export default function AccessPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'delete', id: pos.id }),
       })
-      const data = await res.json()
-      if (data.ok) {
+      const data = await res.json().catch(() => null)
+      if (res.ok && data?.ok) {
         setPositions(prev => prev.filter(p => p.id !== pos.id))
         if (selectedRole === pos.name) setSelectedRole(positions.find(p => p.id !== pos.id)?.name ?? '')
-      } else if (data.error === 'in-use') {
-        alert(data.message || `Роль используется ${data.count} сотрудниками — переназначьте их сначала через вкладку Аккаунты.`)
+        toast({ title: 'Должность удалена' })
+      } else if (data?.error === 'in-use') {
+        toast({
+          title: 'Должность занята',
+          description: data.message || `Роль используется ${data.count} сотрудниками — переназначьте их через вкладку «Аккаунты».`,
+          variant: 'destructive',
+        })
       } else {
-        alert(data.error || 'Ошибка')
+        throw new Error(data?.error || `Ошибка запроса (${res.status})`)
       }
-    } catch { alert('Ошибка сети') }
+    } catch (e: any) {
+      toast({ title: 'Не удалось удалить должность', description: e?.message, variant: 'destructive' })
+    }
     setDeletingId(null)
   }
 
@@ -280,14 +301,17 @@ export default function AccessPage() {
           payload: { name: member.full_name || 'Сотрудник', email: member.email || null, role: newRole },
         }),
       })
-      const data = await res.json()
-      if (data.ok) {
+      const data = await res.json().catch(() => null)
+      if (res.ok && data?.ok) {
         setStaff(prev => prev.map(s => s.id === staffId ? { ...s, role: newRole } : s))
         setChangingRoleId(null)
+        toast({ title: 'Должность сотрудника изменена' })
       } else {
-        alert(data.error || 'Ошибка')
+        throw new Error(data?.error || `Ошибка запроса (${res.status})`)
       }
-    } catch { alert('Ошибка сети') }
+    } catch (e: any) {
+      toast({ title: 'Не удалось сменить должность', description: e?.message, variant: 'destructive' })
+    }
     setSavingRoleId(null)
   }, [staff])
 
@@ -300,14 +324,17 @@ export default function AccessPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ staffId }),
       })
-      const data = await res.json()
-      if (data.password) {
-        setGeneratedPasswords(prev => {
-          const filtered = prev.filter(p => p.staffId !== staffId)
-          return [...filtered, { staffId, password: data.password, email: data.email, visible: true }]
-        })
-      }
-    } catch {}
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.error || `Ошибка запроса (${res.status})`)
+      // Сервер может ответить 200 без пароля — раньше кнопка в этом случае молчала
+      if (!data?.password) throw new Error('Сервер не вернул пароль')
+      setGeneratedPasswords(prev => {
+        const filtered = prev.filter(p => p.staffId !== staffId)
+        return [...filtered, { staffId, password: data.password, email: data.email, visible: true }]
+      })
+    } catch (e: any) {
+      toast({ title: 'Не удалось создать пароль', description: e?.message, variant: 'destructive' })
+    }
     setGeneratingId(null)
   }, [])
 
@@ -322,15 +349,18 @@ export default function AccessPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'changeEmail', staffId, newEmail }),
       })
-      const data = await res.json()
-      if (data.ok) {
+      const data = await res.json().catch(() => null)
+      if (res.ok && data?.ok) {
         setStaff(prev => prev.map(s => s.id === staffId ? { ...s, email: data.email } : s))
         setEditingEmailId(null)
         loadAccounts()
+        toast({ title: 'Email изменён' })
       } else {
-        alert(data.error || 'Ошибка')
+        throw new Error(data?.error || `Ошибка запроса (${res.status})`)
       }
-    } catch { alert('Ошибка сети') }
+    } catch (e: any) {
+      toast({ title: 'Не удалось изменить email', description: e?.message, variant: 'destructive' })
+    }
     setSavingEmailId(null)
   }, [editingEmailValue, loadAccounts])
 

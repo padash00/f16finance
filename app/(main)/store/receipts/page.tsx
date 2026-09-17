@@ -53,6 +53,25 @@ import {
   parseUnitCost,
 } from '@/lib/store/receipts/format'
 import { invalidateStoreCaches } from '@/lib/client/store-cache'
+import { SortableTh } from '@/components/ui/sortable-th'
+import { useTableSort } from '@/lib/client/use-table-sort'
+import type { SortColumns, SortState } from '@/lib/core/table-sort'
+
+type ReceiptSortKey = 'date' | 'supplier' | 'location' | 'invoice' | 'positions' | 'amount' | 'payment'
+
+const RECEIPT_SORT_INITIAL: SortState<ReceiptSortKey> = { key: 'date', dir: 'desc' }
+
+/**
+ * Ранг столбца «Оплата»: сначала то, что требует денег (просрочка, долг),
+ * потом закрытые накладные. Накладные без долга — пусто, уходят в конец.
+ */
+function debtRank(debt: DebtSummary | undefined): number | null {
+  if (!debt) return null
+  if (debt.status === 'paid') return 3
+  if (debt.status === 'written_off') return 4
+  const overdue = debt.due_date ? new Date(debt.due_date).getTime() < Date.now() : false
+  return overdue ? 0 : debt.is_consignment ? 2 : 1
+}
 
 export default function StoreReceiptsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { storeCompanyId } = useStoreScope()
@@ -960,6 +979,26 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
     })
   }, [data?.receipts, receiptSearch])
 
+  // Сортировка по заголовку — после поиска, чтобы фильтр оставался в силе
+  const receiptSortColumns = useMemo<SortColumns<InventoryReceipt, ReceiptSortKey>>(
+    () => ({
+      date: { get: (r) => r.received_at || null, defaultDir: 'desc' },
+      supplier: { get: (r) => (r.kind === 'posting' ? 'Оприходование' : r.supplier?.name || null) },
+      location: { get: (r) => r.location?.name || null },
+      invoice: { get: (r) => r.invoice_number || null },
+      positions: { get: (r) => (r.items || []).length || null, defaultDir: 'desc' },
+      amount: { get: (r) => Number(r.total_amount || 0) || null, defaultDir: 'desc' },
+      payment: { get: (r) => debtRank(debtByReceiptId.get(String(r.id))) },
+    }),
+    [debtByReceiptId],
+  )
+  const { sort: receiptSort, toggle: toggleReceiptSort, sortedRows: sortedReceipts } = useTableSort<InventoryReceipt, ReceiptSortKey>({
+    storageKey: 'storeReceipts.listSort',
+    columns: receiptSortColumns,
+    initial: RECEIPT_SORT_INITIAL,
+    rows: filteredReceipts,
+  })
+
   const totalReceiptsAmount = useMemo(() => {
     return (data?.receipts || []).reduce((s, r) => s + Number(r.total_amount || 0), 0)
   }, [data?.receipts])
@@ -1153,7 +1192,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                 </div>
               ) : null}
               <div className={`space-y-3 ${refreshing ? 'pointer-events-none opacity-50' : ''}`}>
-                {filteredReceipts.map((receipt) => {
+                {sortedReceipts.map((receipt) => {
                   const debt = debtByReceiptId.get(String(receipt.id))
                   const itemsCount = (receipt.items || []).length
                   const open = Boolean(mobileExpandedReceipts[receipt.id])
@@ -1283,18 +1322,18 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
             <table className="w-full min-w-[840px] text-sm">
               <thead className="sticky top-0 z-10 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur">
                 <tr className="border-b border-slate-200 dark:border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
-                  <th className="w-24 py-2.5 pl-4 pr-2 font-normal">Дата</th>
-                  <th className="py-2.5 px-2 font-normal">Поставщик</th>
-                  <th className="w-40 py-2.5 px-2 font-normal">Локация</th>
-                  <th className="w-32 py-2.5 px-2 font-normal">Накладная</th>
-                  <th className="w-20 py-2.5 px-2 text-right font-normal">Позиций</th>
-                  <th className="w-32 py-2.5 px-2 pr-4 text-right font-normal text-emerald-700/70 dark:text-emerald-300/70">Сумма</th>
-                  <th className="w-28 py-2.5 px-2 font-normal">Оплата</th>
+                  <SortableTh label="Дата" sortKey="date" sort={receiptSort} onSort={toggleReceiptSort} className="w-24 py-2.5 pl-4 pr-2 font-normal" />
+                  <SortableTh label="Поставщик" sortKey="supplier" sort={receiptSort} onSort={toggleReceiptSort} className="py-2.5 px-2 font-normal" />
+                  <SortableTh label="Локация" sortKey="location" sort={receiptSort} onSort={toggleReceiptSort} className="w-40 py-2.5 px-2 font-normal" />
+                  <SortableTh label="Накладная" sortKey="invoice" sort={receiptSort} onSort={toggleReceiptSort} className="w-32 py-2.5 px-2 font-normal" />
+                  <SortableTh label="Позиций" sortKey="positions" sort={receiptSort} onSort={toggleReceiptSort} align="right" className="w-20 py-2.5 px-2 font-normal" />
+                  <SortableTh label="Сумма" sortKey="amount" sort={receiptSort} onSort={toggleReceiptSort} align="right" className="w-32 py-2.5 px-2 pr-4 font-normal text-emerald-700/70 dark:text-emerald-300/70" />
+                  <SortableTh label="Оплата" sortKey="payment" sort={receiptSort} onSort={toggleReceiptSort} className="w-28 py-2.5 px-2 font-normal" />
                   <th className="w-28 py-2.5 px-2 pr-4 text-right font-normal">Акт</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
-                {filteredReceipts.map((receipt) => (
+                {sortedReceipts.map((receipt) => (
                   <tr
                     key={receipt.id}
                     className={`transition hover:bg-slate-50 dark:hover:bg-white/[0.02] ${receipt.status === 'cancelled' ? 'opacity-50 line-through' : ''}`}

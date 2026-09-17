@@ -139,7 +139,7 @@ export const navSections: NavSection[] = [
     accentColor: 'emerald',
     icon: PieChart,
     items: [
-      { href: '/income', label: 'Доходы', icon: TrendingUp, note: 'Оборот и выручка', badge: '↑23%', badgeColor: 'green' },
+      { href: '/income', label: 'Доходы', icon: TrendingUp, note: 'Оборот и выручка' },
       { href: '/expenses', label: 'Расходы', icon: TrendingDown, note: 'Списания и статьи' },
       { href: '/expense-analysis', label: 'AI Разбор расходов', icon: Wallet, note: 'Где утекают деньги', badge: 'AI', badgeColor: 'purple', isNew: true },
       { href: '/expenses/pending', label: 'Ожидают одобрения', icon: ClipboardList, note: 'Расходы без чека на проверке', badgeColor: 'orange', isNew: true },
@@ -185,7 +185,7 @@ export const navSections: NavSection[] = [
       { href: '/salary', label: 'Зарплата', icon: Wallet, note: 'Расчеты и выплаты' },
       { href: '/salary/rules', label: 'Правила зарплаты', icon: ListChecks, note: 'Ставки и бонусы' },
       { href: '/point-debts', label: 'Долги с точки', icon: Receipt, note: 'Позиции по неделям и списание' },
-      { href: '/operators', label: 'Операторы', icon: Users2, note: 'Профили и состояние', badge: '8', badgeColor: 'blue' },
+      { href: '/operators', label: 'Операторы', icon: Users2, note: 'Профили и состояние' },
       { href: '/structure', label: 'Структура', icon: Network, note: 'Иерархия команды и точек' },
       { href: '/staff', label: 'Сотрудники', icon: Users, note: 'Админкоманда' },
       { href: '/hr', label: 'Кадры', icon: UserMinus, note: 'Увольнения и восстановление', isNew: true },
@@ -201,7 +201,7 @@ export const navSections: NavSection[] = [
     featuresAny: ['club.pos', 'shop.catalog', 'service.jobs', 'restaurant.recipes_lite'],
     items: [
       { href: '/simulation', label: 'Симуляция выручки', icon: Calculator, note: 'Потенциал по зонам vs факт', badge: 'new', badgeColor: 'blue', isNew: true },
-      { href: '/tasks', label: 'Задачи', icon: FolderKanban, note: 'Текущая работа', badge: '12', badgeColor: 'red' },
+      { href: '/tasks', label: 'Задачи', icon: FolderKanban, note: 'Текущая работа' },
       { href: '/shifts', label: 'Смены', icon: CalendarClock, note: 'График и сменность' },
       { href: '/shifts/reports', label: 'Отчёты смен', icon: CalendarClock, note: 'Закрытые смены точек', badge: 'new', badgeColor: 'green' },
       { href: '/sales-kpi', label: 'Эффективность продавцов', icon: Gauge, note: 'Кому доплатить и почему касса была такой', badge: 'new', badgeColor: 'green', isNew: true, feature: 'addon.sales_kpi' },
@@ -335,10 +335,14 @@ export function buildOwnerNavSections(): NavSection[] {
   const teamSection = getSectionById('team')
   const opsSection = getSectionById('ops')
   const pointDevicesItem = getSectionItem('system', '/point-devices')
-  const operatorAnalyticsItem = getSectionItem('operator-space', '/operator-analytics')
+  // Раздел «Команда» (лента, чат, календарь, аналитика операторов) целиком —
+  // раньше владельцу отдавали только «Аналитику операторов», да и ту через
+  // несуществующий id секции ('operator-space'), поэтому блок молча исчезал.
+  const teamSpaceSection = getSectionById('team-space')
   const subscriptionItem = getSectionItem('system', '/subscription')
   const settingsItem = getSectionItem('system', '/settings')
   const accessItem = getSectionItem('system', '/access')
+  const telegramItem = getSectionItem('system', '/telegram')
   const serverMonitorItem = getSectionItem('system', '/server-monitor')
 
   const sections: NavSection[] = []
@@ -362,7 +366,12 @@ export function buildOwnerNavSections(): NavSection[] {
     })
   }
 
-  if (settingsItem || accessItem || serverMonitorItem) {
+  // Команда: лента, чат, личные сообщения, календарь, модерация, аналитика
+  // операторов, PI и рейтинги. Владельцу нужны все эти страницы; видимость
+  // каждого пункта дальше решают пакет (фича страницы) и права роли.
+  if (teamSpaceSection) sections.push(teamSpaceSection)
+
+  if (settingsItem || accessItem || serverMonitorItem || telegramItem) {
     sections.push({
       id: 'owner-system',
       title: 'Настройки',
@@ -370,18 +379,9 @@ export function buildOwnerNavSections(): NavSection[] {
       accentColor: 'slate',
       icon: Settings2,
       // /access («Права и пароли») — управление доступом, доступно только владельцу.
-      items: [settingsItem, ...ARENA_ITEMS, serverMonitorItem, accessItem].filter(Boolean) as NavItem[],
-    })
-  }
-
-  if (operatorAnalyticsItem) {
-    sections.push({
-      id: 'owner-operator-analytics',
-      title: 'Аналитика операторов',
-      subtitle: 'Эффективность, качество и динамика по людям',
-      accentColor: 'fuchsia',
-      icon: Zap,
-      items: [operatorAnalyticsItem],
+      // /telegram — бот и чат для отчётов: настраивает клиент сам, не через SQL.
+      // Платформенные пункты (/platform, /logs, /debug) владельцу не отдаём.
+      items: [settingsItem, ...ARENA_ITEMS, telegramItem, serverMonitorItem, accessItem].filter(Boolean) as NavItem[],
     })
   }
 

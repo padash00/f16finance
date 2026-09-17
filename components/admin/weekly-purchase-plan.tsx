@@ -38,6 +38,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import { toast } from '@/hooks/use-toast'
+import { deleteWithUndo } from '@/lib/client/undo-delete'
 
 // ── Даты (локальные части, без UTC-сдвига) ───────────────────────────────
 function fmtLocalISO(d: Date): string {
@@ -274,13 +276,15 @@ export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string }
     loadItems(weekStart)
   }, [weekStart, loadItems])
 
+  const notifyError = (message: string) => toast({ title: message, variant: 'destructive' })
+
   const addItem = async () => {
+    if (saving) return
     if (!title.trim()) {
-      setError('Укажите, что закупаем')
+      notifyError('Укажите, что закупаем')
       return
     }
     setSaving(true)
-    setError(null)
     try {
       const res = await fetch('/api/admin/purchase-plan', {
         method: 'POST',
@@ -307,9 +311,10 @@ export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string }
       setTitle('')
       setSupplier('')
       setAmount('')
+      toast({ title: 'Добавлено в план' })
       await loadItems(weekStart)
     } catch (e: any) {
-      setError(e?.message || 'Ошибка сохранения')
+      notifyError(e?.message || 'Не удалось добавить в план')
     } finally {
       setSaving(false)
     }
@@ -319,23 +324,32 @@ export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string }
     const next = it.status === 'bought' ? 'planned' : 'bought'
     setItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, status: next } : p)))
     try {
-      await fetch('/api/admin/purchase-plan', {
+      // Ответ раньше не проверяли: отказ сервера оставлял галочку «куплено» соврать
+      const res = await fetch('/api/admin/purchase-plan', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: it.id, status: next }),
       })
-    } catch {
-      loadItems(weekStart)
+      const j = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(j?.error || 'Не удалось сохранить отметку')
+    } catch (e: any) {
+      setItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, status: it.status } : p)))
+      notifyError(e?.message || 'Не удалось сохранить отметку')
     }
   }
 
-  const removeItem = async (id: string) => {
-    setItems((prev) => prev.filter((p) => p.id !== id))
-    try {
-      await fetch(`/api/admin/purchase-plan?id=${id}`, { method: 'DELETE' })
-    } catch {
-      loadItems(weekStart)
-    }
+  const removeItem = (it: PlanItem) => {
+    deleteWithUndo({
+      message: 'Позиция плана удалена',
+      hide: () => setItems((prev) => prev.filter((p) => p.id !== it.id)),
+      restore: () => loadItems(weekStart),
+      commit: async () => {
+        const res = await fetch(`/api/admin/purchase-plan?id=${it.id}`, { method: 'DELETE' })
+        const j = await res.json().catch(() => null)
+        if (!res.ok) throw new Error(j?.error || 'Не удалось удалить')
+      },
+      onCommitError: (e: any) => notifyError(e?.message || 'Не удалось удалить — позиция возвращена'),
+    })
   }
 
   const companyName = useCallback(
@@ -554,7 +568,7 @@ export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string }
                     ) : null}
                     <button
                       type="button"
-                      onClick={() => removeItem(it.id)}
+                      onClick={() => removeItem(it)}
                       className="shrink-0 rounded-lg p-1.5 text-slate-500 transition hover:bg-rose-500/10 hover:text-rose-400"
                       title="Удалить"
                     >

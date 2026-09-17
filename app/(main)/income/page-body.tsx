@@ -13,6 +13,7 @@ import { useTableSort } from '@/lib/client/use-table-sort'
 import type { SortColumns } from '@/lib/core/table-sort'
 import { SortableTh } from '@/components/ui/sortable-th'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
+import { toast } from '@/hooks/use-toast'
 import type { KeyboardEvent } from 'react'
 import { Card } from '@/components/ui/card'
 import { CardSkeleton, TableSkeleton, StatGridSkeleton } from '@/components/skeleton'
@@ -412,7 +413,6 @@ export default function IncomePage() {
 
   // Локальная копия для оптимистичных обновлений (inline edit, delete)
   const [rows, setRows] = useState<IncomeRow[]>([])
-  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     setRows(serverRows)
@@ -708,7 +708,8 @@ export default function IncomePage() {
 
     if (!response.ok) {
       setRows(curr => curr.map(x => x.id === row.id ? { ...x, online_amount: prev } : x))
-      setError(json?.error || 'Не удалось сохранить Online')
+      // Раньше ошибка уходила в state, который нигде не рисовался — правка молча откатывалась
+      toast({ title: 'Не удалось сохранить Online', description: json?.error || `Ошибка запроса (${response.status})`, variant: 'destructive' })
       await logIncomeEvent({
         entityId: row.id,
         action: 'update-online-failed',
@@ -749,7 +750,7 @@ export default function IncomePage() {
   }, [])
 
   const saveIncomeEdit = useCallback(async () => {
-    if (!editingIncome) return
+    if (!editingIncome || savingIncomeEdit) return
 
     setSavingIncomeEdit(true)
     try {
@@ -781,12 +782,15 @@ export default function IncomePage() {
 
       setRows((curr) => curr.map((item) => (item.id === editingIncome.id ? { ...item, ...json.data } : item)))
       closeIncomeEditor()
+      toast({ title: 'Доход обновлён' })
     } catch (err: any) {
-      setError(err?.message || 'Не удалось обновить доход')
+      // Ошибка поверх окна: карточку внизу страницы за открытым окном не видно
+      toast({ title: 'Не удалось обновить доход', description: err?.message, variant: 'destructive' })
     } finally {
       setSavingIncomeEdit(false)
     }
   }, [
+    savingIncomeEdit,
     closeIncomeEditor,
     editCardDraft,
     editCashDraft,

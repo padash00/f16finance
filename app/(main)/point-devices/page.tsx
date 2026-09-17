@@ -439,6 +439,21 @@ function ProjectFormPanel({
           </select>
         </label>
 
+        {/* Куда точка шлёт сменные отчёты. Раньше поле жило только в состоянии
+            формы и задавалось SQL-ом — в интерфейсе его не было. */}
+        <label className="space-y-2 text-sm">
+          <span className="text-muted-foreground">Chat ID для сменных отчётов</span>
+          <input
+            value={form.shift_report_chat_id}
+            onChange={(e) => onChange({ ...form, shift_report_chat_id: e.target.value })}
+            className="w-full rounded-xl border border-border bg-background px-3 py-2"
+            placeholder="-1001234567890"
+          />
+          <span className="block text-xs text-muted-foreground">
+            ID группы или канала Telegram — числовой, у групп начинается с «−». Пусто — отчёты идут в общий чат.
+          </span>
+        </label>
+
         <label className="space-y-2 text-sm">
           <span className="text-muted-foreground">Заметка</span>
           <input

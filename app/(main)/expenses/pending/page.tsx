@@ -6,6 +6,8 @@ import { CheckCircle2, XCircle, Clock, Loader2, AlertCircle } from 'lucide-react
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { AppModal } from '@/components/ui/app-modal'
+import { toast } from '@/hooks/use-toast'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { CardSkeleton } from '@/components/skeleton'
 
@@ -34,6 +36,9 @@ export default function PendingExpensesPage() {
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Причина отклонения — в окне, а не в window.prompt: при короткой причине текст сохраняется
+  const [declineTarget, setDeclineTarget] = useState<PendingExpense | null>(null)
+  const [declineReason, setDeclineReason] = useState('')
 
   async function load() {
     setLoading(true)
@@ -70,32 +75,37 @@ export default function PendingExpensesPage() {
       const json = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(json.error || 'Не удалось одобрить')
       setItems((prev) => prev.filter((x) => x.id !== id))
+      toast({ title: 'Расход одобрен' })
     } catch (e: any) {
-      setError(e?.message || 'Ошибка')
+      toast({ title: 'Не удалось одобрить', description: e?.message, variant: 'destructive' })
     } finally {
       setBusyId(null)
     }
   }
 
-  async function decline(id: string) {
-    const reason = window.prompt('Укажите причину отклонения (минимум 10 символов):')
-    if (!reason || reason.trim().length < 10) {
-      setError('Причина обязательна (≥ 10 символов)')
+  async function submitDecline() {
+    if (!declineTarget || busyId) return
+    const reason = declineReason.trim()
+    if (reason.length < 10) {
+      toast({ title: 'Причина обязательна', description: 'Минимум 10 символов.', variant: 'destructive' })
       return
     }
+    const id = declineTarget.id
     setBusyId(id)
-    setError(null)
     try {
       const response = await fetch(`/api/admin/expenses/${id}/decline`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: reason.trim() }),
+        body: JSON.stringify({ reason }),
       })
       const json = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(json.error || 'Не удалось отклонить')
       setItems((prev) => prev.filter((x) => x.id !== id))
+      setDeclineTarget(null)
+      setDeclineReason('')
+      toast({ title: 'Расход отклонён' })
     } catch (e: any) {
-      setError(e?.message || 'Ошибка')
+      toast({ title: 'Не удалось отклонить', description: e?.message, variant: 'destructive' })
     } finally {
       setBusyId(null)
     }
@@ -165,7 +175,7 @@ export default function PendingExpensesPage() {
                     </Button>
                   )}
                   {canDecline && (
-                    <Button size="sm" variant="outline" onClick={() => decline(item.id)} disabled={busy}>
+                    <Button size="sm" variant="outline" onClick={() => { setDeclineTarget(item); setDeclineReason('') }} disabled={busy}>
                       <XCircle className="w-3 h-3 mr-1" /> Отклонить
                     </Button>
                   )}
@@ -175,6 +185,41 @@ export default function PendingExpensesPage() {
           })}
         </div>
       )}
+
+      <AppModal
+        open={!!declineTarget}
+        onClose={() => { if (!busyId) { setDeclineTarget(null); setDeclineReason('') } }}
+        title="Отклонить расход"
+        maxWidth="max-w-md"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => { setDeclineTarget(null); setDeclineReason('') }} disabled={!!busyId}>
+              Отмена
+            </Button>
+            <Button variant="destructive" onClick={submitDecline} disabled={!!busyId}>
+              {busyId ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
+              Отклонить
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          <div className="text-sm text-muted-foreground">
+            {declineTarget?.one_off_payee || 'Получатель не указан'} ·{' '}
+            {(Number(declineTarget?.cash_amount || 0) + Number(declineTarget?.kaspi_amount || 0)).toLocaleString('ru-RU')} ₸
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground">Причина отклонения (минимум 10 символов)</label>
+            <textarea
+              value={declineReason}
+              onChange={(e) => setDeclineReason(e.target.value)}
+              rows={3}
+              className="mt-1 w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+              placeholder="Например: нет чека, оплата не согласована"
+            />
+          </div>
+        </div>
+      </AppModal>
     </div>
   )
 }

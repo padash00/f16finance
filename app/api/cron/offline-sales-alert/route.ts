@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { verifyCronRequest } from '@/lib/server/cron-auth'
 import { listOrgReportTargets } from '@/lib/server/report-targets'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { sendTelegramMessage } from '@/lib/telegram/send'
@@ -24,11 +25,8 @@ const WORK_HOUR_START = 10 // рабочее окно по Алматы (UTC+5) 
  */
 export async function GET(req: Request) {
   try {
-    const url = new URL(req.url)
-    const secret = process.env.CRON_SECRET
-    if (secret && url.searchParams.get('secret') !== secret && req.headers.get('authorization') !== `Bearer ${secret}`) {
-      return json({ error: 'unauthorized' }, 401)
-    }
+    // Было `if (secret && ...)`: без CRON_SECRET роут открывался всему интернету.
+    if (!verifyCronRequest(req)) return json({ error: 'unauthorized' }, 401)
     if (!hasAdminSupabaseCredentials()) return json({ ok: true, skipped: 'no-admin-creds' })
 
     const supabase = createAdminSupabaseClient()

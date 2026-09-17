@@ -17,6 +17,9 @@ import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { PageSkeleton, TableSkeleton } from '@/components/skeleton'
 import { invalidateStoreCaches } from '@/lib/client/store-cache'
+import { SortableTh } from '@/components/ui/sortable-th'
+import { useTableSort } from '@/lib/client/use-table-sort'
+import type { SortColumns, SortState } from '@/lib/core/table-sort'
 
 type Item = {
   id: string
@@ -66,6 +69,13 @@ type SessionRole = {
 }
 
 const CONFIRM_PHRASE = 'ОПРИХОДОВАТЬ'
+
+// Сортировка списка последних оприходований: проведённые выше отменённых
+const POSTING_STATUS_RANK: Record<string, number> = { posted: 0, cancelled: 1 }
+
+type PostingSortKey = 'date' | 'location' | 'type' | 'comment' | 'positions' | 'amount' | 'status'
+
+const POSTING_SORT_INITIAL: SortState<PostingSortKey> = { key: 'date', dir: 'desc' }
 
 function newLine(): PostingLine {
   return {
@@ -477,6 +487,26 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
       setSaving(false)
     }
   }
+
+  // Сортировка списка последних оприходований по заголовку (общий хук)
+  const recentSortColumns = useMemo<SortColumns<RecentPosting, PostingSortKey>>(
+    () => ({
+      date: { get: (r) => r.received_at || null, defaultDir: 'desc' },
+      location: { get: (r) => r.location?.name || null },
+      type: { get: (r) => (r.location?.location_type === 'point_display' ? 'витрина' : 'склад') },
+      comment: { get: (r) => r.comment || null },
+      positions: { get: (r) => (r.items || []).length || null, defaultDir: 'desc' },
+      amount: { get: (r) => Number(r.total_amount || 0) || null, defaultDir: 'desc' },
+      status: { get: (r) => POSTING_STATUS_RANK[r.status] ?? 99 },
+    }),
+    [],
+  )
+  const { sort: recentSort, toggle: toggleRecentSort, sortedRows: sortedRecent } = useTableSort<RecentPosting, PostingSortKey>({
+    storageKey: 'storePostings.recentSort',
+    columns: recentSortColumns,
+    initial: POSTING_SORT_INITIAL,
+    rows: recent,
+  })
 
   if (roleLoading || capsLoading) {
     return (
@@ -979,17 +1009,17 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
               <table className="w-full min-w-[720px] text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 dark:border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
-                    <th className="py-2 pl-2 pr-2 font-normal">Дата</th>
-                    <th className="py-2 px-2 font-normal">Куда</th>
-                    <th className="py-2 px-2 font-normal">Тип</th>
-                    <th className="py-2 px-2 font-normal">Комментарий</th>
-                    <th className="py-2 px-2 text-right font-normal">Позиций</th>
-                    <th className="py-2 px-2 text-right font-normal">Сумма</th>
-                    <th className="py-2 px-2 font-normal">Статус</th>
+                    <SortableTh label="Дата" sortKey="date" sort={recentSort} onSort={toggleRecentSort} className="py-2 pl-2 pr-2 font-normal" />
+                    <SortableTh label="Куда" sortKey="location" sort={recentSort} onSort={toggleRecentSort} className="py-2 px-2 font-normal" />
+                    <SortableTh label="Тип" sortKey="type" sort={recentSort} onSort={toggleRecentSort} className="py-2 px-2 font-normal" />
+                    <SortableTh label="Комментарий" sortKey="comment" sort={recentSort} onSort={toggleRecentSort} className="py-2 px-2 font-normal" />
+                    <SortableTh label="Позиций" sortKey="positions" sort={recentSort} onSort={toggleRecentSort} align="right" className="py-2 px-2 font-normal" />
+                    <SortableTh label="Сумма" sortKey="amount" sort={recentSort} onSort={toggleRecentSort} align="right" className="py-2 px-2 font-normal" />
+                    <SortableTh label="Статус" sortKey="status" sort={recentSort} onSort={toggleRecentSort} className="py-2 px-2 font-normal" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
-                  {recent.map((r) => (
+                  {sortedRecent.map((r) => (
                     <tr
                       key={r.id}
                       onClick={() => setViewPosting(r)}

@@ -22,6 +22,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { formatMoney } from '@/lib/core/format'
 import { summarizeSupplierDebts } from '@/lib/domain/supplier-debts'
 import { invalidateStoreCaches } from '@/lib/client/store-cache'
+import { toast } from '@/hooks/use-toast'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
 
 type Supplier = {
   id: string
@@ -70,9 +72,11 @@ type Debt = {
   receipt?: ReceiptLite | null
 }
 
+type ListMeta = { shown: number; total: number; truncated: boolean }
+
 type DebtsResponse = {
   ok: boolean
-  data?: { debts: Debt[]; receipts: ReceiptLite[] }
+  data?: { debts: Debt[]; receipts: ReceiptLite[]; meta?: { debts: ListMeta; receipts: ListMeta } }
   error?: string
 }
 
@@ -98,9 +102,13 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
   const [statusFilter, setStatusFilter] = useState<'open' | 'paid' | 'written_off' | 'all'>('open')
   const [debts, setDebts] = useState<Debt[]>([])
   const [receipts, setReceipts] = useState<ReceiptLite[]>([])
+  // Сервер отдаёт максимум 5000 строк — если не всё, честно пишем об этом:
+  // фильтры и суммы считаются в браузере, по неполному списку они соврут
+  const [listMeta, setListMeta] = useState<{ debts: ListMeta; receipts: ListMeta } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
+  // Ошибки действий — тостами: карточка ошибки внизу страницы остаётся за модалкой
+  const notifyError = (message: string) => toast({ title: message, variant: 'destructive' })
 
   const { storeCompanyId } = useStoreScope()
   const storeUrl = useStoreApiUrl()
@@ -152,8 +160,8 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
     // fresh — после оплаты/списания долга: кэш устарел.
     const cached = opts?.fresh
       ? null
-      : readApiCache<{ debts: Debt[]; receipts: ReceiptLite[] }>(debtsCacheKey)
-    if (cached) { setDebts(cached.debts); setReceipts(cached.receipts); setLoading(false) }
+      : readApiCache<{ debts: Debt[]; receipts: ReceiptLite[]; meta?: { debts: ListMeta; receipts: ListMeta } }>(debtsCacheKey)
+    if (cached) { setDebts(cached.debts); setReceipts(cached.receipts); setListMeta(cached.meta || null); setLoading(false) }
     else setLoading(true)
     setError(null)
     try {
@@ -162,10 +170,11 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
       if (!response.ok || !json?.ok || !json.data) {
         throw new Error(json?.error || 'Не удалось загрузить долги')
       }
-      const payload = { debts: json.data.debts || [], receipts: json.data.receipts || [] }
+      const payload = { debts: json.data.debts || [], receipts: json.data.receipts || [], meta: json.data.meta }
       writeApiCache(debtsCacheKey, payload)
       setDebts(payload.debts)
       setReceipts(payload.receipts)
+      setListMeta(payload.meta || null)
     } catch (err: any) {
       setError(err?.message || 'Ошибка загрузки')
     } finally {
@@ -264,7 +273,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
   }
 
   const parsePayReceipt = async () => {
-    if (!payReceiptUrl || !payDebt) return
+    if (!payReceiptUrl || !payDebt || parsingReceipt) return
     setParsingReceipt(true)
     setReceiptParseHint(null)
     try {
@@ -296,16 +305,15 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
 
       setReceiptParseHint({ total, method, paid_at, merchant, warning: warnings.join(' · ') || null })
     } catch (err: any) {
-      setError(err?.message || 'Не удалось распознать чек')
+      notifyError(err?.message || 'Не удалось распознать чек')
     } finally {
       setParsingReceipt(false)
     }
   }
 
   const uploadPayReceipt = async (file: File | null) => {
-    if (!file) return
+    if (!file || uploadingReceipt) return
     setUploadingReceipt(true)
-    setError(null)
     try {
       const formData = new FormData()
       formData.append('file', file)
@@ -316,8 +324,9 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось загрузить чек')
       setPayReceiptUrl(String(json.document_url || ''))
+      toast({ title: 'Чек загружен' })
     } catch (err: any) {
-      setError(err?.message || 'Не удалось загрузить чек')
+      notifyError(err?.message || 'Не удалось загрузить чек')
     } finally {
       setUploadingReceipt(false)
     }
@@ -341,9 +350,8 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
   }, [filteredDebts, selectedIds])
 
   const uploadBulkReceipt = async (file: File | null) => {
-    if (!file) return
+    if (!file || bulkUploading) return
     setBulkUploading(true)
-    setError(null)
     try {
       const formData = new FormData()
       formData.append('file', file)
@@ -354,20 +362,21 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось загрузить чек')
       setBulkReceiptUrl(String(json.document_url || ''))
+      toast({ title: 'Чек загружен' })
     } catch (err: any) {
-      setError(err?.message || 'Не удалось загрузить чек')
+      notifyError(err?.message || 'Не удалось загрузить чек')
     } finally {
       setBulkUploading(false)
     }
   }
 
   const submitBulkPay = async () => {
+    if (bulkPaying) return
     if (!bulkReceiptUrl) {
-      setError('Загрузите чек об оплате')
+      notifyError('Загрузите чек об оплате')
       return
     }
     setBulkPaying(true)
-    setError(null)
     try {
       const response = await fetch('/api/admin/store/debts/bulk-pay', {
         method: 'POST',
@@ -382,7 +391,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
       })
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось провести объединённую оплату')
-      setSuccess(`Закрыто ${json.data?.closed || 0} долгов`)
+      toast({ title: `Закрыто ${json.data?.closed || 0} долгов` })
       setBulkPayOpen(false)
       setBulkReceiptUrl('')
       setBulkComment('')
@@ -390,7 +399,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
       invalidateStoreCaches()
       await load({ fresh: true })
     } catch (err: any) {
-      setError(err?.message || 'Ошибка')
+      notifyError(err?.message || 'Не удалось провести объединённую оплату')
     } finally {
       setBulkPaying(false)
     }
@@ -443,14 +452,13 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
         total: { total: sheetRows.reduce((s, r) => s + r.total, 0) },
       }, `Dolgi_postavshchikam_${new Date().toISOString().slice(0, 10)}`)
     } catch (err: any) {
-      setError(err?.message || 'Не удалось сформировать отчёт')
+      notifyError(err?.message || 'Не удалось сформировать отчёт')
     }
   }
 
   const submitReschedule = async () => {
-    if (!reschedDebt) return
+    if (!reschedDebt || rescheduling) return
     setRescheduling(true)
-    setError(null)
     try {
       const response = await fetch(`/api/admin/store/debts/${reschedDebt.id}/due-date`, {
         method: 'PATCH',
@@ -462,23 +470,22 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
       })
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось перенести срок')
-      setSuccess('Срок оплаты перенесён')
+      toast({ title: 'Срок оплаты перенесён' })
       setReschedDebt(null)
       setReschedDate('')
       setReschedReason('')
       invalidateStoreCaches()
       await load({ fresh: true })
     } catch (err: any) {
-      setError(err?.message || 'Не удалось перенести срок')
+      notifyError(err?.message || 'Не удалось перенести срок')
     } finally {
       setRescheduling(false)
     }
   }
 
   const submitWriteOff = async () => {
-    if (!writeOffDebt) return
+    if (!writeOffDebt || writingOff) return
     setWritingOff(true)
-    setError(null)
     try {
       const response = await fetch(`/api/admin/store/debts/${writeOffDebt.id}/write-off`, {
         method: 'POST',
@@ -487,45 +494,50 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
       })
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось списать долг')
-      setSuccess('Долг списан')
+      toast({ title: 'Долг списан' })
       setWriteOffDebt(null)
       setWriteOffReason('')
       invalidateStoreCaches()
       await load({ fresh: true })
     } catch (err: any) {
-      setError(err?.message || 'Не удалось списать долг')
+      notifyError(err?.message || 'Не удалось списать долг')
     } finally {
       setWritingOff(false)
     }
   }
 
   const handleDeleteDebt = async (debt: Debt) => {
+    if (deletingId) return
     const label = debt.supplier?.organization_name || debt.supplier?.name || 'поставщик'
-    if (!confirm(`Удалить долг «${label}» на ${formatMoney(debt.total_amount)}?\n\nЗапись будет удалена безвозвратно. Приход и расход не затрагиваются.`)) return
+    const ok = await confirmDialog({
+      title: `Удалить долг «${label}» на ${formatMoney(debt.total_amount)}?`,
+      description: 'Запись будет удалена безвозвратно. Приход и расход не затрагиваются.',
+      confirmLabel: 'Удалить',
+      destructive: true,
+    })
+    if (!ok) return
     setDeletingId(debt.id)
-    setError(null)
     try {
       const response = await fetch(`/api/admin/store/debts/${debt.id}`, { method: 'DELETE' })
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось удалить долг')
-      setSuccess('Долг удалён')
+      toast({ title: 'Долг удалён' })
       invalidateStoreCaches()
       await load({ fresh: true })
     } catch (err: any) {
-      setError(err?.message || 'Не удалось удалить долг')
+      notifyError(err?.message || 'Не удалось удалить долг')
     } finally {
       setDeletingId(null)
     }
   }
 
   const submitPay = async () => {
-    if (!payDebt) return
+    if (!payDebt || paying) return
     if (!payReceiptUrl) {
-      setError('Загрузите чек об оплате')
+      notifyError('Загрузите чек об оплате')
       return
     }
     setPaying(true)
-    setError(null)
     try {
       const response = await fetch(`/api/admin/store/debts/${payDebt.id}/pay`, {
         method: 'POST',
@@ -539,12 +551,12 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
       })
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось провести оплату')
-      setSuccess('Оплата проведена. Долг закрыт.')
+      toast({ title: 'Оплата проведена. Долг закрыт.' })
       closePay()
       invalidateStoreCaches()
       await load({ fresh: true })
     } catch (err: any) {
-      setError(err?.message || 'Не удалось провести оплату')
+      notifyError(err?.message || 'Не удалось провести оплату')
     } finally {
       setPaying(false)
     }
@@ -597,9 +609,17 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
       {error ? (
         <Card className="p-3 border-red-500/30 bg-red-500/10 text-sm text-red-700 dark:text-red-200">{error}</Card>
       ) : null}
-      {success ? (
-        <Card className="p-3 border-emerald-500/30 bg-emerald-500/10 text-sm text-emerald-700 dark:text-emerald-200">{success}</Card>
-      ) : null}
+
+      {(() => {
+        const meta = activeTab === 'debts' ? listMeta?.debts : listMeta?.receipts
+        if (!meta?.truncated) return null
+        return (
+          <Card className="p-3 border-amber-500/30 bg-amber-500/10 text-sm text-amber-700 dark:text-amber-200">
+            Показаны последние {meta.shown} из {meta.total} — суммы и фильтры считаются по показанным строкам.
+            Сузьте период, чтобы цифры были полными.
+          </Card>
+        )
+      })()}
 
       <Card className="p-3 bg-white dark:bg-slate-900/40 border-slate-200 dark:border-slate-800">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">

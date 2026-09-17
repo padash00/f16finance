@@ -364,12 +364,17 @@ export async function GET(req: Request) {
         scope: (query: any) => (allowedStaffIds ? query.in('staff_id', allowedStaffIds) : query),
       })
 
-    const paymentsQuery = supabase
-      .from('staff_salary_payments')
-      .select('id, staff_id, pay_date, slot, amount, comment, created_at')
-      .order('pay_date', { ascending: false })
-      .limit(200)
-    if (allowedStaffIds) paymentsQuery.in('staff_id', allowedStaffIds)
+    // Выплаты — постранично, как и корректировки. Лимит в 200 строк был не
+    // косметикой: по последней выплате считается окно долгов в карточке, и у
+    // сотрудника, чья выплата не попала в эти 200, окно раскрывалось на всю
+    // историю — в долгах всплывало уже оплаченное.
+    const paymentsQuery = () =>
+      fetchAllPages(supabase, {
+        table: 'staff_salary_payments',
+        columns: 'id, staff_id, pay_date, slot, amount, comment, created_at',
+        order: 'pay_date',
+        scope: (query: any) => (allowedStaffIds ? query.in('staff_id', allowedStaffIds) : query),
+      })
 
     const adminOpsQuery = supabase
       .from('operators')
@@ -385,16 +390,17 @@ export async function GET(req: Request) {
       .eq('is_active', true)
     if (allowedCompanyCodes) rulesQuery.in('company_code', allowedCompanyCodes)
 
-    const [staffRes, adjustmentsAll, paymentsRes, rulesRes, adminOpsRes] = await Promise.all([
+    const [staffRes, adjustmentsAll, paymentsAll, rulesRes, adminOpsRes] = await Promise.all([
       staffQuery,
       adjQuery(),
-      paymentsQuery,
+      paymentsQuery(),
       rulesQuery,
       adminOpsQuery,
     ])
 
+    const paymentsRes = { data: paymentsAll, error: null as any }
+
     if (staffRes.error) throw staffRes.error
-    if (paymentsRes.error) throw paymentsRes.error
     if (rulesRes.error) throw rulesRes.error
     if (adminOpsRes.error) throw adminOpsRes.error
 

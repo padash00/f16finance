@@ -62,6 +62,9 @@ import { confirmDialog } from '@/components/ui/confirm-dialog'
 import { toast } from '@/hooks/use-toast'
 import type { LabelItem } from '@/components/store/label-print-dialog'
 import { invalidateStoreCaches } from '@/lib/client/store-cache'
+import { SortableTh } from '@/components/ui/sortable-th'
+import { useTableSort } from '@/lib/client/use-table-sort'
+import type { SortColumns, SortState } from '@/lib/core/table-sort'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -86,6 +89,10 @@ type BalanceItem = {
     category: { id: string; name: string } | null
   } | null
 }
+
+type BalanceSortKey = 'name' | 'barcode' | 'category' | 'total' | 'warehouse' | 'showcase'
+
+const BALANCE_SORT_INITIAL: SortState<BalanceSortKey> = { key: 'name', dir: 'asc' }
 
 type WarehouseData = {
   companies: Company[]
@@ -219,7 +226,9 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
   const companies = whData?.companies || []
   const selectedCompanyId = chosenCompanyId ?? whData?.selectedCompanyId ?? null
   const warehouseLoc = whData?.warehouse || null
-  const balances = whData?.balances || []
+  // Мемо: иначе новый массив на каждый рендер — фильтр и сортировка каталога
+  // (тысячи позиций) пересчитывались бы вхолостую
+  const balances = useMemo(() => whData?.balances || [], [whData?.balances])
   const categories = whData?.categories || []
 
   useEffect(() => {
@@ -734,9 +743,29 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
     )
   }, [balances, stockSearch])
 
+  // Сортировка по заголовку — после поиска и ДО порционного показа,
+  // иначе сортировались бы только отрисованные 100 строк
+  const balanceSortColumns = useMemo<SortColumns<BalanceItem, BalanceSortKey>>(
+    () => ({
+      name: { get: (b) => b.item?.name || null },
+      barcode: { get: (b) => b.item?.barcode || null },
+      category: { get: (b) => b.item?.category?.name || null },
+      total: { get: (b) => Number(b.catalog_quantity || 0) || null, defaultDir: 'desc' },
+      warehouse: { get: (b) => Number(b.warehouse_quantity || 0) || null, defaultDir: 'desc' },
+      showcase: { get: (b) => Number(b.showcase_quantity || 0) || null, defaultDir: 'desc' },
+    }),
+    [],
+  )
+  const { sort: balanceSort, toggle: toggleBalanceSort, sortedRows: sortedBalances } = useTableSort<BalanceItem, BalanceSortKey>({
+    storageKey: 'storeWarehouse.balancesSort',
+    columns: balanceSortColumns,
+    initial: BALANCE_SORT_INITIAL,
+    rows: filteredBalances,
+  })
+
   // Каталог точки — это тысячи позиций; рисуем порциями, иначе поиск тормозит
   // на каждой букве.
-  const shownBalances = useVisibleSlice(filteredBalances, `${selectedCompanyId}|${stockSearch}`)
+  const shownBalances = useVisibleSlice(sortedBalances, `${selectedCompanyId}|${stockSearch}|${balanceSort.key}|${balanceSort.dir}`)
 
   const pendingLines = addMode === 'excel' ? excelRows : lines
   const canSave = pendingLines.some((l) => parseNum(l.quantity) > 0)
@@ -1031,12 +1060,12 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
                     />
                   </th>
                   <th className="w-10 py-2.5 px-2 text-center font-normal">#</th>
-                  <th className="py-2.5 px-2 font-normal">Товар</th>
-                  <th className="w-36 py-2.5 px-2 font-normal">Штрихкод</th>
-                  <th className="w-36 py-2.5 px-2 font-normal">Категория</th>
-                  <th className="w-20 py-2.5 px-2 text-right font-normal text-amber-700 dark:text-amber-300/70">Итого</th>
-                  <th className="w-28 py-2.5 px-2 text-right font-normal text-amber-700 dark:text-amber-300/70">Подсобка</th>
-                  <th className="w-20 py-2.5 px-2 pr-4 text-right font-normal text-emerald-700 dark:text-emerald-300/70">Витрина</th>
+                  <SortableTh label="Товар" sortKey="name" sort={balanceSort} onSort={toggleBalanceSort} className="py-2.5 px-2 font-normal" />
+                  <SortableTh label="Штрихкод" sortKey="barcode" sort={balanceSort} onSort={toggleBalanceSort} className="w-36 py-2.5 px-2 font-normal" />
+                  <SortableTh label="Категория" sortKey="category" sort={balanceSort} onSort={toggleBalanceSort} className="w-36 py-2.5 px-2 font-normal" />
+                  <SortableTh label="Итого" sortKey="total" sort={balanceSort} onSort={toggleBalanceSort} align="right" className="w-20 py-2.5 px-2 font-normal text-amber-700 dark:text-amber-300/70" />
+                  <SortableTh label="Подсобка" sortKey="warehouse" sort={balanceSort} onSort={toggleBalanceSort} align="right" className="w-28 py-2.5 px-2 font-normal text-amber-700 dark:text-amber-300/70" />
+                  <SortableTh label="Витрина" sortKey="showcase" sort={balanceSort} onSort={toggleBalanceSort} align="right" className="w-20 py-2.5 px-2 pr-4 font-normal text-emerald-700 dark:text-emerald-300/70" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">

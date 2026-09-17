@@ -15,6 +15,8 @@ import { useStoreApiUrl } from '@/components/store/store-scope'
 import { readApiCache, writeApiCache } from '@/lib/client/use-api-cache'
 import { formatMoney as money } from '@/lib/core/format'
 import { invalidateStoreCaches } from '@/lib/client/store-cache'
+import { toast } from '@/hooks/use-toast'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
 
 type Loc = { id: string; name: string; location_type: string; company?: { name?: string | null } | null }
 type ActListRow = { id: string; status: string; comment: string | null; opened_at: string; closed_at: string | null; locationName: string; totalItems: number; countedItems: number }
@@ -46,6 +48,8 @@ export default function StoreAuditPage() {
   const [acts, setActs] = useState<ActListRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Ошибки действий — тостами: карточка ошибки прячется за окном предпросмотра
+  const notifyError = (message: string) => toast({ title: message, variant: 'destructive' })
 
   const [locations, setLocations] = useState<Loc[]>([])
   const [locationId, setLocationId] = useState('')
@@ -60,6 +64,8 @@ export default function StoreAuditPage() {
   const [closing, setClosing] = useState(false)
   const [reverting, setReverting] = useState(false)
   const [canceling, setCanceling] = useState(false)
+  // Пока идёт «принять значение»/«на пересчёт» — кнопки строки заблокированы
+  const [itemBusy, setItemBusy] = useState<string | null>(null)
   const [assignDebt, setAssignDebt] = useState(false)
   // Жёсткая (полная) ревизия: непосчитанное обнуляется
   const [zeroUncounted, setZeroUncounted] = useState(false)
@@ -123,7 +129,7 @@ export default function StoreAuditPage() {
     const res = await fetch(storeUrl(`/api/admin/store/audit?act=${encodeURIComponent(id)}`), { cache: 'no-store' })
     const j = await res.json().catch(() => null)
     if (res.ok) setDetail(j?.data || null)
-    else setError(j?.error || 'Ошибка загрузки акта')
+    else toast({ title: j?.error || 'Не удалось загрузить акт', variant: 'destructive' })
   }, [storeUrl])
 
   // Живой опрос: пока открыта деталь НЕзакрытого акта — каждые 4с тихо подтягиваем
@@ -140,12 +146,12 @@ export default function StoreAuditPage() {
   }, [view, detailId, detail?.act.status, storeUrl])
 
   const createAct = async () => {
+    if (creating) return
     if (!locationId || assignments.filter((a) => a.operator_id).length === 0) {
-      setError('Выберите локацию и хотя бы одного оператора')
+      notifyError('Выберите локацию и хотя бы одного оператора')
       return
     }
     setCreating(true)
-    setError(null)
     try {
       const res = await fetch('/api/admin/store/audit', {
         method: 'POST',
@@ -154,27 +160,36 @@ export default function StoreAuditPage() {
       })
       const j = await res.json().catch(() => null)
       if (!res.ok) throw new Error(j?.error || 'Ошибка создания')
+      toast({ title: 'Акт создан' })
       invalidateStoreCaches()
       await loadActs({ fresh: true })
       await openDetail(j.data.id)
     } catch (e: any) {
-      setError(e?.message || 'Не удалось создать акт')
+      notifyError(e?.message || 'Не удалось создать акт')
     } finally {
       setCreating(false)
     }
   }
 
   const closeAct = async (force = false, skipConfirm = false) => {
-    if (!detailId) return
+    if (!detailId || closing) return
     const ok = skipConfirm
       ? true
       : force
-      ? confirm('Принудительно закрыть акт?\n\nБлокировки игнорируются: заявки склад ↔ витрина в пути, расхождения двойного счёта, отсутствие подсчёта. Посчитанные позиции проведутся (расхождение двойного счёта берётся по последнему счёту), непосчитанные останутся без изменений.')
-      : confirm('Закрыть акт и провести ревизию? Остатки будут обновлены.')
+      ? await confirmDialog({
+          title: 'Принудительно закрыть акт?',
+          description: 'Блокировки игнорируются: заявки склад ↔ витрина в пути, расхождения двойного счёта, отсутствие подсчёта. Посчитанные позиции проведутся (расхождение двойного счёта берётся по последнему счёту), непосчитанные останутся без изменений.',
+          confirmLabel: 'Закрыть принудительно',
+          destructive: true,
+        })
+      : await confirmDialog({
+          title: 'Закрыть акт и провести ревизию?',
+          description: 'Остатки будут обновлены.',
+          confirmLabel: 'Закрыть и провести',
+        })
     if (!ok) return
     setZeroPreviewOpen(false)
     setClosing(true)
-    setError(null)
     try {
       const res = await fetch('/api/admin/store/audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'close', act_id: detailId, assignDebt, force, zero_uncounted: !force && zeroUncounted, assignDebtZeroed: !force && zeroUncounted && assignDebtZeroed }) })
       const j = await res.json().catch(() => null)
@@ -182,65 +197,95 @@ export default function StoreAuditPage() {
       setCloseReport((j?.data?.report || []) as CloseRow[])
       setCloseSummary((j?.data?.summary || null) as CloseSummary | null)
       setDebtsCreated(Number(j?.data?.debtsCreated || 0))
+      toast({ title: 'Акт закрыт, ревизия проведена' })
       invalidateStoreCaches()
       await loadActs({ fresh: true })
       await openDetail(detailId, true)
     } catch (e: any) {
-      setError(e?.message || 'Не удалось закрыть акт')
+      notifyError(e?.message || 'Не удалось закрыть акт')
     } finally {
       setClosing(false)
     }
   }
 
   const cancelAct = async () => {
-    if (!detailId) return
-    if (!confirm('Отменить акт? Снимок и введённые подсчёты будут отброшены. Остатки НЕ изменятся (акт ещё не проведён). Акт станет «Отменён».')) return
+    if (!detailId || canceling) return
+    const ok = await confirmDialog({
+      title: 'Отменить акт?',
+      description: 'Снимок и введённые подсчёты будут отброшены. Остатки НЕ изменятся (акт ещё не проведён). Акт станет «Отменён».',
+      confirmLabel: 'Отменить акт',
+      cancelLabel: 'Назад',
+      destructive: true,
+    })
+    if (!ok) return
     setCanceling(true)
-    setError(null)
     try {
       const res = await fetch('/api/admin/store/audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'cancel', act_id: detailId }) })
       const j = await res.json().catch(() => null)
       if (!res.ok) throw new Error(j?.message || j?.error || 'Ошибка отмены')
+      toast({ title: 'Акт отменён' })
       invalidateStoreCaches()
       await loadActs({ fresh: true })
       setView('list')
     } catch (e: any) {
-      setError(e?.message || 'Не удалось отменить акт')
+      notifyError(e?.message || 'Не удалось отменить акт')
     } finally {
       setCanceling(false)
     }
   }
 
   const revertAct = async () => {
-    if (!detailId) return
-    if (!confirm('Откатить ревизию?\n\nОстатки вернутся к состоянию до проведения акта (изменения ревизии развернутся; продажи/движения после ревизии сохранятся). Созданные этим актом активные долги будут удалены. Акт станет «Отменён». Действие необратимо.')) return
+    if (!detailId || reverting) return
+    const ok = await confirmDialog({
+      title: 'Откатить ревизию?',
+      description: 'Остатки вернутся к состоянию до проведения акта (изменения ревизии развернутся; продажи/движения после ревизии сохранятся). Созданные этим актом активные долги будут удалены. Акт станет «Отменён». Действие необратимо.',
+      confirmLabel: 'Откатить',
+      destructive: true,
+    })
+    if (!ok) return
     setReverting(true)
-    setError(null)
     try {
       const res = await fetch('/api/admin/store/audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'revert', act_id: detailId }) })
       const j = await res.json().catch(() => null)
       if (!res.ok) throw new Error(j?.message || j?.error || 'Ошибка отката')
-      alert(`Откат выполнен. Возвращено позиций: ${j?.data?.reversedItems ?? 0}. Удалено долгов: ${j?.data?.debtsRemoved ?? 0}.`)
+      toast({
+        title: 'Откат выполнен',
+        description: `Возвращено позиций: ${j?.data?.reversedItems ?? 0}. Удалено долгов: ${j?.data?.debtsRemoved ?? 0}.`,
+      })
       setCloseReport(null)
       setCloseSummary(null)
       invalidateStoreCaches()
       await loadActs({ fresh: true })
       await openDetail(detailId)
     } catch (e: any) {
-      setError(e?.message || 'Не удалось откатить акт')
+      notifyError(e?.message || 'Не удалось откатить акт')
     } finally {
       setReverting(false)
     }
   }
 
-  const recountItem = async (itemId: string) => {
-    await fetch('/api/admin/store/audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'recount', act_id: detailId, item_id: itemId }) })
-    await openDetail(detailId)
+  // Решение расхождения: ответ сервера раньше игнорировался — кнопка «ничего не делала»
+  const postItemAction = async (body: Record<string, unknown>, itemId: string, okTitle: string, failTitle: string) => {
+    if (itemBusy) return
+    setItemBusy(itemId)
+    try {
+      const res = await fetch('/api/admin/store/audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const j = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(j?.message || j?.error || failTitle)
+      toast({ title: okTitle })
+      await openDetail(detailId)
+    } catch (e: any) {
+      notifyError(e?.message || failTitle)
+    } finally {
+      setItemBusy(null)
+    }
   }
-  const resolveItem = async (itemId: string, qty: number) => {
-    await fetch('/api/admin/store/audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'resolve', act_id: detailId, item_id: itemId, qty }) })
-    await openDetail(detailId)
-  }
+
+  const recountItem = (itemId: string) =>
+    postItemAction({ action: 'recount', act_id: detailId, item_id: itemId }, itemId, 'Позиция отправлена на пересчёт', 'Не удалось отправить на пересчёт')
+
+  const resolveItem = (itemId: string, qty: number) =>
+    postItemAction({ action: 'resolve', act_id: detailId, item_id: itemId, qty }, itemId, 'Значение принято', 'Не удалось принять значение')
 
   // Для текущего/исторического вида (без closeReport) — грубая прикидка по detail.report.
   const totals = useMemo(() => {
@@ -706,11 +751,11 @@ export default function StoreAuditPage() {
                           {can('store-revisions.edit') && (
                           <div className="mt-1.5 flex flex-wrap items-center gap-2">
                             {(r.counts || []).map((c: any, i: number) => (
-                              <button key={i} type="button" onClick={() => void resolveItem(r.item_id, c.qty)} title="Принять это значение" className="rounded border border-border px-2 py-1 text-xs tabular-nums text-foreground transition hover:border-amber-400/40 hover:text-amber-700 dark:hover:text-amber-300">
+                              <button key={i} type="button" onClick={() => void resolveItem(r.item_id, c.qty)} disabled={!!itemBusy} title="Принять это значение" className="rounded border border-border px-2 py-1 text-xs tabular-nums text-foreground transition hover:border-amber-400/40 hover:text-amber-700 dark:hover:text-amber-300 disabled:opacity-50">
                                 {c.by || 'счёт'}: {fmt(c.qty)}
                               </button>
                             ))}
-                            <button type="button" onClick={() => void recountItem(r.item_id)} className="rounded border border-amber-500/30 px-2 py-1 text-xs text-amber-700 dark:text-amber-300 transition hover:bg-amber-500/10">на пересчёт</button>
+                            <button type="button" onClick={() => void recountItem(r.item_id)} disabled={!!itemBusy} className="rounded border border-amber-500/30 px-2 py-1 text-xs text-amber-700 dark:text-amber-300 transition hover:bg-amber-500/10 disabled:opacity-50">на пересчёт</button>
                           </div>
                           )}
                         </div>

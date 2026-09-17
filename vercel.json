@@ -138,6 +138,10 @@
     {
       "path": "/api/cron/goal-pace-alert",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/client-outbox",
+      "schedule": "5,15,25,35,45,55 * * * *"
     }
   ]
 }

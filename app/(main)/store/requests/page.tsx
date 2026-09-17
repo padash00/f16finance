@@ -28,6 +28,10 @@ import { isAbortError } from '@/lib/is-abort-error'
 import { useStoreApiUrl } from '@/components/store/store-scope'
 import { readApiCache, writeApiCache } from '@/lib/client/use-api-cache'
 import { invalidateStoreCaches } from '@/lib/client/store-cache'
+import { toast } from '@/hooks/use-toast'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
+import { useModalEscape } from '@/lib/client/use-modal-escape'
+import { Label } from '@/components/ui/label'
 
 type InventoryLocation = {
   id: string
@@ -227,7 +231,8 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
   const [refreshing, setRefreshing] = useState(false)
   const [savingId, setSavingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
+  // Итоги действий — тостами: карточки вверху страницы не видны у кнопок внизу
+  const notifyError = (message: string) => toast({ title: message, variant: 'destructive' })
   const [filters, setFilters] = useUrlState({
     q: '',
     status: 'all',
@@ -240,6 +245,10 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
   const [decisionDrafts, setDecisionDrafts] = useState<Record<string, DecisionDraft>>({})
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [bulkSaving, setBulkSaving] = useState(false)
+  // Откат одобрения: причина в окне, а не в prompt() — текст не теряется
+  const [undecideId, setUndecideId] = useState<string | null>(null)
+  const [undecideReason, setUndecideReason] = useState('')
+  useModalEscape(!!undecideId, () => { if (!savingId) setUndecideId(null) })
 
   const requestsUrl = storeUrl('/api/admin/inventory/requests')
   // Суффикс: кладём разобранные заявки, а не сырой ответ.
@@ -392,31 +401,31 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
   }
 
   const undecideRequest = async (requestId: string) => {
-    const reason = window.prompt('Откатить одобрение заявки? Товар вернётся на склад. Укажите причину (опционально):')
-    if (reason === null) return
+    if (savingId) return
     setSavingId(requestId)
-    setError(null)
     try {
       const response = await fetch('/api/admin/inventory/requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'undecideRequest', requestId, reason: reason || null }),
+        body: JSON.stringify({ action: 'undecideRequest', requestId, reason: undecideReason.trim() || null }),
       })
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Ошибка')
-      setSuccess('Решение откачено, заявка вернулась в статус «Новая».')
+      toast({ title: 'Решение откачено, заявка вернулась в статус «Новая»' })
+      setUndecideId(null)
+      setUndecideReason('')
       invalidateStoreCaches()
       await load(undefined, { soft: true })
     } catch (err: any) {
-      setError(err?.message || 'Ошибка')
+      notifyError(err?.message || 'Не удалось откатить решение')
     } finally {
       setSavingId(null)
     }
   }
 
   const transitionStatus = async (requestId: string, status: 'issued' | 'received') => {
+    if (savingId) return
     setSavingId(requestId)
-    setError(null)
     try {
       const response = await fetch('/api/admin/inventory/requests', {
         method: 'POST',
@@ -425,20 +434,29 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
       })
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Ошибка')
-      setSuccess(status === 'issued' ? 'Заявка отмечена как выданная.' : 'Заявка отмечена как полученная.')
+      toast({ title: status === 'issued' ? 'Заявка отмечена как выданная' : 'Заявка отмечена как полученная' })
       invalidateStoreCaches()
       await load(undefined, { soft: true })
     } catch (err: any) {
-      setError(err?.message || 'Ошибка')
+      notifyError(err?.message || 'Не удалось изменить статус заявки')
     } finally {
       setSavingId(null)
     }
   }
 
   const submitDecision = async (request: InventoryRequest, approved: boolean, fullApprove: boolean) => {
+    if (savingId) return
+    // Отклонение необратимо для заявителя — спрашиваем подтверждение
+    if (!approved) {
+      const ok = await confirmDialog({
+        title: 'Отклонить заявку?',
+        description: 'Товар не уйдёт на точку. Заявка получит статус «Отклонена».',
+        confirmLabel: 'Отклонить',
+        destructive: true,
+      })
+      if (!ok) return
+    }
     setSavingId(request.id)
-    setError(null)
-    setSuccess(null)
     try {
       const draft = decisionDrafts[request.id] || createDecisionDraft(request)
       const items = approved
@@ -467,11 +485,11 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
         throw new Error(json?.error || 'Не удалось обработать заявку')
       }
 
-      setSuccess(approved ? 'Решение по заявке сохранено.' : 'Заявка отклонена.')
+      toast({ title: approved ? 'Решение по заявке сохранено' : 'Заявка отклонена' })
       invalidateStoreCaches()
       await load(undefined, { soft: true })
     } catch (err: any) {
-      setError(err?.message || 'Не удалось обработать заявку')
+      notifyError(err?.message || 'Не удалось обработать заявку')
     } finally {
       setSavingId(null)
     }
@@ -508,10 +526,17 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
 
   const runBulkAction = async (action: 'approve-full' | 'reject' | 'issue' | 'receive') => {
     const ids = bulkIdsFor(action)
-    if (!ids.length) return
+    if (!ids.length || bulkSaving) return
+    if (action === 'reject') {
+      const ok = await confirmDialog({
+        title: `Отклонить ${ids.length} заявок?`,
+        description: 'Товар не уйдёт на точки. Заявки получат статус «Отклонена».',
+        confirmLabel: 'Отклонить',
+        destructive: true,
+      })
+      if (!ok) return
+    }
     setBulkSaving(true)
-    setError(null)
-    setSuccess(null)
     try {
       const response = await fetch('/api/admin/inventory/requests/bulk', {
         method: 'POST',
@@ -522,12 +547,15 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось выполнить массовое действие')
       const succeeded = Array.isArray(json?.data?.succeeded) ? json.data.succeeded.length : 0
       const failed = Array.isArray(json?.data?.failed) ? json.data.failed.length : 0
-      setSuccess(`${BULK_LABEL[action][0]} ${succeeded} из ${ids.length}${failed ? `, не удалось ${failed}` : ''}.`)
+      toast({
+        title: `${BULK_LABEL[action][0]} ${succeeded} из ${ids.length}${failed ? `, не удалось ${failed}` : ''}`,
+        variant: failed ? 'destructive' : undefined,
+      })
       setSelectedIds((prev) => prev.filter((id) => !ids.includes(id)))
       invalidateStoreCaches()
       await load(undefined, { soft: true })
     } catch (err: any) {
-      setError(err?.message || 'Не удалось выполнить массовое действие')
+      notifyError(err?.message || 'Не удалось выполнить массовое действие')
     } finally {
       setBulkSaving(false)
     }
@@ -692,7 +720,6 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
       </div>
 
       {error ? <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-sm text-red-700 dark:text-red-200">{error}</div> : null}
-      {success ? <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2.5 text-sm text-emerald-700 dark:text-emerald-200">{success}</div> : null}
       {refreshing ? (
         <div className="flex items-center gap-2 rounded-lg border border-border bg-white/[0.04] px-3 py-2 text-xs text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -929,7 +956,7 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
                         variant="outline"
                         className="gap-1.5 border-rose-500/40 text-rose-700 dark:text-rose-300 hover:bg-rose-500/10"
                         disabled={savingId === request.id}
-                        onClick={() => void undecideRequest(request.id)}
+                        onClick={() => { setUndecideReason(''); setUndecideId(request.id) }}
                       >
                         Откатить
                       </Button>
@@ -1060,6 +1087,41 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
               Снять выбор
             </Button>
           </div>
+        </div>
+      ) : null}
+
+      {/* Откат одобрения: причина вводится в поле */}
+      {undecideId ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => { if (!savingId) setUndecideId(null) }}>
+          <Card
+            className="w-full max-w-md space-y-4 p-5"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div>
+              <h2 className="text-base font-semibold text-foreground">Откатить одобрение заявки?</h2>
+              <p className="mt-1 text-xs text-muted-foreground">Товар вернётся на склад, заявка станет «Новой».</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Причина (опционально)</Label>
+              <Textarea
+                rows={3}
+                value={undecideReason}
+                onChange={(event) => setUndecideReason(event.target.value)}
+                placeholder="Например: одобрили не ту точку"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setUndecideId(null)} disabled={!!savingId}>Назад</Button>
+              <Button
+                variant="destructive"
+                disabled={!!savingId}
+                onClick={() => void undecideRequest(undecideId)}
+              >
+                {savingId ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Откатить
+              </Button>
+            </div>
+          </Card>
         </div>
       ) : null}
     </div>

@@ -91,15 +91,25 @@ export async function POST(request: Request) {
     }
 
     const results: Array<{ debt_id: string; expense_id: string; total: number }> = []
+    // Долг, который не удалось закрыть, больше не исчезает молча: ниже каждый шаг
+    // проверяется, при сбое расход этого долга откатывается, а сам долг попадает
+    // сюда — ответ показывает, что оплачено, а что нет.
+    const failures: Array<{ debt_id: string; supplier: string; total: number; error: string }> = []
 
     for (const debt of open) {
       const total = normalizeMoney(debt.total_amount)
-      if (total <= 0) continue
+      const supplierName = debt.supplier?.organization_name || debt.supplier?.name || '—'
+      if (total <= 0) {
+        failures.push({ debt_id: String(debt.id), supplier: supplierName, total, error: 'Сумма долга не положительная' })
+        continue
+      }
 
       const categoryName = String(debt.category?.name || '').trim() || fallbackCategoryName || 'COGS'
-      if (!debt.company_id) continue
+      if (!debt.company_id) {
+        failures.push({ debt_id: String(debt.id), supplier: supplierName, total, error: 'У долга не указана точка' })
+        continue
+      }
 
-      const supplierName = debt.supplier?.organization_name || debt.supplier?.name || '—'
       const expenseComment = [
         `Объединённая оплата (${open.length} долгов)`,
         `Поставщик: ${supplierName}`,
@@ -123,21 +133,26 @@ export async function POST(request: Request) {
       }
 
       let expenseId: string | null = null
-      const { data: insertedExpense, error: expenseError } = await supabase
-        .from('expenses')
-        .insert([expensePayload])
-        .select('id')
-        .single()
-      if (expenseError) {
-        if (String((expenseError as any)?.code || '') === '23505') {
-          const { data: existingExpense } = await supabase
-            .from('expenses')
-            .select('id')
-            .eq('source_type', 'inventory_receipt')
-            .eq('source_id', debt.receipt_id)
-            .maybeSingle()
-          if (existingExpense?.id) {
-            await supabase
+      // Расход, который создали именно мы: только его и можно откатывать.
+      // Найденный по 23505 чужой/прежний расход трогать нельзя.
+      let createdExpenseId: string | null = null
+      try {
+        const { data: insertedExpense, error: expenseError } = await supabase
+          .from('expenses')
+          .insert([expensePayload])
+          .select('id')
+          .single()
+        if (expenseError) {
+          if (String((expenseError as any)?.code || '') === '23505') {
+            const { data: existingExpense, error: existingError } = await supabase
+              .from('expenses')
+              .select('id')
+              .eq('source_type', 'inventory_receipt')
+              .eq('source_id', debt.receipt_id)
+              .maybeSingle()
+            if (existingError) throw existingError
+            if (!existingExpense?.id) throw expenseError
+            const { error: updateExpenseError } = await supabase
               .from('expenses')
               .update({
                 date: paidAt,
@@ -149,48 +164,82 @@ export async function POST(request: Request) {
                 comment: expenseComment,
               })
               .eq('id', existingExpense.id)
+            if (updateExpenseError) throw updateExpenseError
             expenseId = String(existingExpense.id)
           } else {
             throw expenseError
           }
         } else {
-          throw expenseError
+          expenseId = String(insertedExpense?.id || '')
+          createdExpenseId = expenseId || null
         }
-      } else {
-        expenseId = String(insertedExpense?.id || '')
-      }
 
-      await supabase
-        .from('supplier_debts')
-        .update({
-          status: 'paid',
-          payment_paid_at: paidAt,
-          payment_cash_amount: method === 'cash' ? total : 0,
-          payment_kaspi_amount: method === 'kaspi' ? total : 0,
-          payment_receipt_file_url: receiptFileUrl,
-          payment_comment: comment,
-          expense_id: expenseId,
+        const { data: updatedDebt, error: debtUpdateError } = await supabase
+          .from('supplier_debts')
+          .update({
+            status: 'paid',
+            payment_paid_at: paidAt,
+            payment_cash_amount: method === 'cash' ? total : 0,
+            payment_kaspi_amount: method === 'kaspi' ? total : 0,
+            payment_receipt_file_url: receiptFileUrl,
+            payment_comment: comment,
+            expense_id: expenseId,
+          })
+          .eq('id', debt.id)
+          .eq('status', 'open')
+          .select('id')
+        // Раньше ошибка этого шага не проверялась вовсе: расход уходил в кассу,
+        // а долг оставался открытым — платили второй раз.
+        if (debtUpdateError) throw debtUpdateError
+        if (!updatedDebt || updatedDebt.length === 0) throw new Error('Долг уже закрыт другим платежом')
+
+        const { error: paymentError } = await supabase
+          .from('supplier_debt_payments')
+          .insert([{
+            debt_id: debt.id,
+            organization_id: debt.organization_id || null,
+            paid_at: paidAt,
+            cash_amount: method === 'cash' ? total : 0,
+            kaspi_amount: method === 'kaspi' ? total : 0,
+            receipt_file_url: receiptFileUrl,
+            comment,
+            expense_id: expenseId,
+            event_type: 'payment',
+            event_payload: { bulk: true, batch_size: open.length },
+            created_by: access.user?.id || null,
+          }])
+        // Раньше ошибка глоталась `.then(() => null, () => null)` — долг числился
+        // оплаченным без единой записи в истории платежей.
+        if (paymentError) {
+          await supabase
+            .from('supplier_debts')
+            .update({
+              status: 'open',
+              payment_paid_at: null,
+              payment_cash_amount: 0,
+              payment_kaspi_amount: 0,
+              payment_receipt_file_url: null,
+              payment_comment: null,
+              expense_id: null,
+            })
+            .eq('id', debt.id)
+          throw paymentError
+        }
+
+        results.push({ debt_id: debt.id, expense_id: expenseId || '', total })
+      } catch (debtError: any) {
+        // Откатываем расход этого долга, чтобы в кассе не осталось оплаты
+        // по долгу, который так и не закрылся.
+        if (createdExpenseId) {
+          await supabase.from('expenses').delete().eq('id', createdExpenseId)
+        }
+        failures.push({
+          debt_id: String(debt.id),
+          supplier: supplierName,
+          total,
+          error: String(debtError?.message || 'Не удалось закрыть долг'),
         })
-        .eq('id', debt.id)
-
-      await supabase
-        .from('supplier_debt_payments')
-        .insert([{
-          debt_id: debt.id,
-          organization_id: debt.organization_id || null,
-          paid_at: paidAt,
-          cash_amount: method === 'cash' ? total : 0,
-          kaspi_amount: method === 'kaspi' ? total : 0,
-          receipt_file_url: receiptFileUrl,
-          comment,
-          expense_id: expenseId,
-          event_type: 'payment',
-          event_payload: { bulk: true, batch_size: open.length },
-          created_by: access.user?.id || null,
-        }])
-        .then(() => null, () => null)
-
-      results.push({ debt_id: debt.id, expense_id: expenseId || '', total })
+      }
     }
 
     await writeAuditLog(supabase as any, {
@@ -204,10 +253,25 @@ export async function POST(request: Request) {
         paid_at: paidAt,
         receipt_file_url: receiptFileUrl,
         debts: results,
+        failures,
       },
     })
 
-    return json({ ok: true, data: { closed: results.length, results } })
+    if (failures.length > 0) {
+      // 207: часть прошла, часть нет. Текст ошибки перечисляет незакрытые долги —
+      // иначе оператор увидел бы «закрыто N» и не узнал про остальные.
+      const detail = failures.map((f) => `${f.supplier}: ${f.error}`).join('; ')
+      return json(
+        {
+          ok: false,
+          error: `Оплачено ${results.length} из ${open.length}. Не закрыто ${failures.length}: ${detail}`,
+          data: { closed: results.length, results, failures },
+        },
+        207,
+      )
+    }
+
+    return json({ ok: true, data: { closed: results.length, results, failures } })
   } catch (error: any) {
     return json({ error: error?.message || 'Не удалось провести объединённую оплату' }, 500)
   }

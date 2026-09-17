@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
+import { toast } from '@/hooks/use-toast'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Skeleton } from '@/components/skeleton'
 import { useCapabilities } from '@/lib/client/use-capabilities'
@@ -130,6 +132,7 @@ export default function TelegramPage() {
   const [newUserFinance, setNewUserFinance] = useState(true)
   const [addLoading, setAddLoading] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
+  const [busyUserId, setBusyUserId] = useState<string | null>(null)
 
   // Webhook
   const [webhookUrl, setWebhookUrl] = useState('')
@@ -139,6 +142,12 @@ export default function TelegramPage() {
   // Reports
   const [reportLoading, setReportLoading] = useState<'daily' | 'weekly' | null>(null)
   const [reportMsg, setReportMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  // Чат организации для cron-отчётов (organizations.telegram_owner_chat_id)
+  const [ownerChatId, setOwnerChatId] = useState('')
+  const [ownerChatLoading, setOwnerChatLoading] = useState(true)
+  const [ownerChatSaving, setOwnerChatSaving] = useState(false)
+  const [ownerChatMsg, setOwnerChatMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   // Staff Telegram IDs
   const [staffMembers, setStaffMembers] = useState<Array<{ id: string; full_name: string; role: string; telegram_chat_id: string | null; is_active: boolean }>>([])
@@ -151,6 +160,7 @@ export default function TelegramPage() {
   // Section visibility
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     status: true,
+    ownerChat: true,
     users: true,
     staff: false,
     webhook: false,
@@ -200,10 +210,21 @@ export default function TelegramPage() {
     finally { setStaffLoading(false) }
   }
 
+  const loadOwnerChat = async () => {
+    setOwnerChatLoading(true)
+    try {
+      const res = await fetch('/api/admin/organization-telegram')
+      const data = await res.json()
+      if (res.ok) setOwnerChatId(data.chatId || '')
+    } catch {}
+    finally { setOwnerChatLoading(false) }
+  }
+
   useEffect(() => {
     loadStatus()
     loadUsers()
     loadStaff()
+    loadOwnerChat()
   }, [])
 
   // ── Actions ──
@@ -236,17 +257,46 @@ export default function TelegramPage() {
   }
 
   const handleToggleFinance = async (user: AllowedUser) => {
-    await fetch('/api/telegram/allowed-users', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: user.id, label: user.label, can_finance: !user.can_finance }),
-    })
-    await loadUsers()
+    if (busyUserId) return
+    setBusyUserId(user.id)
+    try {
+      const res = await fetch('/api/telegram/allowed-users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: user.id, label: user.label, can_finance: !user.can_finance }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.error || `Ошибка запроса (${res.status})`)
+      await loadUsers()
+      toast({ title: user.can_finance ? 'Доступ к финансам выключен' : 'Доступ к финансам включён' })
+    } catch (e: any) {
+      toast({ title: 'Не удалось изменить доступ', description: e?.message, variant: 'destructive' })
+    } finally {
+      setBusyUserId(null)
+    }
   }
 
-  const handleDeleteUser = async (id: string) => {
-    await fetch(`/api/telegram/allowed-users?id=${id}`, { method: 'DELETE' })
-    await loadUsers()
+  const handleDeleteUser = async (user: AllowedUser) => {
+    if (busyUserId) return
+    const ok = await confirmDialog({
+      title: 'Убрать пользователя из бота?',
+      description: `${user.label || `ID: ${user.telegram_user_id}`} потеряет доступ к боту.`,
+      confirmLabel: 'Убрать',
+      destructive: true,
+    })
+    if (!ok) return
+    setBusyUserId(user.id)
+    try {
+      const res = await fetch(`/api/telegram/allowed-users?id=${user.id}`, { method: 'DELETE' })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.error || `Ошибка запроса (${res.status})`)
+      await loadUsers()
+      toast({ title: 'Пользователь убран из бота' })
+    } catch (e: any) {
+      toast({ title: 'Не удалось убрать пользователя', description: e?.message, variant: 'destructive' })
+    } finally {
+      setBusyUserId(null)
+    }
   }
 
   const handleSetupWebhook = async () => {
@@ -270,6 +320,29 @@ export default function TelegramPage() {
       setSetupMsg({ ok: false, text: 'Сетевая ошибка' })
     } finally {
       setSetupLoading(false)
+    }
+  }
+
+  const handleSaveOwnerChat = async () => {
+    setOwnerChatSaving(true)
+    setOwnerChatMsg(null)
+    try {
+      const res = await fetch('/api/admin/organization-telegram', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatId: ownerChatId.trim() }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setOwnerChatId(data.chatId || '')
+        setOwnerChatMsg({ ok: true, text: data.chatId ? 'Чат сохранён' : 'Чат очищен' })
+      } else {
+        setOwnerChatMsg({ ok: false, text: data.error || 'Ошибка сохранения' })
+      }
+    } catch {
+      setOwnerChatMsg({ ok: false, text: 'Сетевая ошибка' })
+    } finally {
+      setOwnerChatSaving(false)
     }
   }
 
@@ -377,6 +450,49 @@ create table if not exists telegram_allowed_users (
                     <p>6. Зарегистрируйте вебхук в разделе ниже</p>
                   </div>
                 )}
+              </div>
+            )}
+          </SectionToggle>
+
+          {/* ── Чат для отчётов владельца (organizations.telegram_owner_chat_id) ── */}
+          <SectionToggle
+            title="Чат для отчётов владельца"
+            icon={Send}
+            open={openSections.ownerChat}
+            onToggle={() => toggle('ownerChat')}
+            badge={ownerChatId ? undefined : 'не задан'}
+          >
+            <p className="text-xs text-slate-500 mb-3">
+              Куда бот присылает ежедневные и недельные отчёты по вашей организации. Укажите ID группы
+              или канала (числовой, у групп начинается с «−»). Добавьте бота в этот чат админом.
+              Узнать ID: перешлите сообщение из чата боту <span className="text-muted-foreground">@getmyid_bot</span>.
+            </p>
+            {ownerChatLoading ? (
+              <Skeleton className="h-10 w-full rounded-xl" />
+            ) : (
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  type="text"
+                  value={ownerChatId}
+                  onChange={(e) => setOwnerChatId(e.target.value)}
+                  placeholder="-1001234567890"
+                  className="flex-1 px-3 py-2 bg-card border border-border rounded-xl text-sm text-body placeholder-slate-400 dark:placeholder-slate-600 outline-none focus:border-amber-500/50"
+                />
+                {can('telegram.setup_webhook') && (
+                  <button
+                    onClick={handleSaveOwnerChat}
+                    disabled={ownerChatSaving}
+                    className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl transition-colors whitespace-nowrap"
+                  >
+                    {ownerChatSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                    Сохранить
+                  </button>
+                )}
+              </div>
+            )}
+            {ownerChatMsg && (
+              <div className={`mt-3 text-xs rounded-lg px-3 py-2 ${ownerChatMsg.ok ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20'}`}>
+                {ownerChatMsg.text}
               </div>
             )}
           </SectionToggle>
@@ -500,7 +616,8 @@ create table if not exists telegram_allowed_users (
                       {can('telegram.toggle_finance') && (
                         <button
                           onClick={() => handleToggleFinance(user)}
-                          className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
+                          disabled={busyUserId === user.id}
+                          className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors disabled:opacity-50"
                           title={user.can_finance ? 'Отключить доступ' : 'Включить доступ'}
                         >
                           {user.can_finance ? (
@@ -512,8 +629,9 @@ create table if not exists telegram_allowed_users (
                       )}
                       {can('telegram.delete_user') && (
                         <button
-                          onClick={() => handleDeleteUser(user.id)}
-                          className="p-1.5 rounded-lg hover:bg-red-500/10 text-slate-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                          onClick={() => handleDeleteUser(user)}
+                          disabled={busyUserId === user.id}
+                          className="p-1.5 rounded-lg hover:bg-red-500/10 text-slate-500 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50"
                           title="Удалить"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
