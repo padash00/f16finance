@@ -5,7 +5,7 @@ import { downloadReportPdf } from '@/lib/client/download-pdf'
 import { useApiCache } from '@/lib/client/use-api-cache'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useStoreScope } from '@/components/store/store-scope'
-import { Package, PackageX, Pencil, Plus, Printer, Search, Trash2, Upload, Download, Check, X, ChevronLeft, ChevronRight, Coins, ShoppingCart, TrendingUp, Warehouse, Store, Tag, Loader2, AlertTriangle, MoreHorizontal } from 'lucide-react'
+import { Package, PackageX, Pencil, Plus, Printer, Search, Trash2, Upload, Download, Check, X, ChevronLeft, ChevronRight, Coins, ShoppingCart, TrendingUp, Warehouse, Store, Tag, Loader2, AlertTriangle, MoreHorizontal, RotateCcw } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -535,6 +535,9 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
   const [filterCategory, setFilterCategory] = usePersistentState('catalog.filterCategory', 'all')
   const [filterType, setFilterType] = usePersistentState('catalog.filterType', 'all')
   const [sortBy, setSortBy] = usePersistentState<'newest' | 'name'>('catalog.sortBy', 'newest')
+  // Архив: товар с историей движений нельзя удалить физически — он скрывается
+  // (is_active=false). По умолчанию такие не показываем, но их можно включить и вернуть.
+  const [showArchived, setShowArchived] = usePersistentState('catalog.showArchived', false)
   // Быстрый разбор по карточкам-кнопкам. Намеренно не сохраняем между сессиями:
   // после перезагрузки список должен быть полным, а не «почему-то в 4 позиции».
   const [flagFilter, setFlagFilter] = useState<'none' | 'attention' | 'zero'>('none')
@@ -735,7 +738,10 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
     }
   }
 
+  const archivedCount = items.filter((item) => !item.is_active).length
+
   const baseFiltered = items.filter((item) => {
+    if (!item.is_active && !showArchived) return false
     if (filterType !== 'all' && item.item_type !== filterType) return false
     if (filterCategory !== 'all' && item.category?.id !== filterCategory) return false
     if (search) {
@@ -763,7 +769,7 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
   const totalPages = Math.ceil(sorted.length / PAGE_SIZE)
   const paginated = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
-  useEffect(() => { setPage(1) }, [search, filterCategory, filterType, sortBy, filterCompany, storeCompanyId, flagFilter])
+  useEffect(() => { setPage(1) }, [search, filterCategory, filterType, sortBy, filterCompany, storeCompanyId, flagFilter, showArchived])
   // Смена точки = другой набор данных — сбрасываем выбор чекбоксами
   useEffect(() => { setSelectedItemIds(new Set()) }, [filterCompany])
 
@@ -946,6 +952,22 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
       showToast('Ошибка: ' + e.message)
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function restoreItem(item: CatalogItem) {
+    try {
+      const res = await fetch('/api/admin/inventory/catalog', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'restoreItem', item_id: item.id }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || `Ошибка ${res.status}`)
+      showToast(`Товар «${item.name}» восстановлен`)
+      await loadItems()
+    } catch (e: any) {
+      showToast('Не удалось восстановить: ' + (e?.message || 'ошибка'))
     }
   }
 
@@ -1541,6 +1563,18 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
                   <Tag className="mr-1.5 h-3.5 w-3.5" />Категории
                 </Button>
               )}
+              {archivedCount > 0 && (
+                <Button
+                  variant={showArchived ? 'default' : 'outline'}
+                  size="sm"
+                  className="h-8 text-xs"
+                  onClick={() => setShowArchived(!showArchived)}
+                  title="Товары с историей движений не удаляются насовсем, а скрываются"
+                >
+                  <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                  {showArchived ? 'Скрыть удалённые' : `Удалённые (${archivedCount})`}
+                </Button>
+              )}
               {(search || filterCategory !== 'all' || filterType !== 'all') && (
                 <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setSearch(''); setFilterCategory('all'); setFilterType('all') }}>
                   Сбросить
@@ -1793,7 +1827,16 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
                                   <Pencil className="w-3.5 h-3.5" />
                                 </button>
                               )}
-                              {canDelete && (
+                              {canEdit && !item.is_active && (
+                                <button
+                                  onClick={() => void restoreItem(item)}
+                                  className="p-1 rounded hover:bg-emerald-500/10 text-muted-foreground transition-colors hover:text-emerald-600 dark:hover:text-emerald-400"
+                                  title="Восстановить из удалённых"
+                                >
+                                  <RotateCcw className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                              {canDelete && item.is_active && (
                                 <button
                                   onClick={() => deleteItem(item)}
                                   className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"

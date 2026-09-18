@@ -1070,6 +1070,50 @@ export async function POST(request: Request) {
     }
 
     // -----------------------------------------------------------------------
+    // restoreItem — вернуть товар из архива (is_active = true)
+    // Товар с историей движений нельзя удалить физически, он уходит в архив;
+    // без этого действия вернуть его можно было только через базу.
+    // -----------------------------------------------------------------------
+    if (body.action === 'restoreItem') {
+      const denied = await requireCapability(access, 'store-catalog.edit')
+      if (denied) return denied as any
+      const itemId = String(body.item_id || '').trim()
+      if (!itemId) return json({ error: 'item-id-required' }, 400)
+
+      const callerOrgId = access.activeOrganization?.id || null
+      if (!access.isSuperAdmin && !callerOrgId) return json({ error: 'forbidden' }, 403)
+      const { data: itemRow } = await supabase
+        .from('inventory_items')
+        .select('id, organization_id, name, barcode, sale_price, item_type')
+        .eq('id', itemId)
+        .maybeSingle()
+      if (!itemRow) return json({ error: 'item-not-found' }, 404)
+      if (!access.isSuperAdmin && String((itemRow as any).organization_id) !== String(callerOrgId)) {
+        return json({ error: 'forbidden' }, 403)
+      }
+
+      const { error: restoreError } = await supabase
+        .from('inventory_items')
+        .update({ is_active: true, updated_at: new Date().toISOString() })
+        .eq('id', itemId)
+      if (restoreError) throw restoreError
+
+      // Возвращаем товар и в кассу — как при обычном сохранении карточки
+      if (String((itemRow as any).item_type || 'product') !== 'consumable') {
+        await syncInventoryItemToPointProducts(supabase as any, {
+          organizationId: callerOrgId,
+          isSuperAdmin: access.isSuperAdmin,
+          name: String((itemRow as any).name || '').trim(),
+          barcode: String((itemRow as any).barcode || '').trim(),
+          sale_price: Number((itemRow as any).sale_price || 0),
+          is_active: true,
+        })
+      }
+
+      return json({ ok: true })
+    }
+
+    // -----------------------------------------------------------------------
     // updateItem
     // -----------------------------------------------------------------------
     if (body.action === 'updateItem') {
