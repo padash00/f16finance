@@ -1,4 +1,4 @@
-import nodemailer from 'nodemailer'
+import nodemailer, { type Transporter } from 'nodemailer'
 
 export type LeadRequestPayload = {
   name: string
@@ -12,7 +12,7 @@ export type LeadRequestPayload = {
   submittedAt: string
 }
 
-let cachedTransporter: nodemailer.Transporter | null = null
+let cachedTransporter: Transporter | null = null
 
 function getMailerConfig() {
   const user =

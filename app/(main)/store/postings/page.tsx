@@ -12,6 +12,8 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useStoreScope } from '@/components/store/store-scope'
 import { readApiCache, writeApiCache } from '@/lib/client/use-api-cache'
+import { downloadXlsx } from '@/lib/client/excel'
+import { todayISO } from '@/lib/core/date'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
@@ -123,7 +125,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
   const [saving, setSaving] = useState(false)
 
   const [locationId, setLocationId] = useState('')
-  const [receivedAt, setReceivedAt] = useState(() => new Date().toISOString().slice(0, 10))
+  const [receivedAt, setReceivedAt] = useState(() => todayISO())
   const [comment, setComment] = useState('')
   const [lines, setLines] = useState<PostingLine[]>([newLine()])
   const [search, setSearch] = useState<Record<string, string>>({})
@@ -239,12 +241,13 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
       }
       if (rows.length === 0) { setError('Нет оприходованного товара для выгрузки'); return }
       const headers = ['Дата', 'Локация', 'Название', 'Штрихкод', 'Ед.', 'Кол-во', 'Цена закупки', 'Сумма закупки', 'Цена продажи', 'Комментарий']
-      const XLSX = await import('xlsx')
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
-      ;(ws as any)['!cols'] = [{ wch: 12 }, { wch: 18 }, { wch: 34 }, { wch: 16 }, { wch: 6 }, { wch: 8 }, { wch: 13 }, { wch: 13 }, { wch: 13 }, { wch: 26 }]
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, ws, 'Оприходование')
-      XLSX.writeFile(wb, `Oprihodovanie_${new Date().toISOString().slice(0, 10)}.xlsx`)
+      await downloadXlsx({
+        fileName: `Oprihodovanie_${todayISO()}.xlsx`,
+        sheetName: 'Оприходование',
+        headers,
+        rows,
+        columnWidths: [12, 18, 34, 16, 6, 8, 13, 13, 13, 26],
+      })
     } catch (e: any) {
       setError(e?.message || 'Не удалось выгрузить')
     } finally {
@@ -262,17 +265,14 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
     })
     if (rows.length === 0) return
     const headers = ['Название', 'Штрихкод', 'Ед.', 'Кол-во', 'Цена закупки', 'Сумма закупки', 'Цена продажи', 'Комментарий']
-    const XLSX = await import('xlsx')
-    const ws = XLSX.utils.aoa_to_sheet([
-      [`Оприходование от ${p.received_at} · ${p.location?.name || ''}`],
-      [],
+    await downloadXlsx({
+      fileName: `Oprihodovanie_${p.received_at}.xlsx`,
+      sheetName: 'Оприходование',
+      titleRows: [[`Оприходование от ${p.received_at} · ${p.location?.name || ''}`], []],
       headers,
-      ...rows,
-    ])
-    ;(ws as any)['!cols'] = [{ wch: 34 }, { wch: 16 }, { wch: 6 }, { wch: 8 }, { wch: 13 }, { wch: 13 }, { wch: 13 }, { wch: 26 }]
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Оприходование')
-    XLSX.writeFile(wb, `Oprihodovanie_${p.received_at}.xlsx`)
+      rows,
+      columnWidths: [34, 16, 6, 8, 13, 13, 13, 26],
+    })
   }
 
   const itemById = useMemo(() => {
@@ -347,7 +347,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
   // Строки документа → в форму (цены продажи/наценка — из каталога).
   const restoreLinesFrom = (posting: RecentPosting) => {
     setLocationId(posting.location?.id || '')
-    setReceivedAt(posting.received_at || new Date().toISOString().slice(0, 10))
+    setReceivedAt(posting.received_at || todayISO())
     setComment(posting.comment && posting.comment !== 'Оприходование' ? posting.comment : '')
     const restored = (posting.items || []).map((row) => {
       const catalogItem = row.item ? itemById.get(row.item.id) || row.item : null

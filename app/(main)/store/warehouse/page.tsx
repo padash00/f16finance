@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApiCache } from '@/lib/client/use-api-cache'
+import { readSheetRows } from '@/lib/client/excel'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import {
   AlertCircle,
@@ -492,26 +493,18 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
       return
     }
 
-    // xlsx весит сотни КБ — грузим только когда пользователь реально выбрал файл
-    const XLSX = await import('xlsx')
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      try {
-        const data = new Uint8Array(ev.target?.result as ArrayBuffer)
-        const wb = XLSX.read(data, { type: 'array' })
-        const ws = wb.Sheets[wb.SheetNames[0]]
-        const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
-        const parsed = parseRowsFromTable(rows)
-        if (parsed.length === 0) {
-          setExcelError('Не найдено строк. Формат: Штрихкод | Название | Количество | Цена')
-          return
-        }
-        setExcelRows(parsed)
-      } catch {
-        setExcelError('Не удалось прочитать файл.')
+    // Библиотека тяжёлая — грузится только когда файл реально выбрали
+    try {
+      const rows = await readSheetRows(file)
+      const parsed = parseRowsFromTable(rows as any[][])
+      if (parsed.length === 0) {
+        setExcelError('Не найдено строк. Формат: Штрихкод | Название | Количество | Цена')
+        return
       }
+      setExcelRows(parsed)
+    } catch (err: any) {
+      setExcelError(err?.message || 'Не удалось прочитать файл.')
     }
-    reader.readAsArrayBuffer(file)
   }
 
   function resetBackroom() {
@@ -555,11 +548,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
           })
         }
       } else {
-        const XLSX = await import('xlsx')
-        const buf = await file.arrayBuffer()
-        const wb = XLSX.read(new Uint8Array(buf), { type: 'array' })
-        const ws = wb.Sheets[wb.SheetNames[0]]
-        rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][]
+        rows = (await readSheetRows(file)) as any[][]
       }
 
       const parsed = parseRowsFromTable(rows)

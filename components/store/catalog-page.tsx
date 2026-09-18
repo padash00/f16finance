@@ -18,6 +18,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { downloadXlsx, readSheetRows } from '@/lib/client/excel'
+import { todayISO } from '@/lib/core/date'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -174,17 +176,12 @@ function colIndex(headers: string[], ...aliases: string[]): number {
 }
 
 async function parseWiponExcel(file: File): Promise<ImportRow[]> {
-  // xlsx весит сотни КБ — грузим только когда пользователь реально выбрал файл
-  const XLSX = await import('xlsx')
+  // Разбор через общий помощник (exceljs): у прежней библиотеки xlsx открытые
+  // уязвимости, а прайс поставщика — как раз недоверенный файл
+  const rows = (await readSheetRows(file)) as unknown[][]
   return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      try {
-        const data = new Uint8Array(e.target?.result as ArrayBuffer)
-        const wb = XLSX.read(data, { type: 'array' })
-        const ws = wb.Sheets[wb.SheetNames[0]]
-        const rows = XLSX.utils.sheet_to_json(ws, { header: 1 }) as unknown[][]
-
+    {
+      {
         if (!rows.length) return reject(new Error('Файл пустой'))
 
         const headers = (rows[0] as unknown[]).map((h) => normHeaderCell(h))
@@ -238,12 +235,8 @@ async function parseWiponExcel(file: File): Promise<ImportRow[]> {
         }
 
         resolve(result)
-      } catch (err: any) {
-        reject(new Error('Ошибка чтения файла: ' + err.message))
       }
     }
-    reader.onerror = () => reject(new Error('Не удалось прочитать файл'))
-    reader.readAsArrayBuffer(file)
   })
 }
 
@@ -280,7 +273,6 @@ async function exportToExcel(items: CatalogItem[], filename = 'Katalog') {
 // Остатки РАЗДЕЛЬНЫЕ: «Остаток склад» и «Остаток витрина» — чтобы при импорте
 // залить и на склад, и на витрину, а не общей суммой.
 async function exportCatalogExcel(items: CatalogItem[], filename = 'Katalog') {
-  const XLSX = await import('xlsx')
   const header = [
     'Название', 'Штрихкод', 'Категория', 'Единица измерения',
     'Цена продажи', 'Цена закупки', 'Остаток склад', 'Остаток витрина', 'Тип', 'Артикул',
@@ -297,12 +289,13 @@ async function exportCatalogExcel(items: CatalogItem[], filename = 'Katalog') {
     it.item_type === 'service' ? 'Услуга' : it.item_type === 'consumable' ? 'Расходник' : 'Товар',
     (it as any).notes || '',
   ])
-  const ws = XLSX.utils.aoa_to_sheet([header, ...rows])
-  ws['!cols'] = [{ wch: 38 }, { wch: 16 }, { wch: 18 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 14 }]
-  const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, ws, 'Каталог')
-  const today = new Date().toISOString().slice(0, 10)
-  XLSX.writeFile(wb, `${filename.replace(/\.xlsx$/, '')}_${today}.xlsx`)
+  await downloadXlsx({
+    fileName: `${filename.replace(/\.xlsx$/, '')}_${todayISO()}.xlsx`,
+    sheetName: 'Каталог',
+    headers: header,
+    rows: rows as (string | number)[][],
+    columnWidths: [38, 16, 18, 10, 12, 12, 14, 14, 10, 14],
+  })
 }
 
 // ─── ItemForm ──────────────────────────────────────────────────────────────────
