@@ -18,6 +18,17 @@ interface Props {
   onClose: () => void
 }
 
+const MAX_COPIES = 99
+
+/** «1 ценник», «2 ценника», «5 ценников» */
+function labelWord(n: number) {
+  const mod10 = n % 10
+  const mod100 = n % 100
+  if (mod10 === 1 && mod100 !== 11) return 'ценник'
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'ценника'
+  return 'ценников'
+}
+
 function formatPrice(v: number | null) {
   if (!v) return '—'
   return Math.round(v).toLocaleString('ru-RU') + ' ₸'
@@ -71,9 +82,15 @@ function labelHtml(item: LabelItem, svgs: Record<string, string>): string {
       </div>`
 }
 
-function buildPrintHtml(items: LabelItem[], copies: number, svgs: Record<string, string>): string {
+/** Сколько ценников печатать для товара: 0 — не печатаем */
+function copiesOf(copiesById: Record<string, number>, itemId: string) {
+  const value = copiesById[itemId]
+  return Number.isFinite(value) ? Math.max(0, Math.min(MAX_COPIES, Math.round(value))) : 1
+}
+
+function buildPrintHtml(items: LabelItem[], copiesById: Record<string, number>, svgs: Record<string, string>): string {
   const labels = items
-    .flatMap((item) => Array<null>(copies).fill(null).map(() => item))
+    .flatMap((item) => Array<null>(copiesOf(copiesById, item.item_id)).fill(null).map(() => item))
     .map((item) => labelHtml(item, svgs))
     .join('')
 
@@ -86,13 +103,31 @@ ${LABEL_CSS}
 }
 
 export function LabelPrintDialog({ items, onClose }: Props) {
-  const [copies, setCopies] = useState(1)
+  // Количество задаётся ДЛЯ КАЖДОГО товара: на одну позицию нужно 10 копий,
+  // на другую одна. Общее поле сверху просто ставит одинаковое число всем.
+  const [copiesById, setCopiesById] = useState<Record<string, number>>({})
   const [printing, setPrinting] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [svgMap, setSvgMap] = useState<Record<string, string>>({})
   const barcodeRefs = useRef<Record<string, SVGSVGElement | null>>({})
 
   useEffect(() => { setMounted(true) }, [])
+  useEffect(() => {
+    setCopiesById((prev) => {
+      const next: Record<string, number> = {}
+      for (const item of items) next[item.item_id] = prev[item.item_id] ?? 1
+      return next
+    })
+  }, [items])
+
+  const setCopies = (itemId: string, value: number) => {
+    setCopiesById((prev) => ({ ...prev, [itemId]: Math.max(0, Math.min(MAX_COPIES, value)) }))
+  }
+  const setAllCopies = (value: number) => {
+    const clamped = Math.max(0, Math.min(MAX_COPIES, value))
+    setCopiesById(Object.fromEntries(items.map((item) => [item.item_id, clamped])))
+  }
+  const totalLabels = items.reduce((sum, item) => sum + copiesOf(copiesById, item.item_id), 0)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', onKey)
@@ -137,7 +172,7 @@ export function LabelPrintDialog({ items, onClose }: Props) {
       if (el) svgs[item.item_id] = el.outerHTML
     })
 
-    const html = buildPrintHtml(items, copies, svgs)
+    const html = buildPrintHtml(items, copiesById, svgs)
     const win = window.open('', '_blank', 'width=900,height=700')
     if (win) {
       win.document.write(html)
@@ -158,13 +193,15 @@ export function LabelPrintDialog({ items, onClose }: Props) {
           <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white"><X className="h-4 w-4" /></button>
         </div>
 
-        {/* Копии */}
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3 dark:border-white/10">
-          <span className="text-sm text-muted-foreground">Копий каждого ценника</span>
-          <div className="flex items-center gap-2">
-            <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => setCopies((c) => Math.max(1, c - 1))} disabled={copies <= 1}><Minus className="h-3 w-3" /></Button>
-            <span className="w-6 text-center text-sm font-semibold text-foreground">{copies}</span>
-            <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => setCopies((c) => Math.min(20, c + 1))} disabled={copies >= 20}><Plus className="h-3 w-3" /></Button>
+        {/* Поставить одинаковое количество всем сразу */}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-5 py-3 dark:border-white/10">
+          <span className="text-sm text-muted-foreground">Поставить всем сразу</span>
+          <div className="flex items-center gap-1.5">
+            {[1, 2, 5, 10].map((value) => (
+              <Button key={value} size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={() => setAllCopies(value)}>
+                {value}
+              </Button>
+            ))}
           </div>
         </div>
 
@@ -185,23 +222,58 @@ export function LabelPrintDialog({ items, onClose }: Props) {
 
         {/* Список товаров */}
         <div className="min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto dark:divide-white/5">
-          {items.map((item) => (
-            <div key={item.item_id} className="flex items-center gap-3 px-5 py-2">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-foreground">{item.name}</p>
-                <p className="truncate text-xs text-slate-500">{item.barcode}</p>
+          {items.map((item) => {
+            const count = copiesOf(copiesById, item.item_id)
+            return (
+              <div key={item.item_id} className={`flex items-center gap-3 px-5 py-2 ${count === 0 ? 'opacity-50' : ''}`}>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-foreground">{item.name}</p>
+                  <p className="truncate text-xs text-slate-500">{item.barcode} · {formatPrice(item.sale_price)}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="h-7 w-7"
+                    onClick={() => setCopies(item.item_id, count - 1)}
+                    disabled={count <= 0}
+                    aria-label="Меньше ценников"
+                  >
+                    <Minus className="h-3 w-3" />
+                  </Button>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={String(count)}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, '')
+                      setCopies(item.item_id, digits === '' ? 0 : Number(digits))
+                    }}
+                    className="h-7 w-10 rounded-lg border border-slate-200 bg-white text-center text-sm font-semibold text-foreground outline-none focus:border-amber-400 dark:border-white/10 dark:bg-white/5"
+                    aria-label={`Сколько ценников: ${item.name}`}
+                  />
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="h-7 w-7"
+                    onClick={() => setCopies(item.item_id, count + 1)}
+                    disabled={count >= MAX_COPIES}
+                    aria-label="Больше ценников"
+                  >
+                    <Plus className="h-3 w-3" />
+                  </Button>
+                </div>
               </div>
-              <span className="shrink-0 text-sm font-semibold text-foreground">{formatPrice(item.sale_price)}</span>
-            </div>
-          ))}
+            )
+          })}
         </div>
 
         {/* Подвал */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-5 py-3 dark:border-white/10">
-          <p className="text-xs text-slate-500">Итого: {items.length * copies} ценник{items.length * copies === 1 ? '' : 'а'} · 58mm</p>
+          <p className="text-xs text-slate-500">Итого: {totalLabels} {labelWord(totalLabels)} · 58mm</p>
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={onClose}>Отмена</Button>
-            <Button onClick={handlePrint} disabled={printing} className="gap-2"><Printer className="h-4 w-4" />{printing ? 'Открываю…' : `Печать (${items.length * copies})`}</Button>
+            <Button onClick={handlePrint} disabled={printing || totalLabels === 0} className="gap-2"><Printer className="h-4 w-4" />{printing ? 'Открываю…' : `Печать (${totalLabels})`}</Button>
           </div>
         </div>
 
