@@ -287,6 +287,11 @@ export default function StoreAuditPage() {
   const resolveItem = (itemId: string, qty: number) =>
     postItemAction({ action: 'resolve', act_id: detailId, item_id: itemId, qty }, itemId, 'Значение принято', 'Не удалось принять значение')
 
+  // Слепая ревизия по умолчанию: пока акт открыт, расхождения скрыты, чтобы
+  // считающий не «подгонял» цифру под учёт. Владелец может раскрыть их у себя —
+  // тогда видно недостачу сразу, не дожидаясь закрытия акта.
+  const [revealVariance, setRevealVariance] = useState(false)
+
   // Для текущего/исторического вида (без closeReport) — грубая прикидка по detail.report.
   const totals = useMemo(() => {
     const rows = detail?.report || []
@@ -482,6 +487,9 @@ export default function StoreAuditPage() {
   // ── Детали / закрытие ────────────────────────────────────────────────────
   const detailRows: ReportRow[] = (detail?.report || []) as ReportRow[]
   const isOpen = detail?.act.status === 'open'
+  // Раскрывать расхождения во время счёта может тот, кто акт и закрывает
+  const canSeeVariance = can('store-revisions.commit')
+  const showVariance = !isOpen || (canSeeVariance && revealVariance)
   const hasConflicts = isOpen && !closeReport && detailRows.some((r) => r.conflict)
   return (
     <div className="app-page-wide space-y-4">
@@ -716,9 +724,21 @@ export default function StoreAuditPage() {
           ) : (
             /* Подсчёт в процессе / исторический акт */
             <Card className="p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <div className="text-sm font-medium text-foreground">{isOpen ? 'Что уже посчитано' : 'Расхождение'}</div>
-                {!isOpen ? (
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="text-sm font-medium text-foreground">{isOpen ? 'Что уже посчитано' : 'Расхождение'}</div>
+                  {isOpen && canSeeVariance ? (
+                    <button
+                      type="button"
+                      onClick={() => setRevealVariance((v) => !v)}
+                      className={`rounded-lg border px-2 py-0.5 text-[11px] transition ${revealVariance ? 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300' : 'border-border text-muted-foreground hover:text-foreground'}`}
+                      title="Пока идёт счёт, расхождения скрыты: так считающий не подгоняет факт под учёт"
+                    >
+                      {revealVariance ? 'Скрыть расхождения' : 'Показать расхождения'}
+                    </button>
+                  ) : null}
+                </div>
+                {showVariance ? (
                   <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-1 text-xs tabular-nums">
                     <span className="text-rose-400">
                       недостача {fmt(totals.short)} шт
@@ -732,7 +752,11 @@ export default function StoreAuditPage() {
                 ) : null}
               </div>
               {isOpen ? (
-                <p className="mb-3 text-xs text-muted-foreground">Зелёная галочка — позиция уже посчитана. Недостачу/излишек посчитаем при закрытии акта (учтём продажи, что прошли во время счёта).</p>
+                <p className="mb-3 text-xs text-muted-foreground">
+                  {showVariance
+                    ? 'Предварительные расхождения по посчитанным позициям: учёт на момент старта минус факт. Продажи и приходы, прошедшие во время счёта, будут учтены при закрытии — итог может измениться.'
+                    : 'Зелёная галочка — позиция уже посчитана. Недостачу/излишек посчитаем при закрытии акта (учтём продажи, что прошли во время счёта).'}
+                </p>
               ) : null}
               {detailRows.length === 0 ? (
                 <div className="py-6 text-center text-sm text-muted-foreground">Пока ничего не посчитано.</div>
@@ -763,9 +787,9 @@ export default function StoreAuditPage() {
                         <div key={r.item_id} className="flex items-center justify-between gap-3 border-b border-slate-100 dark:border-white/5 py-1.5 text-sm last:border-0">
                           <span className="min-w-0 truncate text-foreground">{r.name}</span>
                           <div className="flex items-center gap-4 tabular-nums">
-                            {!isOpen ? <span className="text-xs text-muted-foreground">сист. {fmt(r.expected)}</span> : null}
+                            {!isOpen || showVariance ? <span className="text-xs text-muted-foreground">сист. {fmt(r.expected)}</span> : null}
                             <span className="text-xs text-muted-foreground">факт {fmt(r.counted)}</span>
-                            {isOpen ? (
+                            {isOpen && !showVariance ? (
                               // Слепая ревизия: пока акт открыт — расхождение не показываем
                               // (как и обещает заголовок). Это лишь отметка «посчитано».
                               <span className="flex w-16 items-center justify-end text-emerald-500"><Check className="h-4 w-4" /></span>
