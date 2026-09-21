@@ -8,6 +8,7 @@ import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/se
 import { humanizeDbError } from '@/lib/server/db-error-humanize'
 import { json } from '@/lib/server/api-response'
 import { normalizeQty } from '@/lib/domain/inventory-quantity'
+import { foldReceiptLinesByItem } from '@/lib/domain/receipt-lines'
 
 function canManageStore(access: {
   isSuperAdmin: boolean
@@ -16,6 +17,7 @@ function canManageStore(access: {
   // Capability checks выше уже отсеивают; здесь — любой staff
   return access.isSuperAdmin || !!access.staffRole
 }
+
 
 // Срок годности обязателен на приёмке/оприходовании, кроме товаров с requires_expiry=false
 // (бургеры/хотдоги и пр.). Возвращает текст ошибки (имена товаров без «годен до») или null.
@@ -429,14 +431,15 @@ export async function POST(request: Request) {
       const priceUpdatesRaw = (posting.items || [])
         .map((i) => ({
           item_id: String(i.item_id || '').trim(),
+          quantity: normalizeQty(i.quantity),
           unit_cost: normalizeUnitCost(i.unit_cost ?? 0),
           sale_price: i.sale_price != null ? normalizeMoney(i.sale_price) : null,
         }))
         .filter((i) => i.item_id && (i.unit_cost > 0 || (i.sale_price != null && i.sale_price > 0)))
-      const priceUpdatesMap = new Map<string, { item_id: string; unit_cost: number; sale_price: number | null }>()
-      for (const row of priceUpdatesRaw) priceUpdatesMap.set(row.item_id, row)
+      // Средневзвешенная по количеству вместо «побеждает последняя строка».
+      const priceUpdates = foldReceiptLinesByItem(priceUpdatesRaw)
       const postingSyncItems: Array<{ name: string; barcode: string; sale_price: number; is_active?: boolean }> = []
-      for (const row of priceUpdatesMap.values()) {
+      for (const row of priceUpdates) {
         const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
         if (row.unit_cost > 0) patch.default_purchase_price = row.unit_cost
         if (row.sale_price != null && row.sale_price > 0) patch.sale_price = row.sale_price
@@ -907,14 +910,19 @@ export async function POST(request: Request) {
         .filter((item) => !item.is_bonus)
         .map((item) => ({
           item_id: String(item.item_id || '').trim(),
+          quantity: normalizeQty(item.quantity),
           unit_cost: normalizeUnitCost(item.unit_cost),
           sale_price: normalizeMoney(item.sale_price),
         }))
         .filter((item) => item.item_id && item.sale_price >= 0)
 
-      const updatesMap = new Map<string, { item_id: string; unit_cost: number; sale_price: number }>()
-      for (const row of updatesRaw) updatesMap.set(row.item_id, row)
-      const updates = [...updatesMap.values()]
+      // Средневзвешенная по количеству вместо «побеждает последняя строка»:
+      // один товар в накладной может идти двумя строками с разной ценой.
+      const updates = foldReceiptLinesByItem(updatesRaw).map((row) => ({
+        item_id: row.item_id,
+        unit_cost: row.unit_cost,
+        sale_price: row.sale_price ?? 0,
+      }))
       const syncItems: Array<{ name: string; barcode: string; sale_price: number; is_active?: boolean }> = []
 
       for (const row of updates) {

@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useCallback, useMemo, useState } from 'react'
-import { Check, ChevronsUpDown } from 'lucide-react'
+import { Check, ChevronsUpDown, CopyPlus } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -27,9 +27,12 @@ type ReceiptLineRowProps = {
   canRemove: boolean
   onPatch: (uid: string, patch: Partial<ReceiptLine>) => void
   onRemove: (uid: string) => void
+  /** Та же позиция отдельной строкой: в накладной один товар может идти
+   *  дважды — часть по обычной цене, часть по акции. */
+  onDuplicate: (uid: string) => void
 }
 
-function ReceiptLineRowImpl({ line, index, items, itemsById, canRemove, onPatch, onRemove }: ReceiptLineRowProps) {
+function ReceiptLineRowImpl({ line, index, items, itemsById, canRemove, onPatch, onRemove, onDuplicate }: ReceiptLineRowProps) {
   const [pickerOpen, setPickerOpen] = useState(false)
   const lineItem = line.item_id ? itemsById.get(line.item_id) || null : null
 

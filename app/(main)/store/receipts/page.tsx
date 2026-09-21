@@ -317,6 +317,32 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
     setLines((current) => [...current, emptyLine()])
   }, [])
 
+  /**
+   * Та же позиция отдельной строкой.
+   * В накладной один товар часто идёт дважды: часть по обычной цене, часть по
+   * акции (у поставщика это разные номенклатурные номера, у нас — один товар).
+   * Копируем товар и цену продажи, а количество и закупку оставляем пустыми —
+   * их заполняют из второй строки накладной.
+   */
+  const duplicateLine = useCallback((uid: string) => {
+    setLines((current) => {
+      const index = current.findIndex((line) => line.uid === uid)
+      if (index < 0) return current
+      const source = current[index]
+      const copy: ReceiptLine = {
+        ...source,
+        uid: nextLineUid(),
+        quantity: '',
+        unit_cost: '',
+        markup_percent: '',
+        comment: 'Акция',
+        is_bonus: false,
+        return_qty: '',
+      }
+      return [...current.slice(0, index + 1), copy, ...current.slice(index + 1)]
+    })
+  }, [])
+
   const quickMatches = useMemo(() => {
     const q = quickQuery.trim().toLowerCase()
     if (!q) return []
@@ -1870,6 +1896,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                   canRemove={lines.length > 1}
                   onPatch={patchLine}
                   onRemove={removeLine}
+                  onDuplicate={duplicateLine}
                 />
               ))}
             </div>
