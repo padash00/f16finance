@@ -56,6 +56,7 @@ import { invalidateStoreCaches } from '@/lib/client/store-cache'
 import { SortableTh } from '@/components/ui/sortable-th'
 import { useTableSort } from '@/lib/client/use-table-sort'
 import type { SortColumns, SortState } from '@/lib/core/table-sort'
+import { usePersistentState } from '@/lib/client/use-persistent-state'
 
 type ReceiptSortKey = 'date' | 'supplier' | 'location' | 'invoice' | 'positions' | 'amount' | 'payment'
 
@@ -117,6 +118,9 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
   const [comment, setComment] = useState('')
   const [lines, setLines] = useState<ReceiptLine[]>([emptyLine()])
   const [quickQuery, setQuickQuery] = useState('')
+  // Повтор товара при быстром добавлении: отдельной строкой (накладная с акцией)
+  // или прибавить количество (сканируешь коробку по одной штуке).
+  const [repeatMode, setRepeatMode] = usePersistentState<'new-line' | 'increment'>('store.receipts.repeatMode', 'new-line')
   const [quickError, setQuickError] = useState<string | null>(null)
   const quickInputRef = useRef<HTMLInputElement>(null)
   const [templateName, setTemplateName] = useState('')
@@ -355,12 +359,37 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
       .slice(0, 8)
   }, [data?.items, quickQuery])
 
-  const upsertReceiptLine = (itemId: string, mode: 'increment' | 'set' = 'increment') => {
+  const upsertReceiptLine = (itemId: string, mode: 'increment' | 'set' | 'new-line' = 'increment') => {
     const item = (data?.items || []).find((row) => row.id === itemId)
     if (!item) return false
 
     setLines((current) => {
       const existingIndex = current.findIndex((line) => line.item_id === itemId)
+
+      // Товар уже в списке, но человек добавляет его снова: в накладной одна и
+      // та же позиция часто идёт двумя строками — часть по обычной цене, часть
+      // по акции. Раньше это всегда схлопывалось в «+1 к количеству», и вторую
+      // цену внести было невозможно.
+      if (existingIndex >= 0 && mode === 'new-line') {
+        const source = current[existingIndex]
+        const copy: ReceiptLine = {
+          uid: nextLineUid(),
+          item_id: itemId,
+          quantity: '1',
+          unit_cost: String(item.default_purchase_price || ''),
+          sale_price: source.sale_price || String(item.sale_price || ''),
+          markup_percent: calcMarkupPercent(
+            String(item.default_purchase_price || ''),
+            source.sale_price || String(item.sale_price || ''),
+          ),
+          comment: '',
+        }
+        // Ставим рядом с первой строкой того же товара, а не в конец списка —
+        // так обе цены видно вместе.
+        const lastSameIndex = current.reduce((acc, line, idx) => (line.item_id === itemId ? idx : acc), existingIndex)
+        return [...current.slice(0, lastSameIndex + 1), copy, ...current.slice(lastSameIndex + 1)]
+      }
+
       if (existingIndex >= 0) {
         return current.map((line, idx) => {
           if (idx !== existingIndex) return line
@@ -400,7 +429,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
 
     const exactBarcode = (data?.items || []).find((item) => String(item.barcode || '').trim() === q)
     if (exactBarcode) {
-      upsertReceiptLine(exactBarcode.id, 'increment')
+      upsertReceiptLine(exactBarcode.id, repeatMode)
       setQuickQuery('')
       return
     }
@@ -413,7 +442,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
     })
 
     if (byContains.length === 1) {
-      upsertReceiptLine(byContains[0].id, 'increment')
+      upsertReceiptLine(byContains[0].id, repeatMode)
       setQuickQuery('')
       return
     }
@@ -1485,6 +1514,35 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                   Добавить товар
                 </Button>
               </div>
+
+              {/* Что делать, если товар уже есть в списке. В накладной одна
+                  позиция часто идёт дважды (часть по акции) — тогда нужна
+                  отдельная строка. При сканировании коробки по штуке — наоборот. */}
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                <span className="text-muted-foreground">Если товар уже добавлен:</span>
+                <div className="inline-flex rounded-lg border border-border bg-white p-0.5 dark:bg-white/[0.04]">
+                  <button
+                    type="button"
+                    onClick={() => setRepeatMode('new-line')}
+                    className={`rounded-md px-2.5 py-1 font-medium transition ${repeatMode === 'new-line' ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'text-muted-foreground hover:text-foreground'}`}
+                  >
+                    Отдельной строкой
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRepeatMode('increment')}
+                    className={`rounded-md px-2.5 py-1 font-medium transition ${repeatMode === 'increment' ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'text-muted-foreground hover:text-foreground'}`}
+                  >
+                    Прибавить количество
+                  </button>
+                </div>
+                <span className="text-muted-foreground">
+                  {repeatMode === 'new-line'
+                    ? '— для накладной, где позиция идёт дважды по разной цене'
+                    : '— для сканирования коробки по одной штуке'}
+                </span>
+              </div>
+
               <p className="mt-2 text-[11px] text-emerald-700/80 dark:text-emerald-200/80">Горячая клавиша: Ctrl/Cmd + K — фокус на сканер</p>
               {quickError ? <p className="mt-2 text-xs text-rose-700 dark:text-rose-300">{quickError}</p> : null}
               {quickMatches.length > 0 && (
@@ -1494,7 +1552,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                       key={item.id}
                       type="button"
                       onClick={() => {
-                        upsertReceiptLine(item.id, 'increment')
+                        upsertReceiptLine(item.id, repeatMode)
                         setQuickQuery('')
                         setQuickError(null)
                         quickInputRef.current?.focus()
