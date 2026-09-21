@@ -41,3 +41,10 @@ tools/arena-probe/senet-scan-report.txt
 # Собранные пакеты (DLL, архивы) — результат prepare-package.ps1, исходники уже в tools/
 tools/*.zip
 tools/*.rar
+
+# Промо-ролики: исходники композиций и рендеры (десятки МБ).
+# Сценарий и режиссура (promo/*.md) в репозитории остаются.
+brag-output/
+promo/film/
+promo/*.mp4
+promo/*.jpg
