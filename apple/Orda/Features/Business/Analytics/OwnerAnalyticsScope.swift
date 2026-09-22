@@ -2,13 +2,13 @@ import OrdaKit
 import OrdaUI
 import SwiftUI
 
-/// Кто видит аналитику владельца: те, кому открыты деньги.
+/// Кто видит кабинет владельца: те, кому открыты отчёты.
 ///
-/// То же правило, что у сервера (`/api/admin/owner-analytics`) и у сводки:
-/// права на главный экран мало — оно открывает страницу, а не суммы на ней.
+/// То же правило, что у сервера (`/api/admin/owner-analytics`): там не только
+/// выручка, но и расходы с прибылью, а права на доходы для этого мало.
 extension AccessResolver {
     var canSeeOwnerAnalytics: Bool {
-        can("reports.view") || can("income.view")
+        can("reports.view")
     }
 }
 

@@ -97,9 +97,11 @@ struct PlatformRootView: View {
         selection = item
 
         #if os(iOS)
-        // Новый кабинет владельца слушает свой маршрутизатор: у него другие
-        // вкладки, и старые `phoneTab`/`sectionsPath` он не видит.
-        OwnerRouter.shared.open(item.id)
+        // Новый кабинет владельца слушает свой маршрутизатор — когда он на
+        // экране: телефон и выбранная организация.
+        if sizeClass == .compact && auth.organizationID != nil && resolver.canSeeOwnerAnalytics {
+            OwnerRouter.shared.open(item.id)
+        }
         #endif
 
         #if os(iOS)
@@ -107,7 +109,9 @@ struct PlatformRootView: View {
         case "platform.overview", "platform.organizations":
             phoneTab = item.id == "platform.overview" ? .platform : .organizations
             sectionsPath = []
-        case "business.dashboard", "business.ledger":
+        case "business.dashboard", "business.ledger", "business.analytics":
+            // Отдельной вкладки аналитики у платформы нет — ведём в «Мою
+            // компанию», а не в пустую страницу «Разделов».
             phoneTab = .company
             sectionsPath = []
         default:

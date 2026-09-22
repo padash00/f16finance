@@ -66,38 +66,64 @@ final class AnalyticsStore {
         inFlight = Task { await load() }
     }
 
-    func load() async {
-        let filter = self.filter
+    /// Номер текущей загрузки: ответ устаревшего запроса не трогает ни
+    /// данные, ни индикатор — иначе он гас раньше, чем пришёл свежий ответ.
+    private var generation = 0
+
+    private var query: OwnerAnalyticsQuery {
         let bounds = filter.period.bounds()
+        return OwnerAnalyticsQuery(
+            from: bounds.from,
+            to: bounds.to,
+            companyIDs: Array(filter.companyIDs),
+            compare: filter.compare,
+            includeExtra: ExtraCashPreference.shared.includeExtra
+        )
+    }
+
+    func load() async {
+        generation += 1
+        let mine = generation
+        let query = self.query
         isLoading = true
+
+        // Прошлый ответ на этот же фильтр — сразу, пока идёт свежий.
+        if let cached = await service.cached(query), mine == generation {
+            apply(cached)
+        }
+
         do {
-            let result = try await service.load(
-                from: bounds.from,
-                to: bounds.to,
-                companyIDs: Array(filter.companyIDs),
-                compare: filter.compare,
-                includeExtra: ExtraCashPreference.shared.includeExtra
-            )
-            guard !Task.isCancelled, filter == self.filter else { return }
-            data = result
-            companies = result.companies
+            let result = try await service.load(query)
+            guard mine == generation else { return }
+            apply(result)
             error = nil
             loadedAt = Date()
-            // Точку могли удалить или отнять доступ — выбор без неё.
-            let known = Set(result.companies.map(\.id))
-            if !self.filter.companyIDs.isSubset(of: known) {
-                self.filter.companyIDs = self.filter.companyIDs.intersection(known)
-            }
         } catch is CancellationError {
-            return
         } catch let apiError as APIError {
-            guard !Task.isCancelled else { return }
-            error = apiError
+            if mine == generation { fail(apiError, query: query) }
         } catch {
-            guard !Task.isCancelled else { return }
-            self.error = .transport(message: error.localizedDescription)
+            if mine == generation { fail(.transport(message: error.localizedDescription), query: query) }
         }
-        isLoading = false
+        if mine == generation { isLoading = false }
+    }
+
+    /// Ответ не пришёл. Цифры другого периода на экране оставлять нельзя:
+    /// над ними уже стоят новые даты, и они читались бы как ответ.
+    private func fail(_ apiError: APIError, query: OwnerAnalyticsQuery) {
+        error = apiError
+        if let period = data?.period, period.from != query.from || period.to != query.to {
+            data = nil
+        }
+    }
+
+    private func apply(_ result: OwnerAnalytics) {
+        data = result
+        companies = result.companies
+        // Точку могли удалить или отнять доступ — выбор без неё.
+        let known = Set(result.companies.map(\.id))
+        if !filter.companyIDs.isSubset(of: known) {
+            filter.companyIDs = filter.companyIDs.intersection(known)
+        }
     }
 
     // ── Хранение фильтра ─────────────────────────────────────────────────────

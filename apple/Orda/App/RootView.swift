@@ -89,12 +89,18 @@ struct RootView: View {
                 workspace
                     .transition(.opacity)
                     .overlay(alignment: .top) { roleErrorBanner }
+                    // Под замком кабинет не должен ни читаться вслух, ни
+                    // принимать касания.
+                    .accessibilityHidden(auth.phase == .locked)
+                    .allowsHitTesting(auth.phase != .locked)
+                    #if os(macOS)
                     .overlay {
                         if auth.phase == .locked {
                             BiometricLockView()
                                 .transition(.opacity)
                         }
                     }
+                    #endif
                     .task {
                         // Разрешение спрашиваем здесь, а не на экране входа:
                         // до входа человек не понимает, о чём его будут
@@ -109,6 +115,18 @@ struct RootView: View {
         }
         .animation(Motion.transition, value: auth.phase)
         .background(Theme.background)
+        #if os(iOS)
+        // Замок — отдельным окном поверх всего, включая открытые листы (см.
+        // `LockWindow`). Здесь, на корне, а не на кабинете: при выходе из
+        // аккаунта прямо с замка кабинет исчезает, и окно некому было бы убрать.
+        .onChange(of: auth.phase, initial: true) { _, phase in
+            if phase == .locked {
+                LockWindow.shared.show(auth: auth)
+            } else {
+                LockWindow.shared.hide()
+            }
+        }
+        #endif
         .task {
             guard auth.phase == .restoring else { return }
             await auth.restore()

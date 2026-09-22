@@ -173,7 +173,8 @@ public struct StockMovement: Decodable, Sendable, Identifiable, Hashable {
         switch kind {
         case "receipt", "purchase": "Приёмка"
         case "receipt_cancel": "Отмена приёмки"
-        case "transfer", "transfer_to_point": "Выдача на точку"
+        case "transfer": "Перемещение"
+        case "transfer_to_point": "Выдача на точку"
         case "transfer_cancel": "Откат выдачи"
         case "transfer_warehouse_to_showcase": "Получение точкой"
         case "transfer_showcase_to_warehouse": "Возврат на склад"

@@ -2,118 +2,6 @@ import OrdaKit
 import OrdaUI
 import SwiftUI
 
-/// Полоса фильтра над аналитикой: период, точки, база сравнения.
-///
-/// Одна на все вкладки и всегда на виду: цифра без подписи «за что» читается
-/// как «за всё время». Под кнопками — строка, за какие дни данные и с чем
-/// сравниваем: «месяц» 22-го числа — это 22 дня, и база тоже 22 дня.
-struct AnalyticsFilterBar: View {
-    @Environment(AnalyticsStore.self) private var store
-
-    @State private var showsPeriod = false
-    @State private var showsCompanies = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: Spacing.sm) {
-                    pill(icon: "calendar", title: store.filter.period.title, isActive: true) {
-                        showsPeriod = true
-                    }
-                    if store.companies.count > 1 || !store.filter.companyIDs.isEmpty {
-                        pill(icon: "building.2", title: store.companiesTitle, isActive: !store.filter.isAllCompanies) {
-                            showsCompanies = true
-                        }
-                    }
-                    compareMenu
-                }
-                .padding(.horizontal, Spacing.lg)
-            }
-            caption
-                .padding(.horizontal, Spacing.lg)
-        }
-        .padding(.vertical, Spacing.sm)
-        .background(.bar)
-        .sheet(isPresented: $showsPeriod) {
-            PeriodPickerSheet(selection: Binding(
-                get: { store.filter.period },
-                set: { store.filter.period = $0 }
-            ))
-            .presentationDetents([.medium, .large])
-        }
-        .sheet(isPresented: $showsCompanies) {
-            CompanyPickerSheet(
-                companies: store.companies,
-                selection: Binding(get: { store.filter.companyIDs }, set: { store.filter.companyIDs = $0 })
-            )
-            .presentationDetents([.medium, .large])
-        }
-    }
-
-    private var compareMenu: some View {
-        Menu {
-            Picker("Сравнение", selection: Binding(
-                get: { store.filter.compare },
-                set: { store.filter.compare = $0 }
-            )) {
-                ForEach(AnalyticsCompare.allCases) { option in
-                    Text(option.title).tag(option)
-                }
-            }
-        } label: {
-            pillLabel(icon: "arrow.left.arrow.right", title: "vs \(store.filter.compare.shortTitle)", isActive: false)
-        }
-    }
-
-    /// «по 22 сен · база 1–22 авг» и признак загрузки.
-    private var caption: some View {
-        HStack(spacing: Spacing.xs) {
-            if let period = store.data?.period {
-                let current = AnalyticsPeriod.rangeLabel(from: period.from, to: min(period.through, period.to))
-                let base = AnalyticsPeriod.rangeLabel(from: period.prevFrom, to: period.prevTo)
-                Text("\(current) · база \(base)" + (period.partial ? " · период идёт" : ""))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            } else {
-                let bounds = store.bounds
-                Text(AnalyticsPeriod.rangeLabel(from: bounds.from, to: bounds.to))
-            }
-            if store.isLoading {
-                ProgressView().controlSize(.mini)
-            }
-        }
-        .font(.system(size: 11))
-        .foregroundStyle(Theme.textDim)
-        .monospacedDigit()
-    }
-
-    private func pill(icon: String, title: String, isActive: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            pillLabel(icon: icon, title: title, isActive: isActive)
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func pillLabel(icon: String, title: String, isActive: Bool) -> some View {
-        HStack(spacing: Spacing.xs) {
-            Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
-            Text(title)
-                .font(Typography.callout.weight(.medium))
-                .lineLimit(1)
-            Image(systemName: "chevron.down")
-                .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(Theme.textDim)
-        }
-        .foregroundStyle(isActive ? Theme.text : Theme.textMuted)
-        .padding(.horizontal, Spacing.md)
-        .padding(.vertical, Spacing.sm)
-        .background(Theme.surface, in: Capsule())
-        .overlay(Capsule().strokeBorder(Theme.border, lineWidth: 1))
-        .contentShape(Capsule())
-    }
-}
-
 // ── Период ───────────────────────────────────────────────────────────────────
 
 struct PeriodPickerSheet: View {
@@ -152,7 +40,20 @@ struct PeriodPickerSheet: View {
 
                 Section("Свои даты") {
                     DatePicker("С", selection: $customFrom, displayedComponents: .date)
-                    DatePicker("По", selection: $customTo, in: customFrom..., displayedComponents: .date)
+                        .onChange(of: customFrom) { _, from in
+                            if let limit = Calendar.current.date(byAdding: .day, value: 399, to: from), customTo > limit {
+                                customTo = limit
+                            }
+                            if customTo < from { customTo = from }
+                        }
+                    // Сервер считает не больше 400 дней за раз — дальше даты не
+                    // предлагаем, иначе выбор молча упирался бы в ошибку.
+                    DatePicker(
+                        "По",
+                        selection: $customTo,
+                        in: customFrom...(Calendar.current.date(byAdding: .day, value: 399, to: customFrom) ?? customFrom),
+                        displayedComponents: .date
+                    )
                     Button("Показать за эти даты") {
                         selection = .custom(from: Self.iso(customFrom), to: Self.iso(customTo))
                         dismiss()

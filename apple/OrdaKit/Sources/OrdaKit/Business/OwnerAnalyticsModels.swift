@@ -208,23 +208,56 @@ public struct OwnerAnalytics: Decodable, Sendable {
     }
 }
 
+/// Что именно спросить у сервера.
+public struct OwnerAnalyticsQuery: Hashable, Sendable {
+    public var from: String
+    public var to: String
+    public var companyIDs: [String]
+    public var compare: AnalyticsCompare
+    public var includeExtra: Bool
+    /// Лёгкий ответ для главной: без товаров, статей и операторов. Главной
+    /// нужны итоги и точки, а разбор чеков по товарам за месяц — десятки
+    /// тысяч строк, которые она всё равно не показывает.
+    public var lite: Bool
+
+    public init(
+        from: String,
+        to: String,
+        companyIDs: [String] = [],
+        compare: AnalyticsCompare = .previous,
+        includeExtra: Bool = false,
+        lite: Bool = false
+    ) {
+        self.from = from
+        self.to = to
+        self.companyIDs = companyIDs.sorted()
+        self.compare = compare
+        self.includeExtra = includeExtra
+        self.lite = lite
+    }
+
+    var request: APIRequest {
+        var query = ["from": from, "to": to, "compare": compare.rawValue]
+        if includeExtra { query["include_extra"] = "1" }
+        if lite { query["lite"] = "1" }
+        if !companyIDs.isEmpty { query["company_ids"] = companyIDs.joined(separator: ",") }
+        return APIRequest(path: "/api/admin/owner-analytics", query: query)
+    }
+}
+
 public struct OwnerAnalyticsService: Sendable {
     private let api: APIClient
     public init(api: APIClient) { self.api = api }
 
-    public func load(
-        from: String,
-        to: String,
-        companyIDs: [String],
-        compare: AnalyticsCompare,
-        includeExtra: Bool = false
-    ) async throws -> OwnerAnalytics {
-        var query = ["from": from, "to": to, "compare": compare.rawValue]
-        if includeExtra { query["include_extra"] = "1" }
-        if !companyIDs.isEmpty { query["company_ids"] = companyIDs.sorted().joined(separator: ",") }
-        let response: Envelope<OwnerAnalytics> = try await api.send(
-            APIRequest(path: "/api/admin/owner-analytics", query: query)
-        )
+    public func load(_ query: OwnerAnalyticsQuery) async throws -> OwnerAnalytics {
+        let response: Envelope<OwnerAnalytics> = try await api.send(query.request)
         return response.data
+    }
+
+    /// Прошлый ответ на тот же запрос — экран рисуется сразу, свежий ответ
+    /// приходит следом. Без этого каждое открытие начиналось с пустых карточек.
+    public func cached(_ query: OwnerAnalyticsQuery) async -> OwnerAnalytics? {
+        let response: Envelope<OwnerAnalytics>? = await api.cached(query.request)
+        return response?.data
     }
 }

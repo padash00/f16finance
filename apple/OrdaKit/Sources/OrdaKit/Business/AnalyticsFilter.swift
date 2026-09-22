@@ -69,7 +69,7 @@ public enum AnalyticsPeriod: Hashable, Sendable, Codable {
         }
     }
 
-    /// Календарь владельца: неделя с понедельника, «сегодня» — местное.
+    /// Календарь владельца: неделя с понедельника, «сегодня» — по поясу бизнеса.
     static func calendar(timeZone: TimeZone) -> Calendar {
         var calendar = Calendar(identifier: .iso8601)
         calendar.timeZone = timeZone
@@ -77,12 +77,16 @@ public enum AnalyticsPeriod: Hashable, Sendable, Codable {
         return calendar
     }
 
+    /// Часовой пояс бизнеса. «Сегодня» и «этот месяц» — по Алматы, как на
+    /// сервере: у владельца в поездке иначе сутки съезжали бы на часы.
+    public static let businessTimeZone = TimeZone(identifier: "Asia/Almaty") ?? .current
+
     /// Границы периода в формате YYYY-MM-DD, обе включительно.
     ///
     /// Идущий период («этот месяц») кончается последним днём месяца, а не
     /// сегодня: сервер сам знает, что данные есть только по сегодня, и режет
     /// базу сравнения той же длиной.
-    public func bounds(now: Date = Date(), timeZone: TimeZone = .current) -> (from: String, to: String) {
+    public func bounds(now: Date = Date(), timeZone: TimeZone = AnalyticsPeriod.businessTimeZone) -> (from: String, to: String) {
         let calendar = Self.calendar(timeZone: timeZone)
         let today = calendar.startOfDay(for: now)
         let iso = { (date: Date) in Self.iso(date, calendar) }

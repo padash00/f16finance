@@ -124,9 +124,17 @@ struct LedgerStatementScreen: View {
         return sums.map { ($0.key, $0.value) }.sorted { $0.1 > $1.1 }
     }
 
+    /// Сумма операции под выбранным пузырём. У дохода «Kaspi» — это только
+    /// его безналичная часть: складывать всю операцию значило бы показать в
+    /// итоге и наличные, и сумма разошлась бы с самим пузырём.
+    private func shownAmount(_ op: Operation) -> Double {
+        guard isIncome, let bucket else { return op.amount }
+        return op.parts.first { $0.0 == bucket }?.1 ?? 0
+    }
+
     private var days: [(date: String, total: Double, items: [Operation])] {
         Dictionary(grouping: filtered, by: \.date)
-            .map { ($0.key, $0.value.reduce(0) { $0 + $1.amount }, $0.value) }
+            .map { ($0.key, $0.value.reduce(0) { $0 + shownAmount($1) }, $0.value) }
             .sorted { $0.0 > $1.0 }
     }
 
@@ -187,6 +195,12 @@ struct LedgerStatementScreen: View {
         }
         .task { await reload() }
         .refreshable { await reload() }
+        // Новый период — фильтры сначала: статьи или точки из прошлого периода
+        // в новом может не быть, и снять такой фильтр было бы нечем.
+        .onChange(of: store.range) { _, _ in
+            bucket = nil
+            companyID = nil
+        }
         .sheet(isPresented: $isAdding) {
             if isIncome { AddIncomeSheet() } else { AddExpenseSheet() }
         }
@@ -217,7 +231,7 @@ struct LedgerStatementScreen: View {
     // ── Итог ─────────────────────────────────────────────────────────────────
 
     private var summary: some View {
-        let total = filtered.reduce(0) { $0 + $1.amount }
+        let total = filtered.reduce(0) { $0 + shownAmount($1) }
         let pending = isIncome ? [] : store.expensesAwaitingApproval
         return VStack(alignment: .leading, spacing: Spacing.sm) {
             Text(summaryCaption)
@@ -264,7 +278,9 @@ struct LedgerStatementScreen: View {
     @ViewBuilder
     private var filters: some View {
         let companies = Set(operations.compactMap(\.companyID))
-        if companies.count > 1 {
+        // Выбранную точку показываем всегда — даже если в списке она одна,
+        // иначе фильтр нечем снять.
+        if companies.count > 1 || companyID != nil {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Spacing.sm) {
                     chip("Все точки", isOn: companyID == nil) { companyID = nil }
@@ -297,7 +313,7 @@ struct LedgerStatementScreen: View {
     @ViewBuilder
     private var bubbles: some View {
         let items = buckets
-        if items.count > 1 {
+        if items.count > 1 || bucket != nil {
             let total = max(items.reduce(0) { $0 + $1.amount }, 1)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Spacing.sm) {
@@ -400,7 +416,7 @@ struct LedgerStatementScreen: View {
                 }
             }
             Spacer(minLength: Spacing.sm)
-            Text((isIncome ? "+" : "−") + Money.format(op.amount))
+            Text((isIncome ? "+" : "−") + Money.format(shownAmount(op)))
                 .font(.system(size: 16, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(isIncome ? Theme.positive : Theme.text)

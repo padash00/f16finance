@@ -25,21 +25,37 @@ final class OwnerHomeStore {
         isLoading = true
         defer { isLoading = false }
         let ids = Array(companyIDs)
+        let extra = ExtraCashPreference.shared.includeExtra
         let todayBounds = AnalyticsPeriod.today.bounds()
         let monthBounds = AnalyticsPeriod.thisMonth.bounds()
+        // Главной хватает лёгкого ответа: итоги, точки, касса без товаров.
+        let todayQuery = OwnerAnalyticsQuery(from: todayBounds.from, to: todayBounds.to, companyIDs: ids, includeExtra: extra, lite: true)
+        let monthQuery = OwnerAnalyticsQuery(from: monthBounds.from, to: monthBounds.to, companyIDs: ids, includeExtra: extra, lite: true)
+
+        // Прошлые цифры — сразу: открыл приложение и видишь выручку, а не
+        // пустую карточку, пока идёт сеть.
+        if today == nil { today = await service.cached(todayQuery) }
+        if month == nil { month = await service.cached(monthQuery) }
+
+        // Два запроса независимы: сбой одного не должен гасить другой.
+        async let t = result(todayQuery)
+        async let m = result(monthQuery)
+        let (todayResult, monthResult) = await (t, m)
+        if case let .success(value) = todayResult { today = value }
+        if case let .success(value) = monthResult { month = value }
+        switch (todayResult, monthResult) {
+        case (.failure(let e), _), (_, .failure(let e)): error = e
+        default: error = nil
+        }
+    }
+
+    private func result(_ query: OwnerAnalyticsQuery) async -> Result<OwnerAnalytics, APIError> {
         do {
-            let extra = ExtraCashPreference.shared.includeExtra
-            async let t = service.load(from: todayBounds.from, to: todayBounds.to, companyIDs: ids, compare: .previous, includeExtra: extra)
-            async let m = service.load(from: monthBounds.from, to: monthBounds.to, companyIDs: ids, compare: .previous, includeExtra: extra)
-            let (todayData, monthData) = try await (t, m)
-            today = todayData
-            month = monthData
-            error = nil
-        } catch is CancellationError {
+            return .success(try await service.load(query))
         } catch let apiError as APIError {
-            error = apiError
+            return .failure(apiError)
         } catch {
-            self.error = .transport(message: error.localizedDescription)
+            return .failure(.transport(message: error.localizedDescription))
         }
     }
 }

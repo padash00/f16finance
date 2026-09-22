@@ -314,8 +314,12 @@ struct BusinessRootView: View {
 
         #if os(iOS)
         // Новый кабинет владельца слушает свой маршрутизатор: у него другие
-        // вкладки, и старые `phoneTab`/`sectionsPath` он не видит.
-        OwnerRouter.shared.open(item.id)
+        // вкладки, и старые `phoneTab`/`sectionsPath` он не видит. Только когда
+        // вкладки на экране: на iPad запрос повис бы и сработал позже, при
+        // сужении окна.
+        if sizeClass == .compact && resolver.canSeeOwnerAnalytics {
+            OwnerRouter.shared.open(item.id)
+        }
         #endif
 
         #if os(iOS)

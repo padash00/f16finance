@@ -140,7 +140,9 @@ struct OwnerTabs<Platform: View>: View {
         case "home.dashboard", "business.dashboard":
             tab = .home
             homePath = []
-        case "platform.overview", "platform.organizations" where hasPlatform:
+        case "owner.analytics", "business.analytics":
+            tab = .analytics
+        case "platform.overview" where hasPlatform, "platform.organizations" where hasPlatform:
             tab = .platform
         case "team-chat" where talk?.title == "Чат", "tasks" where talk?.title == "Задачи":
             tab = .talk

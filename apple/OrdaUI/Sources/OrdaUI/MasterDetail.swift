@@ -95,8 +95,12 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
                         }
                     }
                 }
+                #if os(iOS)
                 .listStyle(.insetGrouped)
                 .listSectionSpacing(.compact)
+                #else
+                .listStyle(.inset)
+                #endif
                 .scrollContentBackground(.hidden)
                 // Список меняется на глазах: пришло сообщение, закрылась
                 // заявка. Мгновенная подмена строк выглядит как сбой.

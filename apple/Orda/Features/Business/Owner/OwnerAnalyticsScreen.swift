@@ -191,7 +191,7 @@ struct OwnerAnalyticsScreen: View {
                 HourBars(hours: livePos.byHour, color: metric.color)
             } else if data.series.count > 1 {
                 ComparisonChart(
-                    points: OwnerOverviewScreen.points(data, metric: metric),
+                    points: AnalyticsChart.points(data, metric: metric),
                     color: metric.color,
                     asBars: data.period.group != .day || data.series.count <= 7,
                     height: 190
