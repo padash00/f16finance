@@ -180,11 +180,17 @@ struct PlatformRootView: View {
     }
     #endif
 
-    /// «Моя компания» — та же аналитика, что у владельца.
+    /// «Моя компания» — тот же кабинет, что у владельца.
     @ViewBuilder
     private var companyHome: some View {
         if resolver.canSeeOwnerAnalytics {
-            OwnerOverviewScreen(resolver: resolver)
+            OwnerHomeScreen(resolver: resolver) { destination in
+                switch destination {
+                case .analytics: openIfAllowed(pageID: "business.analytics")
+                case .services: break
+                case let .page(id): openIfAllowed(pageID: id)
+                }
+            }
         } else {
             BusinessDashboardScreen(resolver: resolver)
         }
@@ -226,7 +232,8 @@ struct PlatformRootView: View {
                 title: "Моя компания",
                 icon: "square.grid.2x2",
                 items: [
-                    WorkspaceItem(id: "business.dashboard", title: "Обзор точек", icon: "chart.bar.fill"),
+                    WorkspaceItem(id: "business.dashboard", title: "Главная", icon: "house.fill"),
+                    WorkspaceItem(id: "business.analytics", title: "Аналитика", icon: "chart.pie.fill"),
                     WorkspaceItem(id: "business.ledger", title: "Деньги", icon: "chart.line.uptrend.xyaxis"),
                 ]
             ),
@@ -255,6 +262,8 @@ struct PlatformRootView: View {
             OrganizationsScreen()
         case "business.dashboard":
             companyHome
+        case "business.analytics":
+            OwnerAnalyticsScreen(resolver: resolver)
         case "business.ledger":
             LedgerScreen()
         default:

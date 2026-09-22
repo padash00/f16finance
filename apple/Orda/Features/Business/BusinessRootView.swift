@@ -222,11 +222,18 @@ struct BusinessRootView: View {
         }
     }
 
-    /// Главный экран: аналитика — тем, кому открыты деньги, иначе прежняя сводка.
+    /// Главный экран: кабинет владельца — тем, кому открыты деньги, иначе
+    /// прежняя сводка.
     @ViewBuilder
     private var homeScreen: some View {
         if resolver.canSeeOwnerAnalytics {
-            OwnerOverviewScreen(resolver: resolver)
+            OwnerHomeScreen(resolver: resolver) { destination in
+                switch destination {
+                case .analytics: openIfAllowed(pageID: "owner.analytics")
+                case .services: break
+                case let .page(id): openIfAllowed(pageID: id)
+                }
+            }
         } else {
             BusinessDashboardScreen(resolver: resolver)
         }
@@ -254,7 +261,21 @@ struct BusinessRootView: View {
     private var sections: [WorkspaceSection] {
         var result: [WorkspaceSection] = []
 
-        if resolver.can("dashboard.view") {
+        if resolver.canSeeOwnerAnalytics {
+            // Тот же кабинет, что на телефоне: главная и аналитика сверху,
+            // разделы — ниже по группам.
+            result.append(
+                WorkspaceSection(
+                    id: "home",
+                    title: "Главное",
+                    icon: "square.grid.2x2",
+                    items: [
+                        WorkspaceItem(id: "home.dashboard", title: "Главная", icon: "house.fill"),
+                        WorkspaceItem(id: "owner.analytics", title: "Аналитика", icon: "chart.pie.fill"),
+                    ]
+                )
+            )
+        } else if resolver.can("dashboard.view") {
             result.append(
                 WorkspaceSection(
                     id: "home",
@@ -327,6 +348,8 @@ struct BusinessRootView: View {
         switch item?.id {
         case "home.dashboard":
             homeScreen
+        case "owner.analytics":
+            OwnerAnalyticsScreen(resolver: resolver)
         default:
             if let item, item.id.hasPrefix("native."),
                let section = NativeSection(rawValue: String(item.id.dropFirst("native.".count))) {

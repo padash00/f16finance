@@ -609,17 +609,18 @@ struct ScheduleWeekScreen: View {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 SectionHeader(company.name)
 
-                // Телефон: день строкой, имена целиком — в две колонки они
-                // обрезались до «Берлібек Асан Базар…». Планшет: неделя в ряд.
-                let columns = surface.isCompact
+                // День строкой, имена целиком: в узких клетках они обрезались
+                // до «Ал…». Одна колонка — на телефоне и планшете (рядом с
+                // боковым меню ему тесно), две — только на широком Mac.
+                let columns = surface != .desktop
                     ? [GridItem(.flexible())]
-                    : Array(repeating: GridItem(.flexible(), spacing: Spacing.sm), count: 7)
+                    : [GridItem(.flexible(), spacing: Spacing.xl), GridItem(.flexible(), spacing: Spacing.xl)]
 
-                LazyVGrid(columns: columns, spacing: surface.isCompact ? 0 : Spacing.sm) {
+                LazyVGrid(columns: columns, spacing: 0) {
                     ForEach(weekDays, id: \.self) { day in
                         let cell = RosterDayCell(
                             day: day,
-                            asRow: surface.isCompact,
+                            asRow: true,
                             shifts: schedule.shifts(
                                 on: DateParsing.dateOnlyString(from: day),
                                 companyID: company.id
