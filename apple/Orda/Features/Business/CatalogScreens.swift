@@ -43,27 +43,28 @@ struct ExpenseCategoriesScreen: View {
         let near = budgeted.filter(\.isNearLimit)
         let free = all.filter { !$0.hasBudget }
 
+        let spent = all.reduce(0) { $0 + $1.spentThisMonth }
+        let budget = budgeted.reduce(0) { $0 + $1.monthlyBudget }
+
         return VStack(spacing: Spacing.lg) {
-            DashboardGrid {
-                MetricTile(
-                    label: "Потрачено за месяц",
-                    value: Money.format(all.reduce(0) { $0 + $1.spentThisMonth }),
-                    icon: "arrow.up.circle.fill",
-                    accent: Theme.brand
-                )
-                MetricTile(
-                    label: "Бюджет месяца",
-                    value: Money.format(budgeted.reduce(0) { $0 + $1.monthlyBudget }),
-                    icon: "target",
-                    accent: Theme.info
-                )
-                MetricTile(
-                    label: "Превышено",
-                    value: "\(over.count)",
-                    icon: "exclamationmark.triangle.fill",
-                    accent: over.isEmpty ? Theme.positive : Theme.negative
-                )
-            }
+            // Потраченное — главная цифра, бюджет и перерасход — её контекст.
+            // Карточка краснеет, если хоть одна статья вышла за лимит: об этом
+            // надо узнать до конца месяца, а не прочитать мелким шрифтом.
+            HeroSummary(
+                title: "Потрачено за месяц",
+                value: Money.format(spent),
+                caption: over.isEmpty
+                    ? "все статьи в пределах бюджета"
+                    : "\(over.count) \(pluralize(over.count, "статья", "статьи", "статей")) сверх бюджета",
+                footer: [
+                    ("Бюджет месяца", Money.format(budget)),
+                    ("Превышено", "\(over.count)"),
+                    ("Близко к лимиту", "\(near.count)"),
+                ],
+                colors: over.isEmpty
+                    ? [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+                    : [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
+            )
 
             if !over.isEmpty {
                 categoryCard("Превышен бюджет", rows: over, accent: Theme.negative)
@@ -78,26 +79,27 @@ struct ExpenseCategoriesScreen: View {
             }
 
             if !free.isEmpty {
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        SectionHeader("Без бюджета", subtitle: "сравнивать не с чем")
-                        ForEach(Array(free.sorted { $0.spentThisMonth > $1.spentThisMonth }.enumerated()), id: \.element.id) { index, category in
-                            if index > 0 { RowDivider() }
-                            HStack(spacing: Spacing.md) {
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(category.name)
-                                        .font(Typography.callout)
-                                        .foregroundStyle(Theme.text)
-                                    Text(category.groupLabel)
-                                        .font(Typography.caption)
-                                        .foregroundStyle(Theme.textDim)
-                                }
-                                Spacer(minLength: Spacing.sm)
-                                Text(Money.format(category.spentThisMonth))
-                                    .font(Typography.callout.weight(.medium))
-                                    .monospacedDigit()
-                                    .foregroundStyle(Theme.textMuted)
-                            }
+                let sortedFree = free.sorted { $0.spentThisMonth > $1.spentThisMonth }
+                let maxFree = max(sortedFree.first?.spentThisMonth ?? 0, 1)
+                OwnerSection("Без бюджета") {
+                    Text("сравнивать не с чем")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.textDim)
+                } content: {
+                    VStack(spacing: 0) {
+                        ForEach(Array(sortedFree.enumerated()), id: \.element.id) { index, category in
+                            if index > 0 { PlainRowDivider(inset: 52) }
+                            // Доля от самой крупной статьи: без лимита сравнивать
+                            // больше не с чем, а масштаб трат виден сразу.
+                            AmountRow(
+                                leading: { LetterBadge(text: category.name, tint: Theme.textMuted) },
+                                title: category.name,
+                                subtitle: category.groupLabel,
+                                amount: Money.format(category.spentThisMonth),
+                                share: category.spentThisMonth / maxFree,
+                                tint: Theme.textMuted
+                            )
+                            .padding(.vertical, Spacing.xs)
                         }
                     }
                 }
@@ -105,24 +107,22 @@ struct ExpenseCategoriesScreen: View {
         }
     }
 
+    /// Группа статей белым блоком; цвет группы — у счётчика в заголовке,
+    /// а не полосой по краю карточки: так тише, и цвет всё равно читается.
     private func categoryCard(_ title: String, rows: [ExpenseCategory], accent: Color?) -> some View {
         let sorted = rows.sorted { ($0.usage ?? 0) > ($1.usage ?? 0) }
 
-        return Group {
-            if let accent {
-                Card(accent: accent) { categoryList(title, rows: sorted) }
-            } else {
-                Card { categoryList(title, rows: sorted) }
-            }
-        }
-    }
-
-    private func categoryList(_ title: String, rows: [ExpenseCategory]) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.md) {
-            SectionHeader(title, subtitle: "\(rows.count)")
-            ForEach(Array(rows.enumerated()), id: \.element.id) { index, category in
-                if index > 0 { RowDivider() }
-                BudgetRow(category: category)
+        return OwnerSection(title) {
+            Text("\(sorted.count)")
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundStyle(accent ?? Theme.textDim)
+        } content: {
+            VStack(spacing: 0) {
+                ForEach(Array(sorted.enumerated()), id: \.element.id) { index, category in
+                    if index > 0 { PlainRowDivider(inset: 52) }
+                    BudgetRow(category: category)
+                        .padding(.vertical, Spacing.sm)
+                }
             }
         }
     }
@@ -138,25 +138,29 @@ private struct BudgetRow: View {
     }
 
     var body: some View {
+        // Буква статьи в кружке цвета её состояния — перерасход видно по
+        // столбику кружков, не читая сумм.
+        HStack(alignment: .top, spacing: Spacing.md) {
+        LetterBadge(text: category.name, tint: tint)
         VStack(alignment: .leading, spacing: Spacing.xs) {
             HStack(spacing: Spacing.md) {
-                VStack(alignment: .leading, spacing: 1) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(category.name)
-                        .font(Typography.callout)
+                        .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(Theme.text)
                         .lineLimit(1)
                     Text(category.groupLabel)
-                        .font(Typography.caption)
+                        .font(.system(size: 13))
                         .foregroundStyle(Theme.textDim)
                 }
 
                 Spacer(minLength: Spacing.sm)
 
-                VStack(alignment: .trailing, spacing: 1) {
+                VStack(alignment: .trailing, spacing: 2) {
                     Text("\(Money.format(category.spentThisMonth)) из \(Money.format(category.monthlyBudget))")
-                        .font(Typography.callout.weight(.medium))
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
                         .monospacedDigit()
-                        .foregroundStyle(tint)
+                        .foregroundStyle(tint == Theme.brand ? Theme.text : tint)
                     if category.isOverBudget {
                         Text("сверх на \(Money.format(category.spentThisMonth - category.monthlyBudget))")
                             .font(Typography.caption)
@@ -174,6 +178,7 @@ private struct BudgetRow: View {
             // Полоска обрезается на единице: перерасход показан текстом выше,
             // а полоса длиннее дорожки выглядела бы сбоем вёрстки.
             ProportionBar(ratio: min(category.usage ?? 0, 1), color: tint)
+        }
         }
     }
 }
@@ -195,10 +200,10 @@ struct StoreAnalyticsScreen: View {
 
         return ScreenScroll {
             VStack(spacing: Spacing.lg) {
-                Picker("Окно", selection: $bindable.analyticsDays) {
-                    ForEach(windows, id: \.0) { Text($0.1).tag($0.0) }
-                }
-                .pickerStyle(.segmented)
+                PillSegment(
+                    options: windows.map { (value: $0.0, title: $0.1) },
+                    selection: $bindable.analyticsDays
+                )
 
                 if let error = store.storeAnalyticsError, store.storeAnalytics == nil {
                     ErrorStateView(error: error) { Task { await store.loadStoreAnalytics() } }
@@ -225,26 +230,19 @@ struct StoreAnalyticsScreen: View {
         let stale = analytics.stale
 
         VStack(spacing: Spacing.lg) {
-            DashboardGrid {
-                MetricTile(
-                    label: "Продано за период",
-                    value: Money.format(analytics.totalSales),
-                    icon: "cart.fill",
-                    accent: Theme.brand
-                )
-                MetricTile(
-                    label: "Продаж",
-                    value: "\(analytics.salesCount)",
-                    icon: "number",
-                    accent: Theme.info
-                )
-                MetricTile(
-                    label: "Без движения",
-                    value: "\(stale.count)",
-                    icon: "shippingbox.fill",
-                    accent: stale.isEmpty ? Theme.positive : Theme.warning
-                )
-            }
+            // Выручка — главная цифра; залежавшееся — рядом, а не в конце:
+            // деньги на полке без движения важнее числа продаж.
+            HeroSummary(
+                title: "Продано за период",
+                value: Money.format(analytics.totalSales),
+                caption: stale.isEmpty ? "всё в обороте" : "\(stale.count) \(pluralize(stale.count, "позиция", "позиции", "позиций")) без движения",
+                footer: [
+                    ("Продаж", "\(analytics.salesCount)"),
+                    ("Средний чек", Money.format(analytics.salesCount > 0 ? analytics.totalSales / Double(analytics.salesCount) : 0)),
+                    ("Без движения", "\(stale.count)"),
+                ],
+                colors: [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
+            )
 
             let series = analytics.salesByDay
             if series.count > 1 {
@@ -261,40 +259,61 @@ struct StoreAnalyticsScreen: View {
             }
 
             SplitDashboard {
-                if top.isEmpty {
-                    Card {
-                        VStack(alignment: .leading, spacing: Spacing.md) {
-                            SectionHeader("Топ продаж")
-                            InlineEmpty(icon: "cart", text: "За период продаж не было", tint: Theme.textDim)
+                // Топ строками с долей от выручки — как «куда ушли деньги» в
+                // банке: название, сумма и тонкая полоса, без осей графика.
+                OwnerSection("Топ продаж") {
+                    if top.isEmpty {
+                        InlineEmpty(icon: "cart", text: "За период продаж не было", tint: Theme.textDim)
+                    } else {
+                        let total = max(analytics.totalSales, 1)
+                        VStack(spacing: 0) {
+                            ForEach(Array(top.prefix(10).enumerated()), id: \.element.id) { index, item in
+                                if index > 0 { PlainRowDivider(inset: 52) }
+                                AmountRow(
+                                    leading: { LetterBadge(text: item.name, tint: OwnerTint.point(index)) },
+                                    title: item.name,
+                                    subtitle: "\(Quantity.format(item.quantity)) шт · \(Percent.format(item.amount / total * 100))",
+                                    amount: Money.format(item.amount),
+                                    share: item.amount / total,
+                                    tint: OwnerTint.point(index)
+                                )
+                                .padding(.vertical, Spacing.xs)
+                            }
                         }
                     }
-                } else {
-                    CategoryBarChart(
-                        title: "Топ продаж",
-                        points: top.prefix(10).map { CategoryPoint(label: $0.name, value: $0.amount) }
-                    )
                 }
             } side: {
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        SectionHeader("Лежит без движения", subtitle: stale.isEmpty ? nil : "ни одной продажи за период")
-
-                        if stale.isEmpty {
-                            InlineEmpty(icon: "checkmark.circle", text: "Всё в обороте", tint: Theme.positive)
-                        } else {
+                OwnerSection("Лежит без движения") {
+                    if !stale.isEmpty {
+                        Text("\(stale.count)")
+                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                            .foregroundStyle(Theme.warning)
+                    }
+                } content: {
+                    if stale.isEmpty {
+                        InlineEmpty(icon: "checkmark.circle", text: "Всё в обороте", tint: Theme.positive)
+                    } else {
+                        VStack(spacing: 0) {
                             ForEach(Array(stale.prefix(12).enumerated()), id: \.element.id) { index, item in
-                                if index > 0 { RowDivider() }
+                                if index > 0 { PlainRowDivider(inset: 52) }
                                 HStack(spacing: Spacing.md) {
-                                    Text(item.name)
-                                        .font(Typography.callout)
-                                        .foregroundStyle(Theme.text)
-                                        .lineLimit(1)
+                                    LetterBadge(text: item.name, tint: Theme.warning)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(item.name)
+                                            .font(.system(size: 16, weight: .medium))
+                                            .foregroundStyle(Theme.text)
+                                            .lineLimit(1)
+                                        Text("ни одной продажи за период")
+                                            .font(.system(size: 13))
+                                            .foregroundStyle(Theme.textDim)
+                                    }
                                     Spacer(minLength: Spacing.sm)
                                     Text("\(Quantity.format(item.quantity)) \(item.unit)")
-                                        .font(Typography.callout.weight(.medium))
+                                        .font(.system(size: 16, weight: .semibold, design: .rounded))
                                         .monospacedDigit()
                                         .foregroundStyle(Theme.warning)
                                 }
+                                .padding(.vertical, Spacing.sm)
                             }
                         }
                     }

@@ -147,13 +147,11 @@ struct ProductionScreen: View {
 
     private func controls(_ store: ProductionStore) -> some View {
         VStack(spacing: Spacing.md) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: Spacing.sm) {
-                    FilterChip(title: "Блюда", isOn: tab == .dishes) { tab = .dishes }
-                    FilterChip(title: "Сырьё", isOn: tab == .ingredients) { tab = .ingredients }
-                }
-                .padding(.horizontal, Spacing.lg)
-            }
+            PillSegment(
+                options: [(value: Tab.dishes, title: "Блюда"), (value: Tab.ingredients, title: "Сырьё")],
+                selection: $tab
+            )
+            .padding(.horizontal, Spacing.lg)
 
             PeriodBar(selection: Binding(
                 get: { store.range },
@@ -162,22 +160,22 @@ struct ProductionScreen: View {
             .padding(.horizontal, Spacing.lg)
 
             if let totals = store.analysis?.totals, totals.revenue > 0 {
-                // Четыре плашки в один ряд на телефоне превращаются в четыре
-                // обрезанные суммы — сетка переносит их во второй ряд сама.
-                LazyVGrid(
-                    columns: [GridItem(.adaptive(minimum: 150), spacing: Spacing.md)],
-                    alignment: .leading,
-                    spacing: Spacing.md
-                ) {
-                    SummaryPill(title: "Выручка блюд", value: Money.format(totals.revenue), tint: Theme.brand)
-                    SummaryPill(title: "Ушло в продукт", value: Money.format(totals.foodCost), tint: Theme.warning)
-                    SummaryPill(
-                        title: "Food cost",
-                        value: Percent.format(totals.foodCostPercent),
-                        tint: totals.isHigh ? Theme.negative : Theme.positive
-                    )
-                    SummaryPill(title: "Осталось", value: Money.format(totals.margin), tint: Theme.textMuted)
-                }
+                // Выручка блюд — главная цифра, food cost и остаток — её
+                // расшифровка. Высокий food cost красит всю карточку: это
+                // сигнал пересмотреть цены, а не строчка среди прочих.
+                HeroSummary(
+                    title: "Выручка блюд",
+                    value: Money.format(totals.revenue),
+                    caption: "food cost \(Percent.format(totals.foodCostPercent))" + (totals.isHigh ? " — выше нормы" : ""),
+                    footer: [
+                        ("Ушло в продукт", Money.format(totals.foodCost)),
+                        ("Food cost", Percent.format(totals.foodCostPercent)),
+                        ("Осталось", Money.format(totals.margin)),
+                    ],
+                    colors: totals.isHigh
+                        ? [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
+                        : [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+                )
                 .padding(.horizontal, Spacing.lg)
             }
         }
@@ -213,26 +211,21 @@ struct ProductionScreen: View {
                     message: "За период не продано ни одного блюда, связанного с техкартой."
                 )
             } else {
+                // Один список с долей каждой позиции вместо графика и списка
+                // по отдельности: полоса под строкой показывает то же, что
+                // столбик графика, но рядом с названием и суммой.
+                let total = max(analysis.ingredients.reduce(0) { $0 + $1.cost }, 1)
                 ScreenScroll {
-                    VStack(spacing: Spacing.lg) {
-                        CategoryBarChart(
-                            title: "На что ушли деньги в сырье",
-                            points: analysis.ingredients.prefix(8).map {
-                                CategoryPoint(label: $0.name, value: $0.cost)
-                            },
-                            color: ChartPalette.series2
-                        )
-
-                        Card {
-                            VStack(alignment: .leading, spacing: Spacing.md) {
-                                SectionHeader(
-                                    "Расход сырья",
-                                    subtitle: "\(analysis.ingredients.count) \(pluralize(analysis.ingredients.count, "позиция", "позиции", "позиций"))"
-                                )
-                                ForEach(Array(analysis.ingredients.enumerated()), id: \.element.id) { index, usage in
-                                    if index > 0 { RowDivider() }
-                                    IngredientUsageRow(usage: usage)
-                                }
+                    OwnerSection("На что ушли деньги в сырье") {
+                        Text("\(analysis.ingredients.count) поз.")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Theme.textDim)
+                    } content: {
+                        VStack(spacing: 0) {
+                            ForEach(Array(analysis.ingredients.enumerated()), id: \.element.id) { index, usage in
+                                if index > 0 { PlainRowDivider(inset: 52) }
+                                IngredientUsageRow(usage: usage, share: usage.cost / total, index: index)
+                                    .padding(.vertical, Spacing.xs)
                             }
                         }
                     }
@@ -251,18 +244,18 @@ private struct RecipeRow: View {
 
     var body: some View {
         HStack(spacing: Spacing.md) {
-            Image(systemName: card.recipe.isSemiFinished ? "square.stack.3d.up" : "fork.knife")
-                .font(.system(size: 15))
-                .foregroundStyle(card.recipe.isActive ? Theme.textMuted : Theme.textDim)
-                .frame(width: 24)
+            TintedIcon(
+                systemName: card.recipe.isSemiFinished ? "square.stack.3d.up" : "fork.knife",
+                tint: !card.recipe.isActive ? Theme.textDim : (card.isFoodCostHigh ? Theme.negative : Color(hex: 0xF97316))
+            )
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(card.name)
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(card.recipe.isActive ? Theme.text : Theme.textDim)
                     .lineLimit(1)
                 Text(subtitle)
-                    .font(Typography.caption)
+                    .font(.system(size: 13))
                     .foregroundStyle(Theme.textDim)
                     .lineLimit(1)
             }
@@ -271,13 +264,14 @@ private struct RecipeRow: View {
 
             VStack(alignment: .trailing, spacing: 2) {
                 Text(Money.format(card.portionCost))
-                    .font(Typography.callout.weight(.medium))
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(Theme.text)
+                // Food cost подписью под суммой: плашка теснила себестоимость.
                 if let share = card.foodCostShare {
-                    StatusChip(Percent.format(share), kind: card.isFoodCostHigh ? .danger : .good)
+                    StatusCaption(Percent.format(share), tint: card.isFoodCostHigh ? Theme.negative : Theme.positive)
                 } else {
-                    StatusChip("нет цены", kind: .neutral)
+                    StatusCaption("нет цены")
                 }
             }
         }
@@ -385,15 +379,19 @@ private struct RecipeDetailView: View {
     }
 
     private var composition: some View {
-        Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Состав", subtitle: "\(card.lines.count) \(pluralize(card.lines.count, "позиция", "позиции", "позиций"))")
-                if card.lines.isEmpty {
-                    InlineEmpty(icon: "tray", text: "Состав не заполнен — себестоимость нулевая", tint: Theme.warning)
-                } else {
+        OwnerSection("Состав") {
+            Text("\(card.lines.count) поз.")
+                .font(.system(size: 14))
+                .foregroundStyle(Theme.textDim)
+        } content: {
+            if card.lines.isEmpty {
+                InlineEmpty(icon: "tray", text: "Состав не заполнен — себестоимость нулевая", tint: Theme.warning)
+            } else {
+                VStack(spacing: 0) {
                     ForEach(Array(card.lines.enumerated()), id: \.element.id) { index, line in
-                        if index > 0 { RowDivider() }
+                        if index > 0 { PlainRowDivider(inset: 48) }
                         RecipeComponentRow(line: line)
+                            .padding(.vertical, Spacing.sm)
                     }
                 }
             }
@@ -402,9 +400,12 @@ private struct RecipeDetailView: View {
 
     @ViewBuilder
     private var salesFact: some View {
-        Card {
+        OwnerSection("Продажи") {
+            Text(range.title.lowercased())
+                .font(.system(size: 14))
+                .foregroundStyle(Theme.textDim)
+        } content: {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Продажи", subtitle: range.title.lowercased())
                 if let fact, fact.soldQty > 0 {
                     StatRow("Продано порций", value: Quantity.format(fact.soldQty), icon: "cart")
                     StatRow("Выручка", value: Money.format(fact.revenue), valueColor: Theme.brand)
@@ -430,14 +431,15 @@ private struct RecipeComponentRow: View {
 
     var body: some View {
         HStack(spacing: Spacing.md) {
-            VStack(alignment: .leading, spacing: 1) {
+            LetterBadge(text: line.name, tint: line.isSemiFinished ? Theme.info : Theme.brand, size: 36)
+            VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: Spacing.xs) {
                     Text(line.name)
-                        .font(Typography.callout)
+                        .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(Theme.text)
                         .lineLimit(1)
                     if line.isSemiFinished {
-                        StatusChip("п/ф", kind: .info)
+                        StatusCaption("п/ф", tint: Theme.info)
                     }
                 }
                 if line.wastePct > 0 {
@@ -457,29 +459,21 @@ private struct RecipeComponentRow: View {
     }
 }
 
+/// Позиция сырья: сколько ушло и какая это доля всех трат на сырьё.
 private struct IngredientUsageRow: View {
     let usage: ProductionIngredientUsage
+    let share: Double
+    let index: Int
 
     var body: some View {
-        HStack(spacing: Spacing.md) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(usage.name)
-                    .font(Typography.callout)
-                    .foregroundStyle(Theme.text)
-                    .lineLimit(1)
-                Text("\(Quantity.format(usage.qty)) \(usage.unit)")
-                    .font(Typography.caption)
-                    .monospacedDigit()
-                    .foregroundStyle(Theme.textDim)
-            }
-
-            Spacer(minLength: Spacing.sm)
-
-            Text(Money.format(usage.cost))
-                .font(Typography.callout.weight(.medium))
-                .monospacedDigit()
-                .foregroundStyle(Theme.text)
-        }
+        AmountRow(
+            leading: { LetterBadge(text: usage.name, tint: OwnerTint.point(index)) },
+            title: usage.name,
+            subtitle: "\(Quantity.format(usage.qty)) \(usage.unit) · \(Percent.format(share * 100))",
+            amount: Money.format(usage.cost),
+            share: share,
+            tint: OwnerTint.point(index)
+        )
     }
 }
 
@@ -628,40 +622,35 @@ struct PurchasePlanScreen: View {
                 }
             }
 
-            // Плашек до четырёх — в один ряд на телефоне они не помещаются.
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 150), spacing: Spacing.md)],
-                alignment: .leading,
-                spacing: Spacing.md
-            ) {
-                SummaryPill(title: "Закупить на", value: Money.format(plan.total), tint: Theme.brand)
-                if let share = plan.shareOfRevenue {
-                    SummaryPill(
-                        title: "От недельной выручки",
-                        value: Percent.format(share),
-                        tint: share > 60 ? Theme.negative : Theme.textMuted
-                    )
-                }
-                SummaryPill(title: "Позиций", value: "\(plan.positionCount)", tint: Theme.textMuted)
-                if !plan.outOfStock.isEmpty {
-                    SummaryPill(title: "Сейчас в нуле", value: "\(plan.outOfStock.count)", tint: Theme.warning)
-                }
-            }
+            // Сумма заказа — главная цифра недели, остальное — её контекст.
+            // Больше 60 % недельной выручки — карточка краснеет: такой заказ
+            // съест оборотные деньги.
+            HeroSummary(
+                title: "Закупить на",
+                value: Money.format(plan.total),
+                caption: plan.weekStart.map { "неделя с \($0.formatted(.dateTime.day().month(.abbreviated)))" },
+                footer: planFooter(plan),
+                colors: (plan.shareOfRevenue ?? 0) > 60
+                    ? [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
+                    : [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+            )
             .padding(.horizontal, Spacing.lg)
 
-            HStack(spacing: Spacing.sm) {
-                FilterChip(title: "Закупить", isOn: tab == .buy) { tab = .buy }
-                FilterChip(title: "Не брать · \(plan.doNotBuy.count)", isOn: tab == .skip) { tab = .skip }
-                Spacer(minLength: 0)
-                if let weekStart = plan.weekStart {
-                    Text("неделя с \(weekStart.formatted(.dateTime.day().month(.abbreviated)))")
-                        .font(Typography.caption)
-                        .foregroundStyle(Theme.textDim)
-                }
-            }
+            PillSegment(
+                options: [(value: Tab.buy, title: "Закупить"), (value: Tab.skip, title: "Не брать · \(plan.doNotBuy.count)")],
+                selection: $tab
+            )
             .padding(.horizontal, Spacing.lg)
         }
         .padding(.vertical, Spacing.md)
+    }
+
+    private func planFooter(_ plan: PurchasePlan) -> [(String, String)] {
+        var footer: [(String, String)] = []
+        if let share = plan.shareOfRevenue { footer.append(("От выручки", Percent.format(share))) }
+        footer.append(("Позиций", "\(plan.positionCount)"))
+        footer.append(("Сейчас в нуле", "\(plan.outOfStock.count)"))
+        return footer
     }
 
     @ViewBuilder
@@ -693,15 +682,17 @@ struct PurchasePlanScreen: View {
             )
         } else {
             ScreenScroll {
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        SectionHeader(
-                            "Деньги уже на полке",
-                            subtitle: "запаса хватит надолго — новый заказ заморозит оборотные"
-                        )
-                        ForEach(Array(plan.doNotBuy.enumerated()), id: \.element.id) { index, skip in
-                            if index > 0 { RowDivider() }
-                            PlanSkipRow(skip: skip)
+                OwnerSection("Деньги уже на полке") {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        Text("Запаса хватит надолго — новый заказ заморозит оборотные.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.textDim)
+                        VStack(spacing: 0) {
+                            ForEach(Array(plan.doNotBuy.enumerated()), id: \.element.id) { index, skip in
+                                if index > 0 { PlainRowDivider(inset: 52) }
+                                PlanSkipRow(skip: skip)
+                                    .padding(.vertical, Spacing.sm)
+                            }
                         }
                     }
                 }
@@ -715,34 +706,22 @@ private struct PlanSupplierRow: View {
     let planTotal: Double
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            HStack(spacing: Spacing.md) {
-                Image(systemName: group.isUnknownSupplier ? "questionmark.circle" : "shippingbox.fill")
-                    .font(.system(size: 15))
-                    .foregroundStyle(group.isUnknownSupplier ? Theme.textDim : Theme.brand)
-                    .frame(width: 24)
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(group.displayName)
-                        .font(Typography.callout)
-                        .foregroundStyle(Theme.text)
-                        .lineLimit(1)
-                    Text("\(group.items.count) \(pluralize(group.items.count, "позиция", "позиции", "позиций"))")
-                        .font(Typography.caption)
-                        .foregroundStyle(Theme.textDim)
+        // Доля поставщика в чеке закупа тонкой полосой под строкой: сразу
+        // видно, с кем торговаться.
+        AmountRow(
+            leading: {
+                if group.isUnknownSupplier {
+                    TintedIcon(systemName: "questionmark", tint: Theme.textDim)
+                } else {
+                    LetterBadge(text: group.displayName, tint: Color(hex: 0x0F766E))
                 }
-
-                Spacer(minLength: Spacing.sm)
-
-                Text(Money.format(group.total))
-                    .font(Typography.callout.weight(.medium))
-                    .monospacedDigit()
-                    .foregroundStyle(Theme.text)
-            }
-
-            // Доля поставщика в чеке закупа: сразу видно, с кем торговаться.
-            ProportionBar(ratio: planTotal > 0 ? group.total / planTotal : 0, color: Theme.brand)
-        }
+            },
+            title: group.displayName,
+            subtitle: "\(group.items.count) \(pluralize(group.items.count, "позиция", "позиции", "позиций"))",
+            amount: Money.format(group.total),
+            share: planTotal > 0 ? group.total / planTotal : 0,
+            tint: Color(hex: 0x0F766E)
+        )
     }
 }
 
@@ -760,7 +739,7 @@ private struct PlanSupplierDetail: View {
                                 .foregroundStyle(Theme.text)
                             Spacer()
                             if group.isUnknownSupplier {
-                                StatusChip("не приходил по накладной", kind: .warning)
+                                StatusCaption("не приходил по накладной", tint: Theme.warning)
                             }
                         }
                         RowDivider()
@@ -769,12 +748,12 @@ private struct PlanSupplierDetail: View {
                     }
                 }
 
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        SectionHeader("Что взять")
+                OwnerSection("Что взять") {
+                    VStack(spacing: 0) {
                         ForEach(Array(group.items.enumerated()), id: \.element.id) { index, line in
-                            if index > 0 { RowDivider() }
+                            if index > 0 { PlainRowDivider(inset: 0) }
                             PlanLineRow(line: line)
+                                .padding(.vertical, Spacing.sm)
                         }
                     }
                 }
@@ -820,17 +799,19 @@ private struct PlanLineRow: View {
                 }
             }
 
-            HStack(spacing: Spacing.sm) {
+            // Признаки цветными подписями в строку, а не плашками: три
+            // плашки подряд переносились и раздували строку вдвое.
+            HStack(spacing: Spacing.md) {
                 if line.wasOutOfStock {
-                    StatusChip("в нуле", kind: .danger)
+                    StatusCaption("в нуле", tint: Theme.negative)
                 }
                 if line.isRising {
-                    StatusChip("спрос \(Percent.format(line.trendPercent, signed: true))", kind: .good)
+                    StatusCaption("спрос \(Percent.format(line.trendPercent, signed: true))", tint: Theme.positive)
                 } else if line.isFalling {
-                    StatusChip("спрос \(Percent.format(line.trendPercent, signed: true))", kind: .warning)
+                    StatusCaption("спрос \(Percent.format(line.trendPercent, signed: true))", tint: Theme.warning)
                 }
                 if line.marginPercent > 0 {
-                    StatusChip("маржа \(Percent.format(line.marginPercent))", kind: .info)
+                    StatusCaption("маржа \(Percent.format(line.marginPercent))", tint: Theme.info)
                 }
             }
         }
@@ -857,20 +838,24 @@ private struct PlanSkipRow: View {
 
     var body: some View {
         HStack(spacing: Spacing.md) {
-            VStack(alignment: .leading, spacing: 1) {
+            LetterBadge(text: skip.name, tint: Theme.warning)
+            VStack(alignment: .leading, spacing: 2) {
                 Text(skip.name)
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
                 Text("остаток \(Quantity.format(skip.stock)) · спрос \(Quantity.format(skip.weeklyDemand))/нед")
-                    .font(Typography.caption)
+                    .font(.system(size: 13))
                     .monospacedDigit()
                     .foregroundStyle(Theme.textDim)
             }
 
             Spacer(minLength: Spacing.sm)
 
-            StatusChip("на \(Quantity.format(skip.coverageWeeks)) нед", kind: .warning)
+            Text("на \(Quantity.format(skip.coverageWeeks)) нед")
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(Theme.warning)
         }
     }
 }
@@ -1022,19 +1007,23 @@ struct PurchaseOrdersScreen: View {
 
     private func summary(_ store: PurchaseOrdersStore) -> some View {
         VStack(spacing: Spacing.md) {
-            HStack(spacing: Spacing.md) {
-                SummaryPill(
-                    title: "В пути",
-                    value: "\(store.inTransit.count)",
-                    tint: store.inTransit.isEmpty ? Theme.textDim : Theme.info
-                )
-                SummaryPill(
-                    title: "Просрочено",
-                    value: "\(store.overdue.count)",
-                    tint: store.overdue.isEmpty ? Theme.positive : Theme.negative
-                )
-                SummaryPill(title: "Черновики", value: "\(store.drafts.count)", tint: Theme.textMuted)
-            }
+            // «В пути» — главная цифра: за ней и открывают раздел. Просрочка
+            // красит карточку — это повод звонить поставщику сегодня.
+            HeroSummary(
+                title: "Заявок в пути",
+                value: "\(store.inTransit.count)",
+                caption: store.overdue.isEmpty
+                    ? "всё приходит в срок"
+                    : "\(store.overdue.count) \(pluralize(store.overdue.count, "заявка", "заявки", "заявок")) просрочено",
+                footer: [
+                    ("Просрочено", "\(store.overdue.count)"),
+                    ("Черновики", "\(store.drafts.count)"),
+                    ("Всего", "\(store.orders.count)"),
+                ],
+                colors: store.overdue.isEmpty
+                    ? [Color(hex: 0x0EA5E9), Color(hex: 0x2563EB)]
+                    : [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
+            )
             .padding(.horizontal, Spacing.lg)
 
             ScrollView(.horizontal, showsIndicators: false) {
@@ -1075,29 +1064,27 @@ private struct PurchaseOrderRow: View {
 
     var body: some View {
         HStack(spacing: Spacing.md) {
-            Image(systemName: order.icon)
-                .font(.system(size: 15))
-                .foregroundStyle(iconColor)
-                .frame(width: 24)
+            TintedIcon(systemName: order.icon, tint: iconColor)
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(order.supplierName)
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(order.isCancelled ? Theme.textDim : Theme.text)
                     .strikethrough(order.isCancelled, color: Theme.textDim)
                     .lineLimit(1)
                 Text(subtitle)
-                    .font(Typography.caption)
+                    .font(.system(size: 13))
                     .foregroundStyle(Theme.textDim)
                     .lineLimit(1)
             }
 
             Spacer(minLength: Spacing.sm)
 
+            // Статус цветной подписью: плашка отнимала место у поставщика.
             if order.isOverdue, let days = order.daysSinceSent {
-                StatusChip("\(days) \(pluralize(days, "день", "дня", "дней")) в пути", kind: .danger)
+                StatusCaption("\(days) \(pluralize(days, "день", "дня", "дней")) в пути", tint: Theme.negative)
             } else {
-                StatusChip(order.statusLabel, kind: statusKind)
+                StatusCaption(order.statusLabel, tint: statusTint)
             }
         }
     }
@@ -1112,12 +1099,12 @@ private struct PurchaseOrderRow: View {
         }
     }
 
-    private var statusKind: StatusChip.Kind {
+    private var statusTint: Color {
         switch order.status {
-        case "received": .good
-        case "sent": .info
-        case "cancelled": .neutral
-        default: .warning
+        case "received": Theme.positive
+        case "sent": Theme.info
+        case "cancelled": Theme.textDim
+        default: Theme.warning
         }
     }
 
@@ -1516,26 +1503,25 @@ struct ConsumablesScreen: View {
 
     private func summary(_ store: ConsumablesStore) -> some View {
         VStack(spacing: Spacing.md) {
-            HStack(spacing: Spacing.md) {
-                SummaryPill(
-                    title: "Кончается",
-                    value: "\(store.runningOut.count)",
-                    tint: store.runningOut.isEmpty ? Theme.positive : Theme.negative
-                )
-                SummaryPill(title: "В норме", value: "\(store.healthy.count)", tint: Theme.textMuted)
-                SummaryPill(
-                    title: "Без нормы",
-                    value: "\(store.withoutNorm.count)",
-                    tint: store.withoutNorm.isEmpty ? Theme.textDim : Theme.warning
-                )
-            }
+            // Главная цифра — что кончается: ради неё раздел и открывают.
+            // Оранжевый — цвет склада во всём приложении.
+            HeroSummary(
+                title: "Кончается",
+                value: "\(store.runningOut.count)",
+                caption: store.runningOut.isEmpty ? "запаса везде хватает" : "заказать до того, как встанет точка",
+                footer: [
+                    ("В норме", "\(store.healthy.count)"),
+                    ("Без нормы", "\(store.withoutNorm.count)"),
+                    ("Выдач", "\(store.issues.count)"),
+                ],
+                colors: [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
+            )
             .padding(.horizontal, Spacing.lg)
 
-            HStack(spacing: Spacing.sm) {
-                FilterChip(title: "Остатки", isOn: tab == .stock) { tab = .stock }
-                FilterChip(title: "Выдачи · \(store.issues.count)", isOn: tab == .issues) { tab = .issues }
-                Spacer(minLength: 0)
-            }
+            PillSegment(
+                options: [(value: Tab.stock, title: "Остатки"), (value: Tab.issues, title: "Выдачи · \(store.issues.count)")],
+                selection: $tab
+            )
             .padding(.horizontal, Spacing.lg)
         }
         .padding(.vertical, Spacing.md)
@@ -1553,39 +1539,45 @@ struct ConsumablesScreen: View {
             ScreenScroll {
                 VStack(spacing: Spacing.lg) {
                     if !store.runningOut.isEmpty {
-                        Card(accent: Theme.negative) {
-                            VStack(alignment: .leading, spacing: Spacing.md) {
-                                SectionHeader("Кончается", subtitle: "заказать до того, как встанет точка")
-                                ForEach(Array(store.runningOut.enumerated()), id: \.element.id) { index, row in
-                                    if index > 0 { RowDivider() }
-                                    ConsumableStockRow(row: row)
-                                }
-                            }
-                        }
+                        consumableSection("Кончается", note: "Заказать до того, как встанет точка.", rows: store.runningOut, countTint: Theme.negative)
                     }
 
                     if !store.healthy.isEmpty {
-                        Card {
-                            VStack(alignment: .leading, spacing: Spacing.md) {
-                                SectionHeader("Запаса хватает")
-                                ForEach(Array(store.healthy.enumerated()), id: \.element.id) { index, row in
-                                    if index > 0 { RowDivider() }
-                                    ConsumableStockRow(row: row)
-                                }
-                            }
-                        }
+                        consumableSection("Запаса хватает", note: nil, rows: store.healthy, countTint: Theme.textDim)
                     }
 
                     if !store.withoutNorm.isEmpty {
-                        Card {
-                            VStack(alignment: .leading, spacing: Spacing.md) {
-                                SectionHeader("Без нормы расхода", subtitle: "прогноз не построить, пока не задана месячная норма")
-                                ForEach(Array(store.withoutNorm.enumerated()), id: \.element.id) { index, row in
-                                    if index > 0 { RowDivider() }
-                                    ConsumableStockRow(row: row)
-                                }
-                            }
-                        }
+                        consumableSection(
+                            "Без нормы расхода",
+                            note: "Прогноз не построить, пока не задана месячная норма.",
+                            rows: store.withoutNorm,
+                            countTint: Theme.warning
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    /// Группа остатков белым блоком: заголовок, пояснение и строки с
+    /// тонкими разделителями — одна форма на все три группы.
+    private func consumableSection(_ title: String, note: String?, rows: [ConsumableStock], countTint: Color) -> some View {
+        OwnerSection(title) {
+            Text("\(rows.count)")
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundStyle(countTint)
+        } content: {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                if let note {
+                    Text(note)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.textDim)
+                }
+                VStack(spacing: 0) {
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                        if index > 0 { PlainRowDivider(inset: 52) }
+                        ConsumableStockRow(row: row)
+                            .padding(.vertical, Spacing.sm)
                     }
                 }
             }
@@ -1616,14 +1608,18 @@ private struct ConsumableStockRow: View {
     let row: ConsumableStock
 
     var body: some View {
+        // Как строка склада: буква в кружке цвета срочности, остаток
+        // крупно справа, на сколько дней хватит — подписью под ним.
         HStack(spacing: Spacing.md) {
-            VStack(alignment: .leading, spacing: 1) {
+            LetterBadge(text: row.itemName, tint: urgencyTint == Theme.textDim ? Theme.brand : urgencyTint)
+
+            VStack(alignment: .leading, spacing: 2) {
                 Text(row.itemName)
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
                 Text(subtitle)
-                    .font(Typography.caption)
+                    .font(.system(size: 13))
                     .foregroundStyle(Theme.textDim)
                     .lineLimit(1)
             }
@@ -1632,22 +1628,22 @@ private struct ConsumableStockRow: View {
 
             VStack(alignment: .trailing, spacing: 2) {
                 Text("\(Quantity.format(row.quantity)) \(row.unit)")
-                    .font(Typography.callout.weight(.medium))
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(Theme.text)
                 if let days = row.daysLeft {
-                    StatusChip("на \(days) \(pluralize(days, "день", "дня", "дней"))", kind: chipKind)
+                    StatusCaption("на \(days) \(pluralize(days, "день", "дня", "дней"))", tint: urgencyTint)
                 }
             }
         }
     }
 
-    private var chipKind: StatusChip.Kind {
+    private var urgencyTint: Color {
         switch row.urgency {
-        case .critical: .danger
-        case .soon: .warning
-        case .ok: .good
-        case .unknown: .neutral
+        case .critical: Theme.negative
+        case .soon: Theme.warning
+        case .ok: Theme.positive
+        case .unknown: Theme.textDim
         }
     }
 
@@ -1669,18 +1665,18 @@ private struct ConsumableIssueRow: View {
 
     var body: some View {
         HStack(spacing: Spacing.md) {
-            Image(systemName: issue.isDisputed ? "exclamationmark.triangle.fill" : "tray.and.arrow.down.fill")
-                .font(.system(size: 15))
-                .foregroundStyle(issue.isDisputed ? Theme.negative : Theme.textMuted)
-                .frame(width: 24)
+            TintedIcon(
+                systemName: issue.isDisputed ? "exclamationmark.triangle.fill" : "tray.and.arrow.down.fill",
+                tint: issue.isDisputed ? Theme.negative : Color(hex: 0xF59E0B)
+            )
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(issue.locationName ?? issue.companyName ?? "Точка")
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
                 Text(subtitle)
-                    .font(Typography.caption)
+                    .font(.system(size: 13))
                     .foregroundStyle(Theme.textDim)
                     .lineLimit(1)
             }
@@ -1688,12 +1684,12 @@ private struct ConsumableIssueRow: View {
             Spacer(minLength: Spacing.sm)
 
             if issue.isDisputed {
-                StatusChip("расхождение", kind: .danger)
+                StatusCaption("расхождение", tint: Theme.negative)
             } else {
                 Text(Quantity.format(issue.totalQty))
-                    .font(Typography.callout.weight(.medium))
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .monospacedDigit()
-                    .foregroundStyle(Theme.textMuted)
+                    .foregroundStyle(Theme.text)
             }
         }
     }
@@ -1721,7 +1717,7 @@ private struct ConsumableIssueDetail: View {
                                 .font(Typography.title)
                                 .foregroundStyle(Theme.text)
                             Spacer()
-                            StatusChip(issue.statusLabel, kind: issue.isDisputed ? .danger : .good)
+                            StatusCaption(issue.statusLabel, tint: issue.isDisputed ? Theme.negative : Theme.positive)
                         }
 
                         if let company = issue.companyName {
@@ -1747,15 +1743,15 @@ private struct ConsumableIssueDetail: View {
                     }
                 }
 
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        SectionHeader("Что выдано")
-                        if issue.items.isEmpty {
-                            InlineEmpty(icon: "tray", text: "Позиции не указаны", tint: Theme.textDim)
-                        } else {
+                OwnerSection("Что выдано") {
+                    if issue.items.isEmpty {
+                        InlineEmpty(icon: "tray", text: "Позиции не указаны", tint: Theme.textDim)
+                    } else {
+                        VStack(spacing: 0) {
                             ForEach(Array(issue.items.enumerated()), id: \.element.id) { index, line in
-                                if index > 0 { RowDivider() }
+                                if index > 0 { PlainRowDivider(inset: 48) }
                                 ConsumableIssueLineRow(line: line)
+                                    .padding(.vertical, Spacing.sm)
                             }
                         }
                     }
@@ -1775,9 +1771,10 @@ private struct ConsumableIssueLineRow: View {
 
     var body: some View {
         HStack(spacing: Spacing.md) {
-            VStack(alignment: .leading, spacing: 1) {
+            LetterBadge(text: line.name, tint: Theme.brand, size: 36)
+            VStack(alignment: .leading, spacing: 2) {
                 Text(line.name)
-                    .font(Typography.callout)
+                    .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
                 // Одобрили меньше, чем просили, — на точке будет меньше, чем ждали.

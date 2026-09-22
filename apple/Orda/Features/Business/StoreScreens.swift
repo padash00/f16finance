@@ -694,7 +694,7 @@ private struct RequestDetail: View {
                                 .font(Typography.title)
                                 .foregroundStyle(Theme.text)
                             Spacer()
-                            StatusChip(request.statusLabel, kind: request.isPending ? .warning : .good)
+                            StatusCaption(request.statusLabel, tint: request.isPending ? Theme.warning : Theme.positive)
                         }
 
                         if let from = request.sourceName, let to = request.targetName {
@@ -713,19 +713,23 @@ private struct RequestDetail: View {
                     }
                 }
 
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        SectionHeader("Состав", subtitle: "\(request.lines.count) позиций")
-
+                OwnerSection("Состав") {
+                    Text("\(request.lines.count) поз.")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Theme.textDim)
+                } content: {
+                    VStack(spacing: 0) {
                         if request.lines.isEmpty {
                             InlineEmpty(icon: "tray", text: "Позиции не указаны", tint: Theme.textDim)
                         } else {
                             ForEach(Array(request.lines.enumerated()), id: \.element.id) { index, line in
-                                if index > 0 { RowDivider() }
+                                if index > 0 { PlainRowDivider() }
                                 HStack(spacing: Spacing.md) {
+                                    LetterBadge(text: line.name, tint: Theme.brand, size: 36)
                                     Text(line.name)
-                                        .font(Typography.callout)
+                                        .font(.system(size: 15, weight: .medium))
                                         .foregroundStyle(Theme.text)
+                                        .lineLimit(2)
                                     Spacer(minLength: Spacing.sm)
                                     // Одобренное количество часто меньше
                                     // запрошенного — показываем оба, иначе
@@ -747,6 +751,7 @@ private struct RequestDetail: View {
                                             .foregroundStyle(Theme.text)
                                     }
                                 }
+                                .padding(.vertical, Spacing.sm)
                             }
                         }
                     }
@@ -808,16 +813,20 @@ struct MovementsScreen: View {
             if movements.isEmpty {
                 WideEmptyState(icon: "arrow.left.arrow.right", title: "Движений нет", message: "За выбранный тип записей нет.")
             } else {
+                // Движения — как операции в выписке: белая подложка, иконка в
+                // кружке, тонкие линии только под текстом.
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(movements) { movement in
+                        ForEach(Array(movements.enumerated()), id: \.element.id) { index, movement in
+                            if index > 0 { PlainRowDivider(inset: 56) }
                             MovementRowView(movement: movement)
-                                .padding(.horizontal, Spacing.lg)
                                 .padding(.vertical, Spacing.sm)
-                            RowDivider().padding(.horizontal, Spacing.lg)
                         }
                     }
-                    .padding(.vertical, Spacing.sm)
+                    .padding(.horizontal, Spacing.md)
+                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .padding(.horizontal, Spacing.lg)
+                    .padding(.bottom, Spacing.xxl)
                 }
             }
         }
@@ -834,13 +843,10 @@ struct MovementsScreen: View {
             // Место — отдельной строкой: спрашивают почти всегда про витрину
             // («куда делись двадцать кол»), и мешать его с видом движения в
             // один ряд значит прятать оба.
-            Picker("", selection: $bindable.movementsScope) {
-                Text("Везде").tag("all")
-                Text("Склад").tag("warehouse")
-                Text("Витрина").tag("showcase")
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+            PillSegment(
+                options: [("all", "Везде"), ("warehouse", "Склад"), ("showcase", "Витрина")] as [(value: String, title: String)],
+                selection: $bindable.movementsScope
+            )
             .padding(.horizontal, Spacing.lg)
             .padding(.top, Spacing.md)
 
@@ -942,33 +948,32 @@ struct MovementRowView: View {
     }
 
     var body: some View {
+        // Иконка вида движения в цветном кружке: приход зелёный, расход
+        // красный — направление читается до того, как прочитано число.
         HStack(spacing: Spacing.md) {
-            Image(systemName: movement.icon)
-                .font(.system(size: 15))
-                .foregroundStyle(tint)
-                .frame(width: 24)
+            TintedIcon(systemName: movement.icon, tint: tint)
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(movement.itemName)
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
                 Text(route)
-                    .font(Typography.caption)
+                    .font(.system(size: 13))
                     .foregroundStyle(Theme.textDim)
                     .lineLimit(1)
             }
 
             Spacer(minLength: Spacing.sm)
 
-            VStack(alignment: .trailing, spacing: 1) {
+            VStack(alignment: .trailing, spacing: 2) {
                 Text(signedQuantity)
-                    .font(Typography.callout.weight(.medium))
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .monospacedDigit()
-                    .foregroundStyle(tint)
+                    .foregroundStyle(tint == Theme.textMuted ? Theme.text : tint)
                 if let date = movement.createdAt {
                     Text(date.formatted(.dateTime.hour().minute()))
-                        .font(Typography.caption)
+                        .font(.system(size: 12))
                         .monospacedDigit()
                         .foregroundStyle(Theme.textDim)
                 }
@@ -1000,24 +1005,28 @@ struct RequestRowView: View {
     let request: StockRequest
 
     var body: some View {
+        // Точка буквой в кружке, статус цветной подписью: плашка статуса
+        // была шире названия точки и перетягивала взгляд.
         HStack(spacing: Spacing.md) {
-            VStack(alignment: .leading, spacing: 1) {
+            LetterBadge(text: request.companyName ?? "Точка", tint: request.isPending ? Theme.warning : Theme.positive)
+
+            VStack(alignment: .leading, spacing: 2) {
                 Text(request.companyName ?? "Точка")
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
                 Text("\(request.lines.count) \(pluralize(request.lines.count, "позиция", "позиции", "позиций"))")
-                    .font(Typography.caption)
+                    .font(.system(size: 13))
                     .foregroundStyle(Theme.textDim)
             }
 
             Spacer(minLength: Spacing.sm)
 
-            VStack(alignment: .trailing, spacing: 3) {
-                StatusChip(request.statusLabel, kind: request.isPending ? .warning : .good)
+            VStack(alignment: .trailing, spacing: 2) {
+                StatusCaption(request.statusLabel, tint: request.isPending ? Theme.warning : Theme.positive)
                 if let date = request.createdAt {
                     Text(date.formatted(.dateTime.day().month(.abbreviated)))
-                        .font(Typography.caption)
+                        .font(.system(size: 12))
                         .foregroundStyle(Theme.textDim)
                 }
             }

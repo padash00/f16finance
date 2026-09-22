@@ -328,23 +328,22 @@ struct DiscountsScreen: View {
         }
     }
 
+    /// Сколько скидок действует — главная цифра; промокоды и истекающие —
+    /// под ней. Четыре плашки в ряд на телефоне обрезали подписи.
     private func summary(_ board: DiscountBoard) -> some View {
-        HStack(spacing: Spacing.md) {
-            SummaryPill(title: "Действуют", value: "\(board.live.count)", tint: board.live.isEmpty ? Theme.textDim : Theme.brand)
-            SummaryPill(
-                title: "Промокоды",
-                value: "\(board.livePromoCodes.count)",
-                tint: board.livePromoCodes.isEmpty ? Theme.textDim : Theme.info
-            )
-            SummaryPill(
-                title: "Скоро кончатся",
-                value: "\(board.expiringSoon.count)",
-                tint: board.expiringSoon.isEmpty ? Theme.positive : Theme.warning
-            )
-            if let deepest = board.deepestPercent {
-                SummaryPill(title: "Максимум скидки", value: deepest.valueLabel, tint: Theme.warning)
-            }
-        }
+        var footer: [(String, String)] = [
+            ("Промокоды", "\(board.livePromoCodes.count)"),
+            ("Скоро кончатся", "\(board.expiringSoon.count)"),
+        ]
+        if let deepest = board.deepestPercent { footer.append(("Максимум", deepest.valueLabel)) }
+
+        return HeroSummary(
+            title: "Скидок действует",
+            value: "\(board.live.count)",
+            caption: board.live.isEmpty ? "чек проходит по полной цене" : nil,
+            footer: footer,
+            colors: [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+        )
         .padding(.horizontal, Spacing.lg)
         .padding(.vertical, Spacing.md)
     }
@@ -382,19 +381,21 @@ private struct DiscountRow: View {
     let discount: Discount
 
     var body: some View {
+        // Скидка как строка выписки: вид скидки иконкой в кружке, размер
+        // крупно справа, состояние цветной подписью под ним.
         HStack(spacing: Spacing.md) {
-            Image(systemName: discount.kind.icon)
-                .font(.system(size: 14))
-                .foregroundStyle(discount.state.isWorking ? Theme.brand : Theme.textDim)
-                .frame(width: 24)
+            TintedIcon(
+                systemName: discount.kind.icon,
+                tint: discount.state.isWorking ? Color(hex: 0x7C3AED) : Theme.textDim
+            )
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(discount.name)
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
                 Text(subtitle)
-                    .font(Typography.caption)
+                    .font(.system(size: 13))
                     .foregroundStyle(Theme.textDim)
                     .lineLimit(1)
             }
@@ -403,22 +404,22 @@ private struct DiscountRow: View {
 
             VStack(alignment: .trailing, spacing: 2) {
                 Text(discount.valueLabel)
-                    .font(Typography.callout.weight(.medium))
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(Theme.text)
-                StatusChip(discount.state.title, kind: stateKind)
+                StatusCaption(discount.state.title, tint: stateTint)
             }
         }
         .contentShape(Rectangle())
     }
 
-    private var stateKind: StatusChip.Kind {
+    private var stateTint: Color {
         switch discount.state {
-        case .live: .good
-        case .scheduled: .info
-        case .expired: .neutral
-        case .exhausted: .warning
-        case .disabled: .neutral
+        case .live: Theme.positive
+        case .scheduled: Theme.info
+        case .expired: Theme.textDim
+        case .exhausted: Theme.warning
+        case .disabled: Theme.textDim
         }
     }
 
@@ -1029,63 +1030,40 @@ struct StationsScreen: View {
 
     private func metrics(_ store: StationsStore, _ board: ArenaBoard) -> some View {
         let revenue = store.revenue
+        let load = board.load.map { Percent.format($0 * 100) } ?? "—"
+        // Выручку видят не все: без права подпись показывает зал, а не деньги.
+        let footer: [(String, String)] = store.canReadRevenue
+            ? [
+                ("Выручка · \(store.period.title.lowercased())", Money.format(revenue.amount)),
+                ("Сессий", "\(revenue.count)"),
+                ("Средний чек", Money.format(revenue.averageCheck)),
+            ]
+            : [("Загрузка", load)] + (board.games.isEmpty ? [] : [("Игр в каталоге", "\(board.games.filter(\.isActive).count)")])
 
-        return DashboardGrid {
-            MetricTile(
-                label: "Занято сейчас",
-                value: "\(board.busyStations.count) из \(board.workingStations.count)",
-                icon: "gamecontroller.fill",
-                accent: board.busyStations.isEmpty ? Theme.textDim : Theme.brand
-            )
-            MetricTile(
-                label: "Загрузка зала",
-                value: board.load.map { Percent.format($0 * 100) } ?? "—",
-                icon: "chart.pie.fill",
-                accent: Theme.info
-            )
-            if !board.games.isEmpty {
-                MetricTile(
-                    label: "Игр в каталоге",
-                    value: "\(board.games.filter(\.isActive).count)",
-                    icon: "square.grid.2x2",
-                    accent: Theme.textMuted
-                )
-            }
-            if store.canReadRevenue {
-                MetricTile(
-                    label: "Выручка · \(store.period.title.lowercased())",
-                    value: Money.format(revenue.amount),
-                    icon: "banknote.fill",
-                    accent: Theme.brand
-                )
-                MetricTile(
-                    label: "Сессий",
-                    value: "\(revenue.count)",
-                    icon: "clock.arrow.circlepath",
-                    accent: Theme.textMuted
-                )
-                MetricTile(
-                    label: "Средний чек",
-                    value: Money.format(revenue.averageCheck),
-                    icon: "arrow.up.arrow.down",
-                    accent: Theme.textMuted
-                )
-            }
-        }
+        // Зал сейчас — главная цифра: «сколько играет» спрашивают чаще всего.
+        return HeroSummary(
+            title: "Занято сейчас",
+            value: "\(board.busyStations.count) из \(board.workingStations.count)",
+            caption: "загрузка зала \(load)",
+            footer: footer,
+            colors: [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+        )
     }
 
     // ── Зоны и станции ───────────────────────────────────────────────────────
 
     private func zoneCard(_ store: StationsStore, _ board: ArenaBoard, _ group: ArenaZoneGroup) -> some View {
-        Card {
+        OwnerSection(group.title) {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader(group.title, subtitle: zoneSubtitle(group))
+                Text(zoneSubtitle(group))
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textDim)
 
                 if group.stations.isEmpty {
                     InlineEmpty(icon: "rectangle.slash", text: "В зоне нет станций", tint: Theme.textDim)
                 } else {
                     ForEach(Array(group.stations.enumerated()), id: \.element.id) { index, station in
-                        if index > 0 { RowDivider() }
+                        if index > 0 { PlainRowDivider(inset: 52) }
                         ArenaStationRow(
                             station: station,
                             tariffs: board.zoneTariffs(for: station),
@@ -1144,9 +1122,13 @@ struct StationsScreen: View {
         let withoutGames = board.stationsWithoutGames
 
         if !overdue.isEmpty {
-            Card(accent: Theme.negative) {
+            OwnerSection("Время вышло") {
+                Circle().fill(Theme.negative).frame(width: 10, height: 10)
+            } content: {
                 VStack(alignment: .leading, spacing: Spacing.sm) {
-                    SectionHeader("Время вышло", subtitle: "сессия не закрыта — станция играет бесплатно")
+                    Text("Сессия не закрыта — станция играет бесплатно.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.textDim)
                     ForEach(overdue) { station in
                         StatRow(
                             station.name,
@@ -1160,9 +1142,13 @@ struct StationsScreen: View {
         }
 
         if !silent.isEmpty {
-            Card(accent: Theme.warning) {
+            OwnerSection("Киоск молчит") {
+                Circle().fill(Theme.warning).frame(width: 10, height: 10)
+            } content: {
                 VStack(alignment: .leading, spacing: Spacing.sm) {
-                    SectionHeader("Киоск молчит", subtitle: "нет сигнала больше 15 минут")
+                    Text("Нет сигнала больше 15 минут.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.textDim)
                     ForEach(silent) { station in
                         StatRow(
                             station.name,
@@ -1176,9 +1162,13 @@ struct StationsScreen: View {
         }
 
         if !withoutGames.isEmpty {
-            Card(accent: Theme.warning) {
+            OwnerSection("Без игр") {
+                Circle().fill(Theme.warning).frame(width: 10, height: 10)
+            } content: {
                 VStack(alignment: .leading, spacing: Spacing.sm) {
-                    SectionHeader("Без игр", subtitle: "киоск покажет пустой список")
+                    Text("Киоск покажет пустой список.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.textDim)
                     ForEach(withoutGames) { station in
                         StatRow(station.name, value: "игр нет", valueColor: Theme.warning, icon: "questionmark.folder")
                     }
@@ -1209,18 +1199,19 @@ struct StationsScreen: View {
     private func revenueCard(_ store: StationsStore, _ board: ArenaBoard) -> some View {
         let revenue = store.revenue
 
-        Card {
+        OwnerSection("Выручка зала") {
+            Text("по завершённым сессиям")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.textDim)
+        } content: {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Выручка зала", subtitle: "по завершённым сессиям")
-
-                HStack(spacing: Spacing.sm) {
-                    ForEach(ArenaPeriod.allCases) { period in
-                        FilterChip(title: period.title, isOn: store.period == period) {
-                            Task { await store.select(period: period) }
-                        }
-                    }
-                    Spacer(minLength: 0)
-                }
+                PillSegment(
+                    options: ArenaPeriod.allCases.map { (value: $0, title: $0.title) },
+                    selection: Binding(
+                        get: { store.period },
+                        set: { (period: ArenaPeriod) -> Void in Task { await store.select(period: period) } }
+                    )
+                )
 
                 if store.isLoadingRevenue && revenue.count == 0 {
                     Skeleton(height: 44, cornerRadius: Radius.md)
@@ -1245,17 +1236,20 @@ struct StationsScreen: View {
         }
 
         if !revenue.byStation.isEmpty {
-            Card {
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    SectionHeader("Кто заработал", subtitle: "станции по выручке")
+            let top = max(revenue.byStation.map(\.amount).max() ?? 0, 1)
+            // Станции строками с полосой доли от лидера — кто тянет зал,
+            // видно без чтения сумм.
+            OwnerSection("Кто заработал") {
+                VStack(spacing: Spacing.md) {
                     ForEach(Array(revenue.byStation.prefix(8).enumerated()), id: \.element.id) { index, share in
-                        if index > 0 { RowDivider() }
-                        VStack(alignment: .leading, spacing: Spacing.xs) {
-                            StatRow(share.name, value: Money.format(share.amount))
-                            Text("\(share.count) \(pluralize(share.count, "сессия", "сессии", "сессий")) · \(share.minutes / 60) ч")
-                                .font(Typography.caption)
-                                .foregroundStyle(Theme.textDim)
-                        }
+                        AmountRow(
+                            leading: { LetterBadge(text: share.name, tint: OwnerTint.point(index)) },
+                            title: share.name,
+                            subtitle: "\(share.count) \(pluralize(share.count, "сессия", "сессии", "сессий")) · \(share.minutes / 60) ч",
+                            amount: Money.format(share.amount),
+                            share: share.amount / top,
+                            tint: OwnerTint.point(index)
+                        )
                     }
                 }
             }
@@ -1287,26 +1281,25 @@ private struct ArenaStationRow: View {
     let onEnd: () -> Void
 
     var body: some View {
+        // Станция иконкой в кружке: занятая — цветная, просроченная —
+        // красная; статус подписью, чтобы рядом поместилось меню «…».
         HStack(spacing: Spacing.md) {
-            Image(systemName: station.isBusy ? "gamecontroller.fill" : "gamecontroller")
-                .font(.system(size: 14))
-                .foregroundStyle(iconColor)
-                .frame(width: 24)
+            TintedIcon(systemName: station.isBusy ? "gamecontroller.fill" : "gamecontroller", tint: iconColor)
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(station.name)
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(station.isActive ? Theme.text : Theme.textDim)
                     .lineLimit(1)
                 Text(subtitle)
-                    .font(Typography.caption)
+                    .font(.system(size: 13))
                     .foregroundStyle(Theme.textDim)
                     .lineLimit(1)
             }
 
             Spacer(minLength: Spacing.sm)
 
-            StatusChip(statusText, kind: statusKind)
+            StatusCaption(statusText, tint: statusTint)
 
             if isBusy {
                 ProgressView().controlSize(.small)
@@ -1345,7 +1338,7 @@ private struct ArenaStationRow: View {
     private var iconColor: Color {
         if !station.isActive { return Theme.textDim }
         if station.isOverdue() { return Theme.negative }
-        return station.isBusy ? Theme.brand : Theme.textMuted
+        return station.isBusy ? Color(hex: 0x7C3AED) : Theme.textMuted
     }
 
     private var statusText: String {
@@ -1355,10 +1348,10 @@ private struct ArenaStationRow: View {
         return remaining >= 0 ? "\(remaining) мин" : "время вышло"
     }
 
-    private var statusKind: StatusChip.Kind {
-        if !station.isActive { return .neutral }
-        guard station.isBusy else { return .good }
-        return station.isOverdue() ? .danger : .info
+    private var statusTint: Color {
+        if !station.isActive { return Theme.textDim }
+        guard station.isBusy else { return Theme.positive }
+        return station.isOverdue() ? Theme.negative : Theme.info
     }
 
     private var subtitle: String {
@@ -1513,12 +1506,13 @@ struct StoreSettingsScreen: View {
                 message: "Магазином становится точка. Создайте её в настройках компаний — потом отметите здесь."
             )
         } else {
-            Card {
+            OwnerSection("Точки-магазины") {
+                Text("\(store.selected.count) из \(config.points.count)")
+                    .font(.system(size: 14, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.textDim)
+            } content: {
                 VStack(alignment: .leading, spacing: Spacing.md) {
-                    SectionHeader(
-                        "Точки-магазины",
-                        subtitle: "\(store.selected.count) из \(config.points.count) отмечено"
-                    )
 
                     Text("У каждого магазина свои товары, склад, техкарты и касса — данные между точками не смешиваются.")
                         .font(Typography.caption)
@@ -1577,9 +1571,11 @@ struct StoreSettingsScreen: View {
     }
 
     private func defaultPointCard(_ store: StoreSettingsStore, _ config: RetailConfig, isManager: Bool) -> some View {
-        Card(accent: config.needsDefaultPoint ? Theme.warning : nil) {
+        OwnerSection("Стартовая точка") {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Стартовая точка", subtitle: "с неё открывается модуль и сменные отчёты")
+                Text("С неё открывается модуль и сменные отчёты.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(config.needsDefaultPoint ? Theme.warning : Theme.textDim)
 
                 if config.storePoints.isEmpty {
                     InlineEmpty(icon: "storefront", text: "Сначала отметьте хотя бы одну точку-магазин", tint: Theme.textDim)
@@ -1623,13 +1619,14 @@ private struct RetailPointToggleRow: View {
     var body: some View {
         Button(action: { if isEnabled { action() } }) {
             HStack(spacing: Spacing.md) {
-                Image(systemName: isOn ? "checkmark.square.fill" : "square")
-                    .font(.system(size: 18))
+                Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 22))
                     .foregroundStyle(isOn ? Theme.brand : Theme.textDim)
+                    .frame(width: 40, height: 40)
 
-                VStack(alignment: .leading, spacing: 1) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(point.name)
-                        .font(Typography.callout)
+                        .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(Theme.text)
                         .lineLimit(1)
                     if let code = point.code, !code.isEmpty {
@@ -1642,7 +1639,7 @@ private struct RetailPointToggleRow: View {
                 Spacer(minLength: Spacing.sm)
 
                 if isOn {
-                    StatusChip("магазин", kind: .good)
+                    StatusCaption("магазин", tint: Theme.positive)
                 }
             }
             .contentShape(Rectangle())
@@ -1816,20 +1813,20 @@ struct StoreShiftsScreen: View {
 
         return Group {
             if !store.shifts.isEmpty {
-                HStack(spacing: Spacing.md) {
-                    SummaryPill(title: "Смен", value: "\(store.shifts.count)", tint: Theme.textMuted)
-                    SummaryPill(title: "Выручка", value: Money.format(revenue), tint: Theme.brand)
-                    SummaryPill(
-                        title: "Открыто сейчас",
-                        value: "\(open.count)",
-                        tint: open.isEmpty ? Theme.textDim : Theme.info
-                    )
-                    SummaryPill(
-                        title: "С расхождением",
-                        value: "\(discrepancies.count)",
-                        tint: discrepancies.isEmpty ? Theme.positive : Theme.warning
-                    )
-                }
+                // Выручка — главная цифра; число смен и расхождения — под ней.
+                HeroSummary(
+                    title: "Выручка за смены",
+                    value: Money.format(revenue),
+                    caption: discrepancies.isEmpty
+                        ? "касса везде сошлась"
+                        : "\(discrepancies.count) \(pluralize(discrepancies.count, "смена", "смены", "смен")) с расхождением",
+                    footer: [
+                        ("Смен", "\(store.shifts.count)"),
+                        ("Открыто сейчас", "\(open.count)"),
+                        ("С расхождением", "\(discrepancies.count)"),
+                    ],
+                    colors: [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+                )
                 .padding(.horizontal, Spacing.lg)
                 .padding(.vertical, Spacing.md)
             }
@@ -1879,18 +1876,18 @@ private struct StoreShiftRow: View {
 
     var body: some View {
         HStack(spacing: Spacing.md) {
-            Image(systemName: shift.isOpen ? "play.circle.fill" : "checkmark.circle.fill")
-                .font(.system(size: 15))
-                .foregroundStyle(shift.isOpen ? Theme.info : Theme.positive)
-                .frame(width: 24)
+            TintedIcon(
+                systemName: shift.isOpen ? "play.fill" : "checkmark",
+                tint: shift.isOpen ? Theme.info : Theme.positive
+            )
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
                 Text(subtitle)
-                    .font(Typography.caption)
+                    .font(.system(size: 13))
                     .foregroundStyle(Theme.textDim)
                     .lineLimit(1)
             }
@@ -1899,11 +1896,12 @@ private struct StoreShiftRow: View {
 
             VStack(alignment: .trailing, spacing: 2) {
                 Text(Money.format(shift.totals.sales))
-                    .font(Typography.callout.weight(.medium))
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(Theme.text)
+                // Расхождение подписью под суммой: плашка теснила сумму.
                 if let difference = shift.cashDifference, abs(difference) > 1 {
-                    StatusChip(Money.signed(difference), kind: difference < 0 ? .danger : .warning)
+                    StatusCaption(Money.signed(difference), tint: difference < 0 ? Theme.negative : Theme.warning)
                 }
             }
         }
@@ -1976,7 +1974,7 @@ private struct StoreShiftDetailView: View {
                             .foregroundStyle(Theme.textMuted)
                     }
                     Spacer()
-                    StatusChip(shift.statusLabel, kind: shift.isOpen ? .info : .good)
+                    StatusCaption(shift.statusLabel, tint: shift.isOpen ? Theme.info : Theme.positive)
                 }
 
                 RowDivider()
@@ -1992,32 +1990,17 @@ private struct StoreShiftDetailView: View {
 
     @ViewBuilder
     private func zReport(_ report: ZReport) -> some View {
-        DashboardGrid {
-            MetricTile(
-                label: "Итог смены",
-                value: Money.format(report.total),
-                icon: "sum",
-                accent: Theme.brand
-            )
-            MetricTile(
-                label: "Чеков",
-                value: "\(report.checkCount)",
-                icon: "receipt",
-                accent: Theme.textMuted
-            )
-            MetricTile(
-                label: "Средний чек",
-                value: Money.format(report.averageCheck),
-                icon: "arrow.up.arrow.down",
-                accent: Theme.info
-            )
-            MetricTile(
-                label: "Возвраты",
-                value: Money.format(report.returns),
-                icon: "arrow.uturn.left",
-                accent: report.returns > 0 ? Theme.warning : Theme.textDim
-            )
-        }
+        // Итог смены — главная цифра Z-отчёта, чеки и возвраты — под ней.
+        HeroSummary(
+            title: "Итог смены",
+            value: Money.format(report.total),
+            footer: [
+                ("Чеков", "\(report.checkCount)"),
+                ("Средний чек", Money.format(report.averageCheck)),
+                ("Возвраты", Money.format(report.returns)),
+            ],
+            colors: [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+        )
 
         SplitDashboard {
             positionsCard(report)
@@ -2034,9 +2017,15 @@ private struct StoreShiftDetailView: View {
     private func cashCard(_ report: ZReport) -> some View {
         let difference = report.cashDifference
 
-        return Card(accent: report.isClosed && abs(difference) > 1 ? Theme.warning : nil) {
+        return OwnerSection("Касса") {
+            if report.isClosed && abs(difference) > 1 {
+                Circle().fill(Theme.warning).frame(width: 10, height: 10)
+            }
+        } content: {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Касса", subtitle: "чем платили и что осталось в ящике")
+                Text("Чем платили и что осталось в ящике.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textDim)
 
                 SplitBar(segments: [
                     .init(label: "Наличные", value: report.cashSales, color: ChartPalette.series1),
@@ -2081,9 +2070,13 @@ private struct StoreShiftDetailView: View {
     }
 
     private func shiftCard(_ report: ZReport) -> some View {
-        Card {
+        OwnerSection("Смена №\(report.shiftNumber)") {
+            Text(report.pointName)
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.textDim)
+                .lineLimit(1)
+        } content: {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Смена №\(report.shiftNumber)", subtitle: report.pointName)
                 StatRow("Кассир", value: report.cashier, icon: "person")
                 if let duration = report.durationLabel {
                     StatRow("Длительность", value: duration, icon: "clock")
@@ -2109,12 +2102,12 @@ private struct StoreShiftDetailView: View {
     private func positionsCard(_ report: ZReport) -> some View {
         let positions = report.topPositions
 
-        return Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader(
-                    "Что продали",
-                    subtitle: "\(positions.count) \(pluralize(positions.count, "наименование", "наименования", "наименований"))"
-                )
+        return OwnerSection("Что продали") {
+            Text("\(positions.count) поз.")
+                .font(.system(size: 14))
+                .foregroundStyle(Theme.textDim)
+        } content: {
+            VStack(alignment: .leading, spacing: 0) {
 
                 if positions.isEmpty {
                     InlineEmpty(icon: "tray", text: "Продаж по позициям не было", tint: Theme.textDim)
@@ -2122,24 +2115,28 @@ private struct StoreShiftDetailView: View {
                     // Разные товары могут совпасть по имени (свободные строки
                     // чека), поэтому ключ — позиция в списке, а не имя.
                     ForEach(Array(positions.enumerated()), id: \.offset) { index, position in
-                        if index > 0 { RowDivider() }
+                        if index > 0 { PlainRowDivider(inset: 52) }
+                        // Как строка склада: буква товара, оранжевая — если
+                        // на складе пусто и следующая смена откроется без него.
                         HStack(spacing: Spacing.md) {
-                            VStack(alignment: .leading, spacing: 1) {
+                            LetterBadge(text: position.name, tint: position.isOutOfStock ? Theme.warning : Theme.brand)
+                            VStack(alignment: .leading, spacing: 2) {
                                 Text(position.name)
-                                    .font(Typography.callout)
+                                    .font(.system(size: 16, weight: .medium))
                                     .foregroundStyle(Theme.text)
                                     .lineLimit(2)
                                 Text(positionSubtitle(position))
-                                    .font(Typography.caption)
+                                    .font(.system(size: 13))
                                     .monospacedDigit()
                                     .foregroundStyle(position.isOutOfStock ? Theme.warning : Theme.textDim)
                             }
                             Spacer(minLength: Spacing.sm)
                             Text(Money.format(position.amount))
-                                .font(Typography.callout.weight(.medium))
+                                .font(.system(size: 16, weight: .semibold, design: .rounded))
                                 .monospacedDigit()
                                 .foregroundStyle(Theme.text)
                         }
+                        .padding(.vertical, Spacing.sm)
                     }
                 }
             }
@@ -2157,12 +2154,16 @@ private struct StoreShiftDetailView: View {
     }
 
     private func debtsCard(_ report: ZReport) -> some View {
-        Card(accent: Theme.warning) {
+        OwnerSection("Взяли в долг") {
+            Text(Money.format(report.debtsTotal))
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(Theme.negative)
+        } content: {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader(
-                    "Взяли в долг",
-                    subtitle: "\(report.debts.count) \(pluralize(report.debts.count, "запись", "записи", "записей")) · в выручку не входит"
-                )
+                Text("\(report.debts.count) \(pluralize(report.debts.count, "запись", "записи", "записей")) · в выручку не входит")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textDim)
 
                 ForEach(Array(report.debts.enumerated()), id: \.offset) { index, debt in
                     if index > 0 { RowDivider() }
@@ -2193,9 +2194,8 @@ private struct StoreShiftDetailView: View {
     private func requisitesCard(_ report: ZReport) -> some View {
         let requisites = report.requisites
 
-        Card(accent: requisites.isFilled ? nil : Theme.warning) {
+        OwnerSection("Реквизиты в отчёте") {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Реквизиты в отчёте")
 
                 if requisites.isFilled {
                     StatRow("Налогоплательщик", value: requisites.name, icon: "building.2")

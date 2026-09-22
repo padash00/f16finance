@@ -95,53 +95,57 @@ struct ShowcaseScreen: View {
             )
         } else {
             ScrollView {
-                LazyVStack(spacing: 0) {
+                VStack(spacing: Spacing.lg) {
                     summary(page.balances)
 
-                    ForEach(rows) { row in
-                        if canMove {
-                            // Строка ведёт к движению товара: другого действия
-                            // у неё нет, прятать его за меню незачем.
-                            Button {
-                                moving = row
-                            } label: {
+                    // Строки на белой подложке, как операции в выписке: на
+                    // сером фоне они читались как текст, а не как список.
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                            if index > 0 { PlainRowDivider(inset: 56) }
+                            if canMove {
+                                // Строка ведёт к движению товара: другого действия
+                                // у неё нет, прятать его за меню незачем.
+                                Button {
+                                    moving = row
+                                } label: {
+                                    ShowcaseRowView(row: row)
+                                        .padding(.vertical, Spacing.sm)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.pressable)
+                            } else {
                                 ShowcaseRowView(row: row)
-                                    .padding(.horizontal, Spacing.lg)
                                     .padding(.vertical, Spacing.sm)
-                                    .contentShape(Rectangle())
                             }
-                            .buttonStyle(.pressable)
-                        } else {
-                            ShowcaseRowView(row: row)
-                                .padding(.horizontal, Spacing.lg)
-                                .padding(.vertical, Spacing.sm)
                         }
-                        RowDivider().padding(.horizontal, Spacing.lg)
                     }
+                    .padding(.horizontal, Spacing.md)
+                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                 }
-                .padding(.vertical, Spacing.sm)
+                .padding(.horizontal, Spacing.lg)
+                .padding(.top, Spacing.md)
+                .padding(.bottom, Spacing.xxl)
             }
         }
     }
 
+    /// Главная цифра — сколько выставлено; под ней то, что пора пополнить.
+    /// Оранжевый — цвет склада во всём приложении.
     private func summary(_ rows: [ShowcaseRow]) -> some View {
         let refill = rows.filter(\.needsRefill).count
-        return Card {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                StatRow("Позиций на витрине", value: "\(rows.count)", icon: "cabinet")
-                if refill > 0 {
-                    RowDivider()
-                    StatRow(
-                        "Кончились, но есть на складе",
-                        value: "\(refill)",
-                        valueColor: Theme.warning,
-                        icon: "arrow.down.to.line"
-                    )
-                }
-            }
-        }
-        .padding(.horizontal, Spacing.lg)
-        .padding(.bottom, Spacing.sm)
+        let empty = rows.filter { $0.showcaseQuantity <= 0 }.count
+        return HeroSummary(
+            title: "Позиций на витрине",
+            value: "\(rows.count)",
+            caption: refill > 0 ? "\(refill) кончились, но есть на складе" : "пополнять нечего",
+            footer: [
+                ("Пополнить", "\(refill)"),
+                ("Пустых", "\(empty)"),
+                ("Выставлено", "\(rows.count - empty)"),
+            ],
+            colors: [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
+        )
     }
 
     private func filtered(_ rows: [ShowcaseRow]) -> [ShowcaseRow] {
@@ -156,22 +160,28 @@ private struct ShowcaseRowView: View {
     let row: ShowcaseRow
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Spacing.md) {
-            VStack(alignment: .leading, spacing: Spacing.xs) {
+        // Как строка склада: буква товара в кружке, оранжевая — когда полка
+        // пуста, а на складе есть, то есть пора нести.
+        HStack(spacing: Spacing.md) {
+            LetterBadge(text: row.name, tint: row.needsRefill ? Theme.warning : Theme.brand)
+
+            VStack(alignment: .leading, spacing: 2) {
                 Text(row.name)
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Theme.text)
                     .lineLimit(2)
 
-                Text("на складе \(Quantity.withUnit(row.warehouseQuantity, unit: row.unit))")
-                    .font(Typography.caption)
+                Text(row.needsRefill
+                     ? "пополнить · на складе \(Quantity.withUnit(row.warehouseQuantity, unit: row.unit))"
+                     : "на складе \(Quantity.withUnit(row.warehouseQuantity, unit: row.unit))")
+                    .font(.system(size: 13, weight: row.needsRefill ? .medium : .regular))
                     .foregroundStyle(row.needsRefill ? Theme.warning : Theme.textDim)
             }
 
             Spacer(minLength: Spacing.sm)
 
             Text(Quantity.withUnit(row.showcaseQuantity, unit: row.unit))
-                .font(Typography.callout.weight(.semibold))
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(row.showcaseQuantity > 0 ? Theme.text : Theme.textDim)
         }
@@ -247,36 +257,41 @@ struct CatalogScreen: View {
             )
         } else {
             ScrollView {
-                LazyVStack(spacing: 0) {
+                VStack(spacing: Spacing.lg) {
                     summary(items)
 
-                    ForEach(rows) { item in
-                        CatalogRowView(item: item)
-                            .padding(.horizontal, Spacing.lg)
-                            .padding(.vertical, Spacing.sm)
-                        RowDivider().padding(.horizontal, Spacing.lg)
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(rows.enumerated()), id: \.element.id) { index, item in
+                            if index > 0 { PlainRowDivider(inset: 56) }
+                            CatalogRowView(item: item)
+                                .padding(.vertical, Spacing.sm)
+                        }
                     }
+                    .padding(.horizontal, Spacing.md)
+                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                 }
-                .padding(.vertical, Spacing.sm)
+                .padding(.horizontal, Spacing.lg)
+                .padding(.top, Spacing.md)
+                .padding(.bottom, Spacing.xxl)
             }
         }
     }
 
     private func summary(_ items: [CatalogItem]) -> some View {
         let missing = items.filter(\.isOutOfStock).count
-        return Card {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                StatRow("Позиций в каталоге", value: "\(items.count)", icon: "books.vertical")
-                if missing > 0 {
-                    RowDivider()
-                    // Не ошибка: позиция может быть заведена заранее. Но если
-                    // их сотни — каталог давно не чистили.
-                    StatRow("Нет в наличии", value: "\(missing)", icon: "tray")
-                }
-            }
-        }
-        .padding(.horizontal, Spacing.lg)
-        .padding(.bottom, Spacing.sm)
+        let priced = items.filter { ($0.salePrice ?? 0) > 0 }.count
+        // «Нет в наличии» — не ошибка: позиция может быть заведена заранее.
+        // Но если их сотни — каталог давно не чистили, поэтому цифра на виду.
+        return HeroSummary(
+            title: "Позиций в каталоге",
+            value: "\(items.count)",
+            footer: [
+                ("В наличии", "\(items.count - missing)"),
+                ("Нет в наличии", "\(missing)"),
+                ("С ценой", "\(priced)"),
+            ],
+            colors: [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+        )
     }
 
     private func filtered(_ items: [CatalogItem]) -> [CatalogItem] {
@@ -294,16 +309,20 @@ private struct CatalogRowView: View {
     let item: CatalogItem
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Spacing.md) {
-            VStack(alignment: .leading, spacing: Spacing.xs) {
+        // Позиция каталога — буква в кружке, цена крупно справа, как сумма
+        // в выписке. Серый кружок — товара сейчас нет нигде.
+        HStack(spacing: Spacing.md) {
+            LetterBadge(text: item.name, tint: item.isOutOfStock ? Theme.textDim : Color(hex: 0x4F46E5))
+
+            VStack(alignment: .leading, spacing: 2) {
                 Text(item.name)
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Theme.text)
                     .lineLimit(2)
 
                 if let subtitle {
                     Text(subtitle)
-                        .font(Typography.caption)
+                        .font(.system(size: 13))
                         .foregroundStyle(Theme.textDim)
                         .lineLimit(1)
                 }
@@ -311,15 +330,15 @@ private struct CatalogRowView: View {
 
             Spacer(minLength: Spacing.sm)
 
-            VStack(alignment: .trailing, spacing: Spacing.xs) {
+            VStack(alignment: .trailing, spacing: 2) {
                 if let price = item.salePrice, price > 0 {
                     Text(Money.format(price))
-                        .font(Typography.callout.weight(.semibold))
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(Theme.text)
                 }
                 Text(Quantity.withUnit(item.catalogQuantity, unit: item.unit))
-                    .font(Typography.caption)
+                    .font(.system(size: 12))
                     .monospacedDigit()
                     .foregroundStyle(item.isOutOfStock ? Theme.textDim : Theme.textMuted)
             }

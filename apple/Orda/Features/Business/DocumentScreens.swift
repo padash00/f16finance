@@ -126,6 +126,10 @@ struct ReceiptsScreen: View {
                         + (expiring > 0 ? [("Истекает срок", "\(expiring)")] : []),
                     colors: [Color(hex: 0x0EA5E9), Color(hex: 0x2563EB)]
                 )
+                // Карточка стоит над списком: без отступа градиент упирался в
+                // края экрана и срезал скругления.
+                .padding(.horizontal, Spacing.lg)
+                .padding(.vertical, Spacing.md)
             }
         }
     }
@@ -143,23 +147,25 @@ private struct ReceiptRow: View {
     let receipt: Receipt
 
     var body: some View {
+        // Строка как операция в выписке: иконка прихода в кружке, сумма
+        // крупно справа. Отменённая — серая, чтобы не путать с живой.
         HStack(spacing: Spacing.md) {
-            Image(systemName: receipt.isCancelled ? "xmark.circle" : "arrow.down.circle.fill")
-                .font(.system(size: 15))
-                .foregroundStyle(receipt.isCancelled ? Theme.textDim : Theme.positive)
-                .frame(width: 24)
+            TintedIcon(
+                systemName: receipt.isCancelled ? "xmark" : "arrow.down",
+                tint: receipt.isCancelled ? Theme.textDim : Theme.positive
+            )
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 // У оприходования поставщика нет по определению — писать
                 // «Без поставщика» на каждой строке значит кричать об
                 // отсутствии того, чего там и не должно быть.
                 Text(receipt.supplierName ?? (receipt.isPosting ? "Оприходование" : "Без поставщика"))
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(receipt.isCancelled ? Theme.textDim : Theme.text)
                     .strikethrough(receipt.isCancelled, color: Theme.textDim)
                     .lineLimit(1)
                 Text(subtitle)
-                    .font(Typography.caption)
+                    .font(.system(size: 13))
                     .foregroundStyle(Theme.textDim)
                     .lineLimit(1)
             }
@@ -168,11 +174,16 @@ private struct ReceiptRow: View {
 
             VStack(alignment: .trailing, spacing: 2) {
                 Text(Money.format(receipt.totalAmount))
-                    .font(Typography.callout.weight(.medium))
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(receipt.isCancelled ? Theme.textDim : Theme.text)
+                    .strikethrough(receipt.isCancelled, color: Theme.textDim)
+                // Цветной подписью, а не плашкой: плашка съедала ширину и
+                // сумма обрезалась.
                 if !receipt.expiring.isEmpty {
-                    StatusChip("\(receipt.expiring.count) истекает", kind: .warning)
+                    Text("\(receipt.expiring.count) истекает")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.warning)
                 }
             }
         }
@@ -253,15 +264,19 @@ private struct ReceiptDetail: View {
                     }
                 }
 
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        SectionHeader("Состав", subtitle: "\(receipt.items.count) позиций")
-                        if receipt.items.isEmpty {
-                            InlineEmpty(icon: "tray", text: "Позиции не указаны", tint: Theme.textDim)
-                        } else {
+                OwnerSection("Состав") {
+                    Text("\(receipt.items.count) поз.")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Theme.textDim)
+                } content: {
+                    if receipt.items.isEmpty {
+                        InlineEmpty(icon: "tray", text: "Позиции не указаны", tint: Theme.textDim)
+                    } else {
+                        VStack(spacing: 0) {
                             ForEach(Array(receipt.items.enumerated()), id: \.element.id) { index, line in
-                                if index > 0 { RowDivider() }
+                                if index > 0 { PlainRowDivider() }
                                 DocumentLineRow(line: line)
+                                    .padding(.vertical, Spacing.sm)
                             }
                         }
                     }
@@ -353,19 +368,22 @@ struct WriteoffsScreen: View {
         }
         let top = byReason.max { $0.value < $1.value }
 
+        let total = active.reduce(0) { $0 + $1.totalAmount }
+        var footer: [(String, String)] = []
+        if let top { footer.append((top.key, Money.format(top.value))) }
+        footer.append(("Документов", "\(active.count)"))
+
+        // Одна главная цифра — сколько ушло, — крупнейшая причина под ней:
+        // три одинаковые плашки не говорили, какая из цифр важна.
         return Group {
             if !active.isEmpty {
-                HStack(spacing: Spacing.md) {
-                    SummaryPill(
-                        title: "Списано всего",
-                        value: Money.format(active.reduce(0) { $0 + $1.totalAmount }),
-                        tint: Theme.negative
-                    )
-                    if let top {
-                        SummaryPill(title: top.key, value: Money.format(top.value), tint: Theme.warning)
-                    }
-                    SummaryPill(title: "Документов", value: "\(active.count)", tint: Theme.textMuted)
-                }
+                HeroSummary(
+                    title: "Списано всего",
+                    value: Money.format(total),
+                    caption: top.map { "больше всего — \($0.key.lowercased())" },
+                    footer: footer,
+                    colors: [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
+                )
                 .padding(.horizontal, Spacing.lg)
                 .padding(.vertical, Spacing.md)
             }
@@ -382,29 +400,27 @@ private struct WriteoffRow: View {
 
     var body: some View {
         HStack(spacing: Spacing.md) {
-            Image(systemName: "trash.circle.fill")
-                .font(.system(size: 15))
-                .foregroundStyle(writeoff.isCancelled ? Theme.textDim : Theme.negative)
-                .frame(width: 24)
+            TintedIcon(systemName: "trash", tint: writeoff.isCancelled ? Theme.textDim : Theme.negative)
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(writeoff.reasonLabel)
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(writeoff.isCancelled ? Theme.textDim : Theme.text)
                     .strikethrough(writeoff.isCancelled, color: Theme.textDim)
                     .lineLimit(1)
                 Text(subtitle)
-                    .font(Typography.caption)
+                    .font(.system(size: 13))
                     .foregroundStyle(Theme.textDim)
                     .lineLimit(1)
             }
 
             Spacer(minLength: Spacing.sm)
 
-            Text(Money.format(writeoff.totalAmount))
-                .font(Typography.callout.weight(.medium))
+            Text("−" + Money.format(writeoff.totalAmount))
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(writeoff.isCancelled ? Theme.textDim : Theme.negative)
+                .strikethrough(writeoff.isCancelled, color: Theme.textDim)
         }
     }
 
@@ -476,15 +492,19 @@ private struct WriteoffDetail: View {
                     }
                 }
 
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        SectionHeader("Состав", subtitle: "\(writeoff.items.count) позиций")
-                        if writeoff.items.isEmpty {
-                            InlineEmpty(icon: "tray", text: "Позиции не указаны", tint: Theme.textDim)
-                        } else {
+                OwnerSection("Состав") {
+                    Text("\(writeoff.items.count) поз.")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Theme.textDim)
+                } content: {
+                    if writeoff.items.isEmpty {
+                        InlineEmpty(icon: "tray", text: "Позиции не указаны", tint: Theme.textDim)
+                    } else {
+                        VStack(spacing: 0) {
                             ForEach(Array(writeoff.items.enumerated()), id: \.element.id) { index, line in
-                                if index > 0 { RowDivider() }
+                                if index > 0 { PlainRowDivider() }
                                 DocumentLineRow(line: line)
+                                    .padding(.vertical, Spacing.sm)
                             }
                         }
                     }
@@ -515,19 +535,24 @@ struct DocumentLineRow: View {
     let line: DocumentLine
 
     var body: some View {
+        // Буква товара в кружке — как в строках склада: позиции документа
+        // читаются так же, как остатки, к которым они относятся.
         HStack(spacing: Spacing.md) {
-            VStack(alignment: .leading, spacing: 1) {
+            LetterBadge(text: line.name, tint: line.expiresSoon ? Theme.warning : Theme.brand, size: 36)
+            VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: Spacing.xs) {
                     Text(line.name)
-                        .font(Typography.callout)
+                        .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(Theme.text)
                         .lineLimit(1)
                     if line.isBonus {
-                        StatusChip("бонус", kind: .info)
+                        Text("бонус")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Theme.info)
                     }
                 }
                 Text(detail)
-                    .font(Typography.caption)
+                    .font(.system(size: 13))
                     .monospacedDigit()
                     .foregroundStyle(line.expiresSoon ? Theme.warning : Theme.textDim)
                     .lineLimit(1)
@@ -536,7 +561,7 @@ struct DocumentLineRow: View {
             Spacer(minLength: Spacing.sm)
 
             Text(Money.format(line.totalCost))
-                .font(Typography.callout.weight(.medium))
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(Theme.text)
         }
@@ -599,21 +624,23 @@ struct ShiftReportsScreen: View {
         let closed = store.shiftReports.filter { !$0.isOpen }
         let discrepancies = closed.filter { abs($0.cashDifference ?? 0) > 1 }
 
+        // Выручка — главная цифра, открытые смены и расхождения — её
+        // расшифровка.
         return Group {
             if !store.shiftReports.isEmpty {
-                HStack(spacing: Spacing.md) {
-                    SummaryPill(title: "Открыто сейчас", value: "\(open.count)", tint: open.isEmpty ? Theme.textDim : Theme.info)
-                    SummaryPill(
-                        title: "Выручка",
-                        value: Money.format(store.shiftReports.reduce(0) { $0 + $1.totals.sales }),
-                        tint: Theme.brand
-                    )
-                    SummaryPill(
-                        title: "С расхождением",
-                        value: "\(discrepancies.count)",
-                        tint: discrepancies.isEmpty ? Theme.positive : Theme.warning
-                    )
-                }
+                HeroSummary(
+                    title: "Выручка за смены",
+                    value: Money.format(store.shiftReports.reduce(0) { $0 + $1.totals.sales }),
+                    caption: discrepancies.isEmpty
+                        ? "касса везде сошлась"
+                        : "\(discrepancies.count) \(pluralize(discrepancies.count, "смена", "смены", "смен")) с расхождением",
+                    footer: [
+                        ("Смен", "\(store.shiftReports.count)"),
+                        ("Открыто сейчас", "\(open.count)"),
+                        ("С расхождением", "\(discrepancies.count)"),
+                    ],
+                    colors: [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+                )
                 .padding(.horizontal, Spacing.lg)
                 .padding(.vertical, Spacing.md)
             }
@@ -626,18 +653,18 @@ private struct ShiftReportRow: View {
 
     var body: some View {
         HStack(spacing: Spacing.md) {
-            Image(systemName: shift.isOpen ? "play.circle.fill" : "checkmark.circle.fill")
-                .font(.system(size: 15))
-                .foregroundStyle(shift.isOpen ? Theme.info : Theme.positive)
-                .frame(width: 24)
+            TintedIcon(
+                systemName: shift.isOpen ? "play.fill" : "checkmark",
+                tint: shift.isOpen ? Theme.info : Theme.positive
+            )
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(shift.companyName ?? "Точка")
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
                 Text(subtitle)
-                    .font(Typography.caption)
+                    .font(.system(size: 13))
                     .foregroundStyle(Theme.textDim)
                     .lineLimit(1)
             }
@@ -646,11 +673,15 @@ private struct ShiftReportRow: View {
 
             VStack(alignment: .trailing, spacing: 2) {
                 Text(Money.format(shift.totals.sales))
-                    .font(Typography.callout.weight(.medium))
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(Theme.text)
+                // Расхождение подписью под суммой: плашка теснила сумму.
                 if let difference = shift.cashDifference, abs(difference) > 1 {
-                    StatusChip(Money.signed(difference), kind: difference < 0 ? .danger : .warning)
+                    Text(Money.signed(difference))
+                        .font(.system(size: 12, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(difference < 0 ? Theme.negative : Theme.warning)
                 }
             }
         }
@@ -721,36 +752,20 @@ private struct ShiftReportDetail: View {
 
                 reopenCard
 
-                DashboardGrid {
-                    MetricTile(
-                        label: "Продажи",
-                        value: Money.format(shift.totals.sales),
-                        icon: "cart.fill",
-                        accent: Theme.brand
-                    )
-                    MetricTile(
-                        label: "Наличные",
-                        value: Money.format(shift.totals.cash),
-                        icon: "banknote.fill",
-                        accent: Theme.info
-                    )
-                    MetricTile(
-                        label: "Kaspi",
-                        value: Money.format(shift.totals.kaspi),
-                        icon: "creditcard.fill",
-                        accent: Theme.textMuted
-                    )
-                    MetricTile(
-                        label: "Чеков",
-                        value: "\(shift.totals.count)",
-                        icon: "number",
-                        accent: Theme.textMuted
-                    )
-                }
+                // Продажи — главная цифра смены, способы оплаты — её состав.
+                HeroSummary(
+                    title: "Продажи за смену",
+                    value: Money.format(shift.totals.sales),
+                    footer: [
+                        ("Наличные", Money.format(shift.totals.cash)),
+                        ("Kaspi", Money.format(shift.totals.kaspi)),
+                        ("Чеков", "\(shift.totals.count)"),
+                    ],
+                    colors: [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+                )
 
-                Card {
+                OwnerSection("Касса") {
                     VStack(spacing: Spacing.md) {
-                        SectionHeader("Касса")
                         StatRow("На начало смены", value: Money.format(shift.openingCash), icon: "arrow.right.circle")
                         StatRow("Продано наличными", value: Money.format(shift.totals.cash), icon: "plus.circle")
                         RowDivider()
@@ -885,41 +900,25 @@ struct BirthdaysScreen: View {
         } else {
             VStack(spacing: Spacing.lg) {
                 if !list.today.isEmpty {
-                    Card(accent: Theme.brand) {
-                        VStack(alignment: .leading, spacing: Spacing.md) {
-                            SectionHeader("Сегодня")
-                            ForEach(Array(list.today.enumerated()), id: \.element.id) { index, person in
-                                if index > 0 { RowDivider() }
-                                BirthdayRow(person: person)
-                            }
-                        }
+                    OwnerSection("Сегодня") {
+                        Image(systemName: "gift.fill").foregroundStyle(Theme.brand)
+                    } content: {
+                        birthdayList(list.today)
                     }
                 }
 
                 if !list.thisWeek.isEmpty {
-                    Card {
-                        VStack(alignment: .leading, spacing: Spacing.md) {
-                            SectionHeader("На этой неделе")
-                            ForEach(Array(list.thisWeek.enumerated()), id: \.element.id) { index, person in
-                                if index > 0 { RowDivider() }
-                                BirthdayRow(person: person)
-                            }
-                        }
+                    OwnerSection("На этой неделе") {
+                        birthdayList(list.thisWeek)
                     }
                 }
 
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        SectionHeader("Дальше")
-                        let rest = list.items.filter { !$0.isThisWeek }
-                        if rest.isEmpty {
-                            InlineEmpty(icon: "calendar", text: "Больше дат в ближайший месяц нет", tint: Theme.textDim)
-                        } else {
-                            ForEach(Array(rest.enumerated()), id: \.element.id) { index, person in
-                                if index > 0 { RowDivider() }
-                                BirthdayRow(person: person)
-                            }
-                        }
+                OwnerSection("Дальше") {
+                    let rest = list.items.filter { !$0.isThisWeek }
+                    if rest.isEmpty {
+                        InlineEmpty(icon: "calendar", text: "Больше дат в ближайший месяц нет", tint: Theme.textDim)
+                    } else {
+                        birthdayList(rest)
                     }
                 }
 
@@ -937,7 +936,16 @@ struct BirthdaysScreen: View {
         }
     }
 
-
+    /// Люди строками с тонкими разделителями под текстом, а не под фото.
+    private func birthdayList(_ people: [Birthday]) -> some View {
+        VStack(spacing: 0) {
+            ForEach(Array(people.enumerated()), id: \.element.id) { index, person in
+                if index > 0 { PlainRowDivider(inset: 48) }
+                BirthdayRow(person: person)
+                    .padding(.vertical, Spacing.sm)
+            }
+        }
+    }
 }
 
 private struct BirthdayRow: View {
@@ -981,6 +989,51 @@ private struct BirthdayRow: View {
 }
 
 // ── Общее ────────────────────────────────────────────────────────────────────
+
+/// Тонкий разделитель с отступом под текст строки, а не под иконку — как в
+/// выписке банка: иконки стоят столбиком, линия отделяет только подписи.
+/// Общий для складских экранов этого модуля.
+struct PlainRowDivider: View {
+    var inset: CGFloat = 52
+
+    var body: some View {
+        Rectangle()
+            .fill(Theme.borderSoft)
+            .frame(height: 1)
+            .padding(.leading, inset)
+    }
+}
+
+/// Белая скруглённая подложка под список строк — как операции в банковском
+/// приложении. Строки на сером фоне читались как текст, а не как список.
+struct WhiteRowsCard<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(spacing: 0, content: content)
+            .padding(.horizontal, Spacing.md)
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+}
+
+/// Короткий статус цветным текстом — вместо широкой плашки там, где она
+/// теснит сумму в строке.
+struct StatusCaption: View {
+    let text: String
+    var tint: Color = Theme.textDim
+
+    init(_ text: String, tint: Color = Theme.textDim) {
+        self.text = text
+        self.tint = tint
+    }
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(tint)
+            .lineLimit(1)
+    }
+}
 
 /// Скелет списка на время загрузки.
 struct LoadingRows: View {

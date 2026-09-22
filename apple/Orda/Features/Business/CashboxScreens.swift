@@ -138,29 +138,28 @@ struct ReceiptsListScreen: View {
     // ── Фильтры ──────────────────────────────────────────────────────────────
 
     private func filters(_ store: PosReceiptsStore) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                HStack(spacing: Spacing.sm) {
-                    ForEach(PosPeriod.allCases) { period in
-                        FilterChip(title: period.title, isOn: store.period == period) {
-                            Task { await store.select(period: period) }
-                        }
-                    }
-                    Spacer(minLength: 0)
-                }
+        // Период — сегментом, как в банковской выписке; точки — лентой
+        // чипов под ним. Без карточки вокруг: это управление, а не раздел.
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            PillSegment(
+                options: PosPeriod.allCases.map { (value: $0, title: $0.title) },
+                selection: Binding(
+                    get: { store.period },
+                    set: { (period: PosPeriod) -> Void in Task { await store.select(period: period) } }
+                )
+            )
 
-                // Выбор точки показываем, только если их несколько: на одной
-                // точке этот ряд — просто шум.
-                if store.companies.count > 1 {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: Spacing.sm) {
-                            FilterChip(title: "Все точки", isOn: store.companyID == nil) {
-                                Task { await store.select(companyID: nil) }
-                            }
-                            ForEach(store.companies) { company in
-                                FilterChip(title: company.name, isOn: store.companyID == company.id) {
-                                    Task { await store.select(companyID: company.id) }
-                                }
+            // Выбор точки показываем, только если их несколько: на одной
+            // точке этот ряд — просто шум.
+            if store.companies.count > 1 {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: Spacing.sm) {
+                        FilterChip(title: "Все точки", isOn: store.companyID == nil) {
+                            Task { await store.select(companyID: nil) }
+                        }
+                        ForEach(store.companies) { company in
+                            FilterChip(title: company.name, isOn: store.companyID == company.id) {
+                                Task { await store.select(companyID: company.id) }
                             }
                         }
                     }
@@ -183,38 +182,19 @@ struct ReceiptsListScreen: View {
             )
         } else {
             VStack(spacing: Spacing.lg) {
-                DashboardGrid {
-                    MetricTile(
-                        label: "Выручка",
-                        value: Money.format(summary.revenue),
-                        icon: "creditcard.fill",
-                        accent: Theme.brand
-                    )
-                    MetricTile(
-                        label: "Чеков",
-                        value: "\(store.totalCount)",
-                        icon: "receipt",
-                        accent: Theme.textMuted
-                    )
-                    MetricTile(
-                        label: "Средний чек",
-                        value: Money.format(summary.averageCheck),
-                        icon: "arrow.up.arrow.down",
-                        accent: Theme.info
-                    )
-                    MetricTile(
-                        label: "Товаров в чеке",
-                        value: Quantity.format(((summary.itemsSold / Double(max(summary.count, 1))) * 10).rounded() / 10),
-                        icon: "basket.fill",
-                        accent: Theme.textMuted
-                    )
-                    MetricTile(
-                        label: "Скидки",
-                        value: Money.format(summary.discounts + summary.loyaltyDiscounts),
-                        icon: "tag.fill",
-                        accent: summary.discounts + summary.loyaltyDiscounts > 0 ? Theme.warning : Theme.textDim
-                    )
-                }
+                // Выручка — главная цифра, остальное — её расшифровка. Пять
+                // одинаковых плиток не говорили, на какую смотреть первой.
+                HeroSummary(
+                    title: "Выручка · \(store.period.title.lowercased())",
+                    value: Money.format(summary.revenue),
+                    caption: "в среднем \(Quantity.format(((summary.itemsSold / Double(max(summary.count, 1))) * 10).rounded() / 10)) товара в чеке",
+                    footer: [
+                        ("Чеков", "\(store.totalCount)"),
+                        ("Средний чек", Money.format(summary.averageCheck)),
+                        ("Скидки", Money.format(summary.discounts + summary.loyaltyDiscounts)),
+                    ],
+                    colors: [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+                )
 
                 // Сумма считается по загруженным чекам. Если в периоде их
                 // больше, об этом нужно сказать прямо, а не показывать
@@ -260,32 +240,46 @@ struct ReceiptsListScreen: View {
         )
     }
 
+    /// Способы оплаты кольцом и строками под ним — как «чем платили» в
+    /// банке: цвет доли в кольце тот же, что у иконки строки.
     private func paymentsCard(_ summary: PosSalesSummary) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader(
-                    "Чем платили",
-                    subtitle: summary.cashlessShare.map { "безнал \(Percent.format($0 * 100))" }
-                )
+        let methods: [(title: String, icon: String, amount: Double, color: Color)] = [
+            ("Наличные", "banknote", summary.cash, ChartPalette.series1),
+            ("Безналичный", "qrcode", summary.kaspi, ChartPalette.series2),
+            ("Карта", "creditcard", summary.card, ChartPalette.series3),
+            ("Онлайн", "globe", summary.online, Theme.accent),
+        ].filter { $0.amount > 0 }
+        let total = max(methods.reduce(0) { $0 + $1.amount }, 1)
 
-                SplitBar(segments: [
-                    .init(label: "Наличные", value: summary.cash, color: ChartPalette.series1),
-                    .init(label: "Безналичный", value: summary.kaspi, color: ChartPalette.series2),
-                    .init(label: "Карта", value: summary.card, color: ChartPalette.series3),
-                    .init(label: "Онлайн", value: summary.online, color: Theme.accent),
-                ])
-
-                if summary.cash > 0 {
-                    StatRow("Наличные", value: Money.format(summary.cash), icon: "banknote")
-                }
-                if summary.kaspi > 0 {
-                    StatRow("Безналичный", value: Money.format(summary.kaspi), icon: "qrcode")
-                }
-                if summary.card > 0 {
-                    StatRow("Карта", value: Money.format(summary.card), icon: "creditcard")
-                }
-                if summary.online > 0 {
-                    StatRow("Онлайн", value: Money.format(summary.online), icon: "globe")
+        return OwnerSection("Чем платили") {
+            if let share = summary.cashlessShare {
+                Text("безнал \(Percent.format(share * 100))")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textDim)
+            }
+        } content: {
+            if methods.isEmpty {
+                InlineEmpty(icon: "creditcard", text: "Оплат нет", tint: Theme.textDim)
+            } else {
+                VStack(spacing: Spacing.lg) {
+                    DonutChart(
+                        slices: methods.map { ShareSlice(label: $0.title, value: $0.amount, color: $0.color) },
+                        centerTitle: "Всего",
+                        centerValue: Money.format(total),
+                        showsLegend: false
+                    )
+                    VStack(spacing: Spacing.md) {
+                        ForEach(methods, id: \.title) { method in
+                            AmountRow(
+                                leading: { TintedIcon(systemName: method.icon, tint: method.color) },
+                                title: method.title,
+                                subtitle: Percent.format(method.amount / total * 100),
+                                amount: Money.format(method.amount),
+                                share: method.amount / total,
+                                tint: method.color
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -294,21 +288,26 @@ struct ReceiptsListScreen: View {
     private func sourcesCard(_ store: PosReceiptsStore) -> some View {
         let sources = PosSalesSummary.sources(store.receipts)
 
-        return Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Кто пробил", subtitle: "по каналу продажи")
+        let total = max(sources.reduce(0) { $0 + $1.amount }, 1)
 
-                if sources.isEmpty {
-                    InlineEmpty(icon: "person.crop.circle", text: "Данных о канале нет", tint: Theme.textDim)
-                } else {
+        return OwnerSection("Кто пробил") {
+            Text("по каналу продажи")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.textDim)
+        } content: {
+            if sources.isEmpty {
+                InlineEmpty(icon: "person.crop.circle", text: "Данных о канале нет", tint: Theme.textDim)
+            } else {
+                VStack(spacing: Spacing.md) {
                     ForEach(Array(sources.enumerated()), id: \.element.id) { index, share in
-                        if index > 0 { RowDivider() }
-                        VStack(alignment: .leading, spacing: Spacing.xs) {
-                            StatRow(share.label, value: Money.format(share.amount))
-                            Text("\(share.count) \(pluralize(share.count, "чек", "чека", "чеков"))")
-                                .font(Typography.caption)
-                                .foregroundStyle(Theme.textDim)
-                        }
+                        AmountRow(
+                            leading: { LetterBadge(text: share.label, tint: OwnerTint.point(index)) },
+                            title: share.label,
+                            subtitle: "\(share.count) \(pluralize(share.count, "чек", "чека", "чеков"))",
+                            amount: Money.format(share.amount),
+                            share: share.amount / total,
+                            tint: OwnerTint.point(index)
+                        )
                     }
                 }
             }
@@ -319,9 +318,12 @@ struct ReceiptsListScreen: View {
         let visible = filtered(store)
         let shown = Array(visible.prefix(30))
 
-        return Card {
+        return OwnerSection("Чеки") {
+            Text("\(visible.count)")
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundStyle(Theme.textDim)
+        } content: {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Чеки", subtitle: "\(visible.count) \(pluralize(visible.count, "чек", "чека", "чеков"))")
 
                 TextField("Номер чека или сумма", text: $search)
                     .textFieldStyle(.plain)
@@ -336,12 +338,15 @@ struct ReceiptsListScreen: View {
                 if shown.isEmpty {
                     InlineEmpty(icon: "magnifyingglass", text: "По запросу ничего не найдено", tint: Theme.textDim)
                 } else {
-                    ForEach(Array(shown.enumerated()), id: \.element.id) { index, receipt in
-                        if index > 0 { RowDivider() }
-                        NavigationLink(value: PosReceiptRoute(receipt: receipt)) {
-                            PosReceiptRow(receipt: receipt)
+                    VStack(spacing: 0) {
+                        ForEach(Array(shown.enumerated()), id: \.element.id) { index, receipt in
+                            if index > 0 { PlainRowDivider(inset: 52) }
+                            NavigationLink(value: PosReceiptRoute(receipt: receipt)) {
+                                PosReceiptRow(receipt: receipt)
+                                    .padding(.vertical, Spacing.sm)
+                            }
+                            .buttonStyle(.pressable)
                         }
-                        .buttonStyle(.pressable)
                     }
 
                     if visible.count > shown.count {
@@ -371,19 +376,18 @@ private struct PosReceiptRow: View {
     let receipt: PosReceipt
 
     var body: some View {
+        // Чек как операция в выписке: способ оплаты иконкой в кружке, сумма
+        // крупно справа, скидка — тихой подписью под ней.
         HStack(spacing: Spacing.md) {
-            Image(systemName: receipt.paymentKind.icon)
-                .font(.system(size: 14))
-                .foregroundStyle(Theme.textMuted)
-                .frame(width: 22)
+            TintedIcon(systemName: receipt.paymentKind.icon, tint: Color(hex: 0x059669))
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text("№\(receipt.shortNumber)")
-                    .font(Typography.callout.weight(.medium))
+                    .font(.system(size: 16, weight: .medium))
                     .monospacedDigit()
                     .foregroundStyle(Theme.text)
                 Text(subtitle)
-                    .font(Typography.caption)
+                    .font(.system(size: 13))
                     .foregroundStyle(Theme.textDim)
                     .lineLimit(1)
             }
@@ -392,11 +396,11 @@ private struct PosReceiptRow: View {
 
             VStack(alignment: .trailing, spacing: 2) {
                 Text(Money.format(receipt.totalAmount))
-                    .font(Typography.callout.weight(.medium))
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(Theme.text)
                 if receipt.discountAmount + receipt.loyaltyDiscountAmount > 0 {
-                    StatusChip("скидка", kind: .neutral)
+                    StatusCaption("скидка", tint: Theme.warning)
                 }
             }
         }
@@ -419,72 +423,54 @@ private struct PosReceiptDetailView: View {
 
     var body: some View {
         ScreenScroll {
-            Card {
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    HStack(alignment: .top) {
-                        VStack(alignment: .leading, spacing: Spacing.xs) {
-                            Text("№\(receipt.shortNumber)")
-                                .font(Typography.title)
-                                .monospacedDigit()
-                                .foregroundStyle(Theme.text)
-                            Text(receipt.sourceLabel)
-                                .font(Typography.callout)
-                                .foregroundStyle(Theme.textMuted)
-                        }
-                        Spacer()
-                        StatusChip(receipt.paymentKind.label, kind: .info)
-                    }
+            // Сумма чека — главная цифра, как сумма операции в банке; когда,
+            // чем и кто — подписями под ней.
+            HeroSummary(
+                title: "Чек №\(receipt.shortNumber) · \(receipt.sourceLabel)",
+                value: Money.format(receipt.totalAmount),
+                caption: receipt.occurredAt.map { "пробит \($0.formatted(.dateTime.day().month(.wide).hour().minute()))" },
+                footer: [("Оплата", receipt.paymentKind.label)]
+                    + (receipt.customerID != nil ? [("Покупатель", "по карте лояльности")] : []),
+                colors: [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+            )
 
-                    RowDivider()
-
-                    if let date = receipt.occurredAt {
-                        StatRow(
-                            "Пробит",
-                            value: date.formatted(.dateTime.day().month(.wide).hour().minute()),
-                            icon: "clock"
-                        )
-                    }
-                    if receipt.customerID != nil {
-                        StatRow("Покупатель", value: "по карте лояльности", icon: "person.crop.circle")
-                    }
-                    StatRow("Итого", value: Money.format(receipt.totalAmount), emphasized: true)
-                }
-            }
-
-            Card {
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    SectionHeader("Состав", subtitle: "\(receipt.items.count) \(pluralize(receipt.items.count, "позиция", "позиции", "позиций"))")
-
-                    if receipt.items.isEmpty {
-                        InlineEmpty(icon: "tray", text: "Позиции не сохранились", tint: Theme.textDim)
-                    } else {
+            OwnerSection("Состав") {
+                Text("\(receipt.items.count) поз.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Theme.textDim)
+            } content: {
+                if receipt.items.isEmpty {
+                    InlineEmpty(icon: "tray", text: "Позиции не сохранились", tint: Theme.textDim)
+                } else {
+                    VStack(spacing: 0) {
                         ForEach(Array(receipt.items.enumerated()), id: \.element.id) { index, line in
-                            if index > 0 { RowDivider() }
+                            if index > 0 { PlainRowDivider(inset: 48) }
                             HStack(spacing: Spacing.md) {
-                                VStack(alignment: .leading, spacing: 1) {
+                                LetterBadge(text: line.name, tint: Theme.brand, size: 36)
+                                VStack(alignment: .leading, spacing: 2) {
                                     Text(line.name)
-                                        .font(Typography.callout)
+                                        .font(.system(size: 15, weight: .medium))
                                         .foregroundStyle(Theme.text)
                                         .lineLimit(2)
                                     Text("\(Quantity.format(line.quantity)) × \(Money.format(line.unitPrice))")
-                                        .font(Typography.caption)
+                                        .font(.system(size: 13))
                                         .monospacedDigit()
                                         .foregroundStyle(Theme.textDim)
                                 }
                                 Spacer(minLength: Spacing.sm)
                                 Text(Money.format(line.totalPrice))
-                                    .font(Typography.callout.weight(.medium))
+                                    .font(.system(size: 15, weight: .semibold, design: .rounded))
                                     .monospacedDigit()
                                     .foregroundStyle(Theme.text)
                             }
+                            .padding(.vertical, Spacing.sm)
                         }
                     }
                 }
             }
 
-            Card {
+            OwnerSection("Оплата") {
                 VStack(alignment: .leading, spacing: Spacing.md) {
-                    SectionHeader("Оплата")
                     if receipt.cashAmount > 0 {
                         StatRow("Наличные", value: Money.format(receipt.cashAmount), icon: "banknote")
                     }
@@ -508,9 +494,8 @@ private struct PosReceiptDetailView: View {
             }
 
             if receipt.hasLoyalty {
-                Card {
+                OwnerSection("Бонусы") {
                     VStack(alignment: .leading, spacing: Spacing.md) {
-                        SectionHeader("Бонусы")
                         if receipt.loyaltyPointsEarned > 0 {
                             StatRow("Начислено", value: Quantity.format(receipt.loyaltyPointsEarned), valueColor: Theme.positive)
                         }
@@ -522,9 +507,8 @@ private struct PosReceiptDetailView: View {
             }
 
             if let comment = receipt.comment, !comment.isEmpty {
-                Card {
+                OwnerSection("Комментарий") {
                     VStack(alignment: .leading, spacing: Spacing.sm) {
-                        SectionHeader("Комментарий")
                         Text(comment)
                             .font(Typography.callout)
                             .foregroundStyle(Theme.textMuted)
@@ -688,9 +672,11 @@ struct ReturnsScreen: View {
     // ── Поиск чека ───────────────────────────────────────────────────────────
 
     private func searchCard(_ store: PosReturnStore) -> some View {
-        Card {
+        OwnerSection("Какой чек возвращаем") {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Какой чек возвращаем", subtitle: "последние 6 символов номера — они напечатаны внизу чека")
+                Text("Последние 6 символов номера — они напечатаны внизу чека.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textDim)
 
                 HStack(spacing: Spacing.sm) {
                     TextField("Например, 1C54E4", text: $number)
@@ -725,40 +711,26 @@ struct ReturnsScreen: View {
 
     // ── Найденный чек ────────────────────────────────────────────────────────
 
+    /// Найденный чек — карточкой с суммой: человек сверяет её с бумажным
+    /// чеком в руках покупателя, поэтому цифра главная и крупная.
     private func saleCard(_ sale: PosSaleForReturn) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: Spacing.xs) {
-                        Text("№\(sale.shortNumber)")
-                            .font(Typography.title)
-                            .monospacedDigit()
-                            .foregroundStyle(Theme.text)
-                        if let date = sale.occurredAt {
-                            Text(date.formatted(.dateTime.day().month(.wide).hour().minute()))
-                                .font(Typography.callout)
-                                .foregroundStyle(Theme.textMuted)
-                        }
-                    }
-                    Spacer()
-                    StatusChip(sale.paymentKind.label, kind: .info)
-                }
-
-                RowDivider()
-                StatRow("Сумма чека", value: Money.format(sale.totalAmount), emphasized: true)
-
-                if sale.hasPreviousReturns {
-                    StatusChip("по чеку уже были возвраты", kind: .warning)
-                }
-            }
-        }
+        let date = sale.occurredAt.map { $0.formatted(.dateTime.day().month(.abbreviated).hour().minute()) }
+        var footer: [(String, String)] = [("Оплата", sale.paymentKind.label)]
+        if sale.hasPreviousReturns, let date { footer.append(("Пробит", date)) }
+        return HeroSummary(
+            title: "Чек №\(sale.shortNumber)",
+            value: Money.format(sale.totalAmount),
+            caption: sale.hasPreviousReturns ? "по чеку уже были возвраты" : date,
+            footer: footer,
+            colors: sale.hasPreviousReturns
+                ? [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
+                : [Color(hex: 0x0EA5E9), Color(hex: 0x2563EB)]
+        )
     }
 
     private func linesCard(_ store: PosReturnStore, _ sale: PosSaleForReturn) -> some View {
-        Card {
+        OwnerSection("Что возвращают") {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Что возвращают")
-
                 if sale.returnable.isEmpty {
                     InlineEmpty(
                         icon: "checkmark.circle.fill",
@@ -781,9 +753,11 @@ struct ReturnsScreen: View {
     }
 
     private func reasonCard(_ store: PosReturnStore, _ sale: PosSaleForReturn) -> some View {
-        Card(accent: Theme.warning) {
+        OwnerSection("Почему возвращают") {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Почему возвращают", subtitle: "причину увидят в журнале смены")
+                Text("Причину увидят в журнале смены.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textDim)
 
                 TextField("Например: не подошёл размер", text: $reason, axis: .vertical)
                     .textFieldStyle(.plain)
@@ -1010,7 +984,7 @@ struct ReceiptSettingsScreen: View {
     @ViewBuilder
     private func content(_ store: ReceiptSettingsStore, _ payload: ReceiptSettingsPayload) -> some View {
         if payload.companies.count > 1 {
-            Card {
+            VStack(alignment: .leading) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: Spacing.sm) {
                         ForEach(payload.companies) { company in
@@ -1037,12 +1011,17 @@ struct ReceiptSettingsScreen: View {
     }
 
     private func complianceCard(_ settings: ReceiptSettings) -> some View {
-        Card(accent: settings.isCompliant ? Theme.positive : Theme.negative) {
+        OwnerSection(settings.isCompliant ? "Чек заполнен полностью" : "Чек неполный") {
+            TintedIcon(
+                systemName: settings.isCompliant ? "checkmark" : "exclamationmark",
+                tint: settings.isCompliant ? Theme.positive : Theme.negative,
+                size: 30
+            )
+        } content: {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader(
-                    settings.isCompliant ? "Чек заполнен полностью" : "Чек неполный",
-                    subtitle: "обязательные реквизиты по приказу МФ РК №626"
-                )
+                Text("Обязательные реквизиты по приказу МФ РК №626.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textDim)
 
                 if !settings.isCompliant {
                     Text("Без этих полей чек считается невыданным — заполнить их можно в веб-кабинете.")
@@ -1077,9 +1056,8 @@ struct ReceiptSettingsScreen: View {
     }
 
     private func detailsCard(_ settings: ReceiptSettings) -> some View {
-        Card {
+        OwnerSection("Касса и налоги") {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Касса и налоги")
                 StatRow(
                     "НДС",
                     value: settings.isVatPayer ? "плательщик, \(Percent.format(settings.vatRate))" : "не плательщик",
@@ -1097,9 +1075,8 @@ struct ReceiptSettingsScreen: View {
     }
 
     private func printingCard(_ settings: ReceiptSettings) -> some View {
-        Card {
+        OwnerSection("Что печатается на чеке") {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Что печатается на чеке")
                 StatRow("Язык", value: settings.languageLabel, icon: "textformat")
                 StatRow(
                     "ИИН покупателя",
@@ -1278,26 +1255,21 @@ struct AdvertisingScreen: View {
                 message: "Экран покупателя ничего не показывает. Файлы загружают в веб-кабинете — оттуда они уходят в хранилище напрямую."
             )
         } else {
-            DashboardGrid {
-                MetricTile(
-                    label: "Крутится сейчас",
-                    value: "\(activeCount)",
-                    icon: "play.circle.fill",
-                    accent: Theme.brand
-                )
-                MetricTile(
-                    label: "Выключено",
-                    value: "\(pausedCount)",
-                    icon: "pause.circle",
-                    accent: Theme.textDim
-                )
-                MetricTile(
-                    label: "Экранов молчит",
-                    value: "\(silent.count)",
-                    icon: "rectangle.slash",
-                    accent: silent.isEmpty ? Theme.positive : Theme.warning
-                )
-            }
+            // Сколько крутится — главная цифра; молчащие экраны — в подписи:
+            // это потерянные показы, о них надо узнать первым делом.
+            HeroSummary(
+                title: "Крутится сейчас",
+                value: "\(activeCount)",
+                caption: silent.isEmpty
+                    ? "все экраны что-то показывают"
+                    : "\(silent.count) \(pluralize(silent.count, "экран молчит", "экрана молчат", "экранов молчат"))",
+                footer: [
+                    ("Выключено", "\(pausedCount)"),
+                    ("Экранов молчит", "\(silent.count)"),
+                    ("Плейлистов", "\(playlists.count)"),
+                ],
+                colors: [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+            )
 
             if let actionError = store.actionError {
                 Text(actionError)
@@ -1313,15 +1285,17 @@ struct AdvertisingScreen: View {
     }
 
     private func playlistCard(_ store: AdvertisingStore, _ playlist: AdPlaylist) -> some View {
-        Card(accent: playlist.isSilent ? Theme.warning : nil) {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader(playlist.companyName, subtitle: loopSubtitle(playlist))
-
+        OwnerSection(playlist.companyName) {
+            Text(loopSubtitle(playlist))
+                .font(.system(size: 13))
+                .foregroundStyle(playlist.isSilent ? Theme.warning : Theme.textDim)
+        } content: {
+            VStack(alignment: .leading, spacing: 0) {
                 if playlist.slides.isEmpty {
                     InlineEmpty(icon: "rectangle.slash", text: "Плейлист пуст", tint: Theme.warning)
                 } else {
                     ForEach(Array(playlist.slides.enumerated()), id: \.element.id) { index, slide in
-                        if index > 0 { RowDivider() }
+                        if index > 0 { PlainRowDivider(inset: 56) }
                         AdSlideRow(
                             slide: slide,
                             canEdit: canEdit,
@@ -1329,6 +1303,7 @@ struct AdvertisingScreen: View {
                             onToggle: { Task { await store.setActive(slide, isActive: !slide.isActive) } },
                             onDelete: { deleting = slide }
                         )
+                        .padding(.vertical, Spacing.sm)
                     }
                 }
             }
@@ -1355,28 +1330,26 @@ private struct AdSlideRow: View {
             // У видео превью нет — сервер хранит только ссылку на файл,
             // поэтому вместо картинки честная иконка.
             if slide.isVideo {
-                Image(systemName: "film.fill")
-                    .font(.system(size: 16))
-                    .foregroundStyle(Theme.textMuted)
-                    .frame(width: 44, height: 44)
-                    .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                TintedIcon(systemName: "film.fill", tint: Color(hex: 0x7C3AED), size: 44, corner: 12)
             } else {
                 Thumbnail(url: slide.url, side: 44, cornerRadius: Radius.sm, fallbackText: "IMG")
             }
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(slide.displayTitle)
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(slide.isActive ? Theme.text : Theme.textDim)
                     .lineLimit(1)
                 Text("\(slide.isVideo ? "Видео" : "Картинка") · \(slide.durationLabel)")
-                    .font(Typography.caption)
+                    .font(.system(size: 13))
                     .foregroundStyle(Theme.textDim)
             }
 
             Spacer(minLength: Spacing.sm)
 
-            StatusChip(slide.isActive ? "в эфире" : "выключен", kind: slide.isActive ? .good : .neutral)
+            // Статус подписью: плашка рядом с меню «…» не оставляла места
+            // названию ролика.
+            StatusCaption(slide.isActive ? "в эфире" : "выключен", tint: slide.isActive ? Theme.positive : Theme.textDim)
 
             if canEdit || canDelete {
                 Menu {
