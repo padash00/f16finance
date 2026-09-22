@@ -192,36 +192,28 @@ private struct OperatorDetail: View {
             VStack(spacing: Spacing.lg) {
                 header
 
+                // Цифры за 30 дней — одной карточкой: оборот главный, смены,
+                // средний чек смены и долги — его расшифровка. Четыре равные
+                // плитки заставляли искать, что тут важнее.
+                HeroSummary(
+                    title: "Оборот за 30 дней",
+                    value: Money.format(person.stats.totalTurnover),
+                    caption: person.stats.totalBonuses > 0
+                        ? "бонусы \(Money.format(person.stats.totalBonuses))"
+                        : nil,
+                    footer: [
+                        ("Смен", "\(person.stats.totalShifts)"),
+                        ("За смену", Money.format(person.stats.avgPerShift)),
+                        ("Долги", Money.format(person.stats.totalDebts)),
+                    ],
+                    colors: person.isActive
+                        ? [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+                        : [Color(hex: 0x64748B), Color(hex: 0x475569)]
+                )
+
                 staffLinkCard
 
                 if canToggle || canReset || canEditLogin || canPromote { accessCard }
-
-                DashboardGrid {
-                    MetricTile(
-                        label: "Оборот за 30 дней",
-                        value: Money.format(person.stats.totalTurnover),
-                        icon: "banknote.fill",
-                        accent: Theme.brand
-                    )
-                    MetricTile(
-                        label: "Смен",
-                        value: "\(person.stats.totalShifts)",
-                        icon: "calendar",
-                        accent: Theme.info
-                    )
-                    MetricTile(
-                        label: "В среднем за смену",
-                        value: Money.format(person.stats.avgPerShift),
-                        icon: "chart.bar.fill",
-                        accent: Theme.textMuted
-                    )
-                    MetricTile(
-                        label: "Долги",
-                        value: Money.format(person.stats.totalDebts),
-                        icon: "creditcard.fill",
-                        accent: person.stats.totalDebts > 0 ? Theme.warning : Theme.positive
-                    )
-                }
 
                 contacts
             }
@@ -308,14 +300,18 @@ private struct OperatorDetail: View {
     /// «когда дойду до сайта». Это не удаление: смены, выручка и ведомости
     /// остаются, иначе рассыпалась бы отчётность за прошлые недели.
     private var accessCard: some View {
-        Card(accent: person.isActive ? nil : Theme.warning) {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader(
-                    person.isActive ? "Доступ открыт" : "Доступ закрыт",
-                    subtitle: person.isActive
-                        ? "Может входить в программу точки и в приложение"
-                        : "Войти не может. Смены и выплаты сохранены"
-                )
+        OwnerSection(person.isActive ? "Доступ открыт" : "Доступ закрыт") {
+            Text(person.isActive ? "может входить" : "вход закрыт")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(person.isActive ? Theme.positive : Theme.warning)
+        } content: {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                Text(person.isActive
+                    ? "Может входить в программу точки и в приложение"
+                    : "Войти не может. Смены и выплаты сохранены")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textDim)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 if let toggleError {
                     Text(toggleError)
@@ -324,18 +320,22 @@ private struct OperatorDetail: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
+                // Действия строками с иконкой в кружке, как в профиле банка:
+                // пять кнопок одинаковой ширины друг под другом читались как
+                // форма, а не как меню человека.
                 if canDismiss {
                     // Решение принимают на месте, а оформляют «когда дойду до
                     // компьютера» — и всё это время у уволенного открыт вход.
                     Button {
                         dismissing = true
                     } label: {
-                        Label(
-                            person.isActive ? "Уволить" : "Восстановить",
-                            systemImage: person.isActive ? "person.badge.minus" : "person.badge.plus"
+                        OperatorActionRow(
+                            icon: person.isActive ? "person.badge.minus" : "person.badge.plus",
+                            title: person.isActive ? "Уволить" : "Восстановить",
+                            tint: person.isActive ? Theme.negative : Theme.positive
                         )
                     }
-                    .buttonStyle(person.isActive ? AnyButtonStyle(DestructiveButtonStyle()) : AnyButtonStyle(SecondaryButtonStyle()))
+                    .buttonStyle(.pressable)
                 }
 
                 if canReset {
@@ -344,44 +344,42 @@ private struct OperatorDetail: View {
                     Button {
                         resetting = true
                     } label: {
-                        Label("Сбросить пароль", systemImage: "key")
+                        OperatorActionRow(icon: "key", title: "Сбросить пароль", tint: Color(hex: 0xF59E0B))
                     }
-                    .buttonStyle(SecondaryButtonStyle())
+                    .buttonStyle(.pressable)
                 }
 
                 if canEditLogin {
                     Button {
                         loginOpen = true
                     } label: {
-                        Label("Изменить логин", systemImage: "person.text.rectangle")
+                        OperatorActionRow(icon: "person.text.rectangle", title: "Изменить логин", tint: Color(hex: 0x3B82F6))
                     }
-                    .buttonStyle(SecondaryButtonStyle())
+                    .buttonStyle(.pressable)
                 }
 
                 if canPromote {
                     Button {
                         promoteOpen = true
                     } label: {
-                        Label("Повысить в должности", systemImage: "arrow.up.circle")
+                        OperatorActionRow(icon: "arrow.up.circle", title: "Повысить в должности", tint: Color(hex: 0x8B5CF6))
                     }
-                    .buttonStyle(SecondaryButtonStyle())
+                    .buttonStyle(.pressable)
                 }
 
                 if canToggle {
-                Button {
-                    confirmingToggle = true
-                } label: {
-                    if isToggling {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Label(
-                            person.isActive ? "Закрыть доступ" : "Открыть доступ",
-                            systemImage: person.isActive ? "lock" : "lock.open"
+                    Button {
+                        confirmingToggle = true
+                    } label: {
+                        OperatorActionRow(
+                            icon: person.isActive ? "lock" : "lock.open",
+                            title: person.isActive ? "Закрыть доступ" : "Открыть доступ",
+                            tint: person.isActive ? Theme.negative : Theme.positive,
+                            isLoading: isToggling
                         )
                     }
-                }
-                .buttonStyle(person.isActive ? AnyButtonStyle(DestructiveButtonStyle()) : AnyButtonStyle(SecondaryButtonStyle()))
-                .disabled(isToggling)
+                    .buttonStyle(.pressable)
+                    .disabled(isToggling)
                 }
             }
         }
@@ -440,53 +438,104 @@ private struct OperatorDetail: View {
         }
     }
 
+    /// Шапка как профиль в банке: крупный аватар по центру, имя, должность
+    /// и статус мелким цветным текстом — плашки съедали строку.
     private var header: some View {
-        Card {
-            HStack(spacing: Spacing.lg) {
-                OperatorAvatar(person: person, size: 64)
-
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    Text(person.displayName)
-                        .font(Typography.title)
-                        .foregroundStyle(Theme.text)
-                    Text(person.position ?? "Оператор")
-                        .font(Typography.callout)
-                        .foregroundStyle(Theme.textMuted)
-                    HStack(spacing: Spacing.sm) {
-                        StatusChip(person.isActive ? "работает" : "не работает", kind: person.isActive ? .good : .neutral)
-                        if person.hasTelegram {
-                            StatusChip("telegram", kind: .info)
-                        }
-                    }
+        VStack(spacing: Spacing.sm) {
+            OperatorAvatar(person: person, size: 84)
+            Text(person.displayName)
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .foregroundStyle(Theme.text)
+                .multilineTextAlignment(.center)
+            Text(person.position ?? "Оператор")
+                .font(.system(size: 15))
+                .foregroundStyle(Theme.textMuted)
+            HStack(spacing: Spacing.md) {
+                Label(person.isActive ? "работает" : "не работает", systemImage: person.isActive ? "checkmark.circle.fill" : "circle.fill")
+                    .foregroundStyle(person.isActive ? Theme.positive : Theme.textDim)
+                if person.hasTelegram {
+                    Label("telegram", systemImage: "paperplane.fill")
+                        .foregroundStyle(Theme.info)
                 }
-
-                Spacer()
             }
+            .font(.system(size: 13, weight: .semibold))
         }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, Spacing.md)
     }
 
     private var contacts: some View {
-        Card {
-            VStack(spacing: Spacing.md) {
-                SectionHeader("Данные")
-
+        OwnerSection("Данные") {
+            VStack(spacing: Spacing.sm) {
                 if let phone = person.phone, !phone.isEmpty {
-                    StatRow("Телефон", value: phone, icon: "phone")
+                    OperatorInfoRow(icon: "phone", tint: Color(hex: 0x10B981), label: "Телефон", value: phone)
                 }
                 if let username = person.username, !username.isEmpty {
-                    StatRow("Логин", value: username, icon: "person.badge.key")
+                    OperatorInfoRow(icon: "person.badge.key", tint: Color(hex: 0x3B82F6), label: "Логин", value: username)
                 }
                 if let hire = person.hireDate {
-                    StatRow("Принят", value: hire.formatted(.dateTime.day().month(.wide).year()), icon: "calendar.badge.plus")
+                    OperatorInfoRow(icon: "calendar.badge.plus", tint: Color(hex: 0x8B5CF6), label: "Принят", value: hire.formatted(.dateTime.day().month(.wide).year()))
                 }
                 if let last = person.lastLogin {
-                    StatRow("Был в системе", value: last.formatted(.dateTime.day().month(.abbreviated).hour().minute()), icon: "clock")
+                    OperatorInfoRow(icon: "clock", tint: Color(hex: 0x14B8A6), label: "Был в системе", value: last.formatted(.dateTime.day().month(.abbreviated).hour().minute()))
                 }
                 if person.stats.totalBonuses > 0 {
-                    RowDivider()
-                    StatRow("Бонусы за 30 дней", value: Money.format(person.stats.totalBonuses), valueColor: Theme.positive, icon: "gift")
+                    OperatorInfoRow(icon: "gift", tint: Color(hex: 0xF59E0B), label: "Бонусы за 30 дней", value: Money.format(person.stats.totalBonuses), valueColor: Theme.positive)
                 }
             }
+        }
+    }
+}
+
+/// Действие в карточке человека: иконка в кружке, название, шеврон.
+/// Пока запрос идёт, вместо шеврона крутится индикатор — кнопка не прыгает.
+private struct OperatorActionRow: View {
+    let icon: String
+    let title: String
+    let tint: Color
+    var isLoading = false
+
+    var body: some View {
+        HStack(spacing: Spacing.md) {
+            TintedIcon(systemName: icon, tint: tint)
+            Text(title)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(tint == Theme.negative ? Theme.negative : Theme.text)
+            Spacer(minLength: Spacing.sm)
+            if isLoading {
+                ProgressView().controlSize(.small)
+            } else {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.textDim)
+            }
+        }
+        .padding(.vertical, Spacing.xs)
+        .contentShape(Rectangle())
+    }
+}
+
+/// Строка данных профиля: иконка в кружке, подпись серым, значение справа.
+private struct OperatorInfoRow: View {
+    let icon: String
+    let tint: Color
+    let label: String
+    let value: String
+    var valueColor: Color = Theme.text
+
+    var body: some View {
+        HStack(spacing: Spacing.md) {
+            TintedIcon(systemName: icon, tint: tint, size: 36)
+            Text(label)
+                .font(.system(size: 15))
+                .foregroundStyle(Theme.textMuted)
+            Spacer(minLength: Spacing.sm)
+            Text(value)
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(valueColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
     }
 }
@@ -1015,10 +1064,10 @@ private struct PromoteOperatorSheet: View {
                     VStack(alignment: .leading, spacing: Spacing.md) {
                         SectionHeader(person.displayName, subtitle: "Новая должность")
 
-                        Picker("Должность", selection: $role) {
-                            ForEach(roles, id: \.0) { Text($0.1).tag($0.0) }
-                        }
-                        .pickerStyle(.segmented)
+                        PillSegment(
+                            options: roles.map { (value: $0.0, title: $0.1) },
+                            selection: $role
+                        )
 
                         FieldLabel("Оклад в месяц")
                         TextField("не менять", text: $salary)

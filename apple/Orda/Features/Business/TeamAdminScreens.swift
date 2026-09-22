@@ -2,6 +2,90 @@ import OrdaKit
 import OrdaUI
 import SwiftUI
 
+// ── Общее для кадровых экранов ──────────────────────────────────────────────
+
+/// Шапка карточки человека как профиль в банке: крупный кружок по центру,
+/// имя, должность и строка статусов мелким цветным текстом. Плашки в ряд
+/// съедали ширину и переносились на вторую строку.
+private struct AdminProfileHeader: View {
+    let name: String
+    let photoURL: String?
+    let subtitle: String?
+    var isActive = true
+    /// Статусы: текст, иконка, цвет.
+    var badges: [(String, String, Color)] = []
+
+    var body: some View {
+        VStack(spacing: Spacing.sm) {
+            if let photoURL, !photoURL.isEmpty {
+                Thumbnail(url: photoURL, side: 84, cornerRadius: 42, fallbackText: String(name.prefix(1)))
+                    .overlay(Circle().stroke(Theme.border, lineWidth: 0.5))
+                    .opacity(isActive ? 1 : 0.55)
+            } else {
+                PersonInitial(name: name, isActive: isActive, size: 84)
+            }
+            Text(name)
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .foregroundStyle(Theme.text)
+                .multilineTextAlignment(.center)
+            if let subtitle, !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(.system(size: 15))
+                    .foregroundStyle(Theme.textMuted)
+            }
+            if !badges.isEmpty {
+                HStack(spacing: Spacing.md) {
+                    ForEach(badges, id: \.0) { text, icon, color in
+                        Label(text, systemImage: icon)
+                            .foregroundStyle(color)
+                    }
+                }
+                .font(.system(size: 13, weight: .semibold))
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, Spacing.md)
+    }
+}
+
+/// Строка данных профиля: иконка в кружке, подпись серым, значение справа.
+private struct AdminInfoRow: View {
+    let icon: String
+    let tint: Color
+    let label: String
+    let value: String
+    var valueColor: Color = Theme.text
+
+    var body: some View {
+        HStack(spacing: Spacing.md) {
+            TintedIcon(systemName: icon, tint: tint, size: 36)
+            Text(label)
+                .font(.system(size: 15))
+                .foregroundStyle(Theme.textMuted)
+            Spacer(minLength: Spacing.sm)
+            Text(value)
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(valueColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+    }
+}
+
+/// Мелкая серая подпись справа от заголовка секции.
+private struct SectionNote: View {
+    let text: String
+    var color: Color = Theme.textDim
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(color)
+            .lineLimit(1)
+    }
+}
+
 // ── Правила зарплаты ─────────────────────────────────────────────────────────
 
 @MainActor @Observable
@@ -77,26 +161,18 @@ struct SalaryRulesScreen: View {
             )
         } else {
             ScreenScroll {
-                DashboardGrid {
-                    MetricTile(
-                        label: "Правил действует",
-                        value: "\(book.activeRules.count)",
-                        icon: "function",
-                        accent: Theme.brand
-                    )
-                    MetricTile(
-                        label: "Потолок смены",
-                        value: Money.format(book.activeRules.map(\.ceilingPerShift).max() ?? 0),
-                        icon: "arrow.up.right",
-                        accent: Theme.info
-                    )
-                    MetricTile(
-                        label: "Надбавка за стаж",
-                        value: book.maxSeniorityPercent > 0 ? "до \(Percent.format(book.maxSeniorityPercent))" : "нет",
-                        icon: "calendar.badge.clock",
-                        accent: book.maxSeniorityPercent > 0 ? Theme.accent : Theme.textDim
-                    )
-                }
+                // Потолок смены — главная цифра: это максимум, который точка
+                // может отдать человеку за смену. Число правил и стаж — подписи.
+                HeroSummary(
+                    title: "Потолок смены",
+                    value: Money.format(book.activeRules.map(\.ceilingPerShift).max() ?? 0),
+                    caption: "самая высокая ставка среди действующих правил",
+                    footer: [
+                        ("Правил действует", "\(book.activeRules.count)"),
+                        ("Надбавка за стаж", book.maxSeniorityPercent > 0 ? "до \(Percent.format(book.maxSeniorityPercent))" : "нет"),
+                    ],
+                    colors: [Color(hex: 0x0F766E), Color(hex: 0x0E7490)]
+                )
 
                 if !book.activeTiers.isEmpty {
                     SeniorityCard(tiers: book.activeTiers)
@@ -131,37 +207,34 @@ private struct SalaryRuleCard: View {
     let book: SalaryRuleBook
 
     var body: some View {
-        // Без акцента: серая рамка «отключённого» правила получалась заметнее
-        // обычной, и выключённая ставка выделялась сильнее действующих.
-        // Состояние несёт плашка в заголовке.
-        Card {
+        // Состояние — подписью у заголовка, без рамки: серая рамка
+        // «отключённого» правила выделяла его сильнее действующих.
+        OwnerSection(book.companyName(forCode: rule.companyCode)) {
+            if !rule.isActive {
+                SectionNote(text: "отключено")
+            } else {
+                Label(rule.isNight ? "ночь" : "день", systemImage: rule.isNight ? "moon.stars.fill" : "sun.max.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(rule.isNight ? Theme.accent : Theme.warning)
+            }
+        } content: {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader(
-                    book.companyName(forCode: rule.companyCode),
-                    subtitle: rule.isNight ? "ночная смена" : "дневная смена"
-                ) {
-                    if !rule.isActive {
-                        StatusChip("отключено", kind: .neutral)
-                    } else {
-                        Image(systemName: rule.isNight ? "moon.stars.fill" : "sun.max.fill")
-                            .font(.system(size: 14))
-                            .foregroundStyle(rule.isNight ? Theme.accent : Theme.warning)
-                    }
+                if !rule.isActive {
+                    Text(rule.isNight ? "ночная смена" : "дневная смена")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.textDim)
                 }
 
                 ForEach(rule.terms) { term in
                     HStack(spacing: Spacing.md) {
-                        Image(systemName: term.icon)
-                            .font(.system(size: 13))
-                            .foregroundStyle(term.isBonus ? Theme.positive : Theme.textDim)
-                            .frame(width: 18)
+                        TintedIcon(systemName: term.icon, tint: term.isBonus ? Theme.positive : Theme.textDim, size: 32)
                         Text(term.text)
-                            .font(Typography.callout)
+                            .font(.system(size: 15))
                             .foregroundStyle(Theme.textMuted)
                             .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: Spacing.sm)
                         Text(term.amount)
-                            .font(Typography.callout.weight(.medium))
+                            .font(.system(size: 15, weight: .semibold, design: .rounded))
                             .monospacedDigit()
                             .foregroundStyle(term.isBonus ? Theme.positive : Theme.text)
                     }
@@ -187,7 +260,7 @@ private struct SalaryRuleCard: View {
                     RowDivider()
                     VStack(alignment: .leading, spacing: Spacing.sm) {
                         Text("Ставка по датам")
-                            .font(Typography.label)
+                            .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(Theme.textDim)
                         // Прошлые смены считаются по своей версии — без этого
                         // списка непонятно, почему старая неделя не сошлась с
@@ -215,26 +288,19 @@ private struct SeniorityCard: View {
     let tiers: [SeniorityTier]
 
     var body: some View {
-        Card(accent: Theme.accent) {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Надбавка за стаж", subtitle: "процент к ставке, общий для всех точек")
-
-                ForEach(Array(tiers.enumerated()), id: \.element.id) { index, tier in
-                    if index > 0 { RowDivider() }
-                    HStack(spacing: Spacing.md) {
-                        Image(systemName: "calendar.badge.clock")
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.accent)
-                            .frame(width: 18)
-                        Text("Отработал \(tier.tenureLabel)")
-                            .font(Typography.callout)
-                            .foregroundStyle(Theme.textMuted)
-                        Spacer(minLength: Spacing.sm)
-                        Text(Percent.format(tier.bonusPercent, signed: true))
-                            .font(Typography.callout.weight(.medium))
-                            .monospacedDigit()
-                            .foregroundStyle(Theme.positive)
-                    }
+        OwnerSection("Надбавка за стаж") {
+            SectionNote(text: "ко всем точкам")
+        } content: {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                Text("Процент к ставке, общий для всех точек")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textDim)
+                ForEach(tiers) { tier in
+                    AmountRow(
+                        leading: { TintedIcon(systemName: "calendar.badge.clock", tint: Color(hex: 0x8B5CF6)) },
+                        title: "Отработал \(tier.tenureLabel)",
+                        amount: Percent.format(tier.bonusPercent, signed: true)
+                    )
                 }
             }
         }
@@ -245,31 +311,32 @@ private struct SalaryHistoryCard: View {
     let changes: [SalaryRuleChange]
 
     var body: some View {
-        Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Кто менял ставки", subtitle: "последние правки")
-
-                ForEach(Array(changes.enumerated()), id: \.element.id) { index, change in
-                    if index > 0 { RowDivider() }
+        OwnerSection("Кто менял ставки") {
+            SectionNote(text: "последние правки")
+        } content: {
+            VStack(spacing: Spacing.sm) {
+                ForEach(changes) { change in
                     HStack(spacing: Spacing.md) {
+                        PersonInitial(name: change.actorEmail ?? "Система", size: 36)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(change.actorEmail ?? "Система")
-                                .font(Typography.callout)
+                                .font(.system(size: 16, weight: .medium))
                                 .foregroundStyle(Theme.text)
                                 .lineLimit(1)
                             Text(subtitle(change))
-                                .font(Typography.caption)
+                                .font(.system(size: 13))
                                 .foregroundStyle(Theme.textDim)
                                 .lineLimit(1)
                         }
                         Spacer(minLength: Spacing.sm)
                         if let delta = change.baseDelta {
                             Text(Money.signed(delta))
-                                .font(Typography.callout.weight(.medium))
+                                .font(.system(size: 16, weight: .semibold, design: .rounded))
                                 .monospacedDigit()
                                 .foregroundStyle(delta > 0 ? Theme.negative : Theme.positive)
                         }
                     }
+                    .padding(.vertical, Spacing.xs)
                 }
             }
         }
@@ -373,12 +440,10 @@ struct HRScreen: View {
                 .padding(.horizontal, Spacing.lg)
                 .padding(.top, Spacing.md)
 
-                HStack(spacing: Spacing.sm) {
-                    ForEach(HRFilter.allCases, id: \.self) { option in
-                        FilterChip(title: option.title, isOn: mode == option) { mode = option }
-                    }
-                    Spacer()
-                }
+                PillSegment(
+                    options: HRFilter.allCases.map { (value: $0, title: $0.title) },
+                    selection: $mode
+                )
                 .padding(.horizontal, Spacing.lg)
                 .padding(.vertical, Spacing.md)
             }
@@ -465,15 +530,11 @@ private struct HRPersonRow: View {
 
     var body: some View {
         HStack(spacing: Spacing.md) {
-            Text(person.initials)
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .foregroundStyle(person.isDismissed ? Theme.textDim : Theme.brand)
-                .frame(width: 36, height: 36)
-                .background((person.isDismissed ? Theme.textDim : Theme.brand).opacity(0.14), in: Circle())
+            PersonInitial(name: person.fullName, isActive: !person.isDismissed)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(person.fullName)
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(person.isDismissed ? Theme.textDim : Theme.text)
                     .lineLimit(1)
                 Text(person.position ?? person.roleLabel)
@@ -484,9 +545,12 @@ private struct HRPersonRow: View {
 
             Spacer(minLength: Spacing.sm)
 
+            // Статус — цветной подписью, а не плашкой: плашка съедала полстроки.
             if person.isDismissed {
                 VStack(alignment: .trailing, spacing: 2) {
-                    StatusChip("уволен", kind: .danger)
+                    Text("уволен")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.negative)
                     if let left = person.leftOn {
                         Text(left.formatted(.dateTime.day().month(.abbreviated).year()))
                             .font(Typography.caption)
@@ -500,6 +564,7 @@ private struct HRPersonRow: View {
                     .foregroundStyle(Theme.textDim)
             }
         }
+        .padding(.vertical, 2)
     }
 }
 
@@ -517,50 +582,35 @@ private struct HRPersonDetail: View {
     /// Право то же, что проверяет сервер.
     private var canRestore: Bool { access?.can("hr.restore") ?? false }
 
+    private var badges: [(String, String, Color)] {
+        var result: [(String, String, Color)] = [
+            person.isDismissed
+                ? ("уволен", "xmark.circle.fill", Theme.negative)
+                : ("работает", "checkmark.circle.fill", Theme.positive),
+            (person.isOperator ? "оператор" : "штат", "person.fill", Theme.textDim),
+        ]
+        if person.isHybrid { result.append(("и штат, и смены", "arrow.triangle.2.circlepath", Theme.info)) }
+        return result
+    }
+
     var body: some View {
         ScreenScroll {
-            Card {
-                HStack(spacing: Spacing.lg) {
-                    if let photo = person.photoURL, !photo.isEmpty {
-                        Thumbnail(url: photo, side: 64, cornerRadius: 32, fallbackText: person.initials)
-                    } else {
-                        Text(person.initials)
-                            .font(.system(size: 22, weight: .semibold, design: .rounded))
-                            .foregroundStyle(person.isDismissed ? Theme.textDim : Theme.brand)
-                            .frame(width: 64, height: 64)
-                            .background((person.isDismissed ? Theme.textDim : Theme.brand).opacity(0.14), in: Circle())
-                    }
-
-                    VStack(alignment: .leading, spacing: Spacing.xs) {
-                        Text(person.fullName)
-                            .font(Typography.title)
-                            .foregroundStyle(Theme.text)
-                        Text(person.position ?? person.roleLabel)
-                            .font(Typography.callout)
-                            .foregroundStyle(Theme.textMuted)
-                        HStack(spacing: Spacing.sm) {
-                            StatusChip(person.isDismissed ? "уволен" : "работает", kind: person.isDismissed ? .danger : .good)
-                            StatusChip(person.isOperator ? "оператор" : "штат", kind: .neutral)
-                            if person.isHybrid {
-                                StatusChip("и штат, и смены", kind: .info)
-                            }
-                        }
-                    }
-                    Spacer()
-                }
-            }
+            AdminProfileHeader(
+                name: person.fullName,
+                photoURL: person.photoURL,
+                subtitle: person.position ?? person.roleLabel,
+                isActive: !person.isDismissed,
+                badges: badges
+            )
 
             if person.isDismissed, canRestore {
                 // Вернуть — рядом с фактом увольнения, а не в конце карточки:
                 // человек звонит и говорит «выхожу с понедельника», и решение
                 // принимается прямо здесь.
-                Card(accent: Theme.positive) {
+                OwnerSection("Человек вернулся?") {
                     VStack(alignment: .leading, spacing: Spacing.sm) {
-                        Text("Человек вернулся?")
-                            .font(Typography.callout.weight(.medium))
-                            .foregroundStyle(Theme.text)
                         Text("Восстановление вернёт доступ и сохранит стаж, историю смен и долги. Заводить заново — значит всё это потерять.")
-                            .font(Typography.caption)
+                            .font(.system(size: 13))
                             .foregroundStyle(Theme.textMuted)
                             .fixedSize(horizontal: false, vertical: true)
 
@@ -574,13 +624,24 @@ private struct HRPersonDetail: View {
                         Button {
                             confirming = true
                         } label: {
-                            if isBusy {
-                                ProgressView().controlSize(.small)
-                            } else {
-                                Label("Восстановить", systemImage: "arrow.uturn.backward.circle")
+                            HStack(spacing: Spacing.md) {
+                                TintedIcon(systemName: "arrow.uturn.backward.circle", tint: Theme.positive)
+                                Text("Восстановить")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundStyle(Theme.text)
+                                Spacer(minLength: Spacing.sm)
+                                if isBusy {
+                                    ProgressView().controlSize(.small)
+                                } else {
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(Theme.textDim)
+                                }
                             }
+                            .padding(.vertical, Spacing.xs)
+                            .contentShape(Rectangle())
                         }
-                        .buttonStyle(SecondaryButtonStyle())
+                        .buttonStyle(.pressable)
                         .disabled(isBusy)
                     }
                 }
@@ -593,85 +654,82 @@ private struct HRPersonDetail: View {
             }
 
             if person.isDismissed {
-                Card(accent: Theme.negative) {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        SectionHeader("Увольнение")
+                OwnerSection("Увольнение") {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
                         if let left = person.leftOn {
-                            StatRow(
-                                "Последний день",
-                                value: left.formatted(.dateTime.day().month(.wide).year()),
-                                valueColor: Theme.negative,
+                            AdminInfoRow(
                                 icon: "calendar",
-                                emphasized: true
+                                tint: Theme.negative,
+                                label: "Последний день",
+                                value: left.formatted(.dateTime.day().month(.wide).year()),
+                                valueColor: Theme.negative
                             )
                         }
                         if let type = person.dismissalTypeLabel {
-                            StatRow("Основание", value: type, icon: "doc.text")
+                            AdminInfoRow(icon: "doc.text", tint: Color(hex: 0xF59E0B), label: "Основание", value: type)
                         }
                         if let who = person.dismissedByName {
-                            StatRow("Оформил", value: who, icon: "person.badge.shield.checkmark")
+                            AdminInfoRow(icon: "person.badge.shield.checkmark", tint: Color(hex: 0x3B82F6), label: "Оформил", value: who)
                         }
                         if let reason = person.dismissalReason, !reason.isEmpty {
-                            RowDivider()
                             Text("«\(reason)»")
-                                .font(Typography.callout)
+                                .font(.system(size: 15))
                                 .foregroundStyle(Theme.textMuted)
                                 .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.top, Spacing.xs)
                         }
                     }
                 }
             }
 
-            Card {
-                VStack(spacing: Spacing.md) {
-                    SectionHeader("В компании")
+            OwnerSection("В компании") {
+                VStack(spacing: Spacing.sm) {
                     if let hired = person.hireDate {
-                        StatRow("Принят", value: hired.formatted(.dateTime.day().month(.wide).year()), icon: "calendar.badge.plus")
+                        AdminInfoRow(icon: "calendar.badge.plus", tint: Color(hex: 0x8B5CF6), label: "Принят", value: hired.formatted(.dateTime.day().month(.wide).year()))
                     }
                     if let months = person.tenureMonths() {
-                        StatRow(
-                            person.isDismissed ? "Проработал" : "Стаж",
-                            value: "\(months) \(pluralize(months, "месяц", "месяца", "месяцев"))",
-                            icon: "clock"
+                        AdminInfoRow(
+                            icon: "clock",
+                            tint: Color(hex: 0x14B8A6),
+                            label: person.isDismissed ? "Проработал" : "Стаж",
+                            value: "\(months) \(pluralize(months, "месяц", "месяца", "месяцев"))"
                         )
                     }
-                    StatRow("Роль", value: person.roleLabel, icon: "person.text.rectangle")
+                    AdminInfoRow(icon: "person.text.rectangle", tint: Color(hex: 0x3B82F6), label: "Роль", value: person.roleLabel)
                     if let salary = person.monthlySalary, salary > 0 {
-                        StatRow("Оклад", value: Money.format(salary), icon: "wallet.bifold")
+                        AdminInfoRow(icon: "wallet.bifold", tint: Color(hex: 0x10B981), label: "Оклад", value: Money.format(salary))
                     }
                 }
             }
 
             if person.phone != nil || person.email != nil {
-                Card {
-                    VStack(spacing: Spacing.md) {
-                        SectionHeader("Контакты")
+                OwnerSection("Контакты") {
+                    VStack(spacing: Spacing.sm) {
                         if let phone = person.phone, !phone.isEmpty {
-                            StatRow("Телефон", value: phone, icon: "phone")
+                            AdminInfoRow(icon: "phone", tint: Color(hex: 0x10B981), label: "Телефон", value: phone)
                         }
                         if let email = person.email, !email.isEmpty {
-                            StatRow("Почта", value: email, icon: "envelope")
+                            AdminInfoRow(icon: "envelope", tint: Color(hex: 0x3B82F6), label: "Почта", value: email)
                         }
                     }
                 }
             }
 
-            Card {
-                VStack(spacing: Spacing.md) {
-                    SectionHeader("Доступ в систему")
-                    StatRow(
-                        "Учётная запись",
+            OwnerSection("Доступ в систему") {
+                VStack(spacing: Spacing.sm) {
+                    AdminInfoRow(
+                        icon: "key",
+                        tint: Color(hex: 0xF59E0B),
+                        label: "Учётная запись",
                         value: person.hasLogin ? "есть" : "нет",
-                        valueColor: person.hasLogin ? Theme.text : Theme.textDim,
-                        icon: "key"
+                        valueColor: person.hasLogin ? Theme.text : Theme.textDim
                     )
                     if let last = person.lastLogin {
-                        StatRow("Последний вход", value: last.formatted(.dateTime.day().month(.abbreviated).year()), icon: "clock.arrow.circlepath")
+                        AdminInfoRow(icon: "clock.arrow.circlepath", tint: Color(hex: 0x14B8A6), label: "Последний вход", value: last.formatted(.dateTime.day().month(.abbreviated).year()))
                     }
                     // Уволенный с живым доступом — открытая дверь: он всё ещё
                     // может зайти в кассу и отчёты.
                     if person.isDismissed && person.hasLogin {
-                        RowDivider()
                         InlineEmpty(
                             icon: "exclamationmark.triangle.fill",
                             text: "Уволен, но вход не закрыт",
@@ -768,26 +826,21 @@ struct StructureScreen: View {
             let leaderless = structure.operatorsWithoutLead
 
             ScreenScroll {
-                DashboardGrid {
-                    MetricTile(
-                        label: "Точек",
-                        value: "\(structure.companies.count)",
-                        icon: "building.2.fill",
-                        accent: Theme.brand
-                    )
-                    MetricTile(
-                        label: "Операторов",
-                        value: "\(structure.operators.count)",
-                        icon: "person.3.fill",
-                        accent: Theme.info
-                    )
-                    MetricTile(
-                        label: "Без точки",
-                        value: "\(orphans.count)",
-                        icon: "person.fill.questionmark",
-                        accent: orphans.isEmpty ? Theme.textDim : Theme.warning
-                    )
-                }
+                // Сколько людей — главная цифра; точки и «без точки» — её
+                // расшифровка. Разрыв структуры подсвечен цветом карточки.
+                HeroSummary(
+                    title: "Операторов в структуре",
+                    value: "\(structure.operators.count)",
+                    caption: orphans.isEmpty ? "все прикреплены к точкам" : "есть разрывы — смотрите ниже",
+                    footer: [
+                        ("Точек", "\(structure.companies.count)"),
+                        ("Без точки", "\(orphans.count)"),
+                        ("Без руководителя", "\(leaderless.count)"),
+                    ],
+                    colors: orphans.isEmpty
+                        ? [Color(hex: 0x0EA5E9), Color(hex: 0x2563EB)]
+                        : [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
+                )
 
                 if !orphans.isEmpty {
                     StructureGapCard(
@@ -830,44 +883,37 @@ private struct CompanyTeamCard: View {
     var body: some View {
         let team = structure.staffedBy(companyID: company.id)
 
-        return Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader(
-                    company.name,
-                    subtitle: "\(team.count) \(pluralize(team.count, "человек", "человека", "человек"))"
-                ) {
-                    if let code = company.code, !code.isEmpty {
-                        StatusChip(code.uppercased(), kind: .neutral)
-                    }
-                }
-
-                if team.isEmpty {
-                    InlineEmpty(icon: "person.slash", text: "На точке никого нет", tint: Theme.warning)
-                } else {
-                    ForEach(Array(sorted(team).enumerated()), id: \.element.id) { index, member in
-                        if index > 0 { RowDivider() }
+        return OwnerSection(company.name) {
+            SectionNote(text: [
+                company.code.flatMap { $0.isEmpty ? nil : $0.uppercased() },
+                "\(team.count) \(pluralize(team.count, "человек", "человека", "человек"))",
+            ].compactMap { $0 }.joined(separator: " · "))
+        } content: {
+            if team.isEmpty {
+                InlineEmpty(icon: "person.slash", text: "На точке никого нет", tint: Theme.warning)
+            } else {
+                VStack(spacing: Spacing.sm) {
+                    ForEach(sorted(team)) { member in
                         let assignment = structure.assignment(operatorID: member.id, companyID: company.id)
                         HStack(spacing: Spacing.md) {
-                            Text(member.initials)
-                                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                                .foregroundStyle(Theme.brand)
-                                .frame(width: 28, height: 28)
-                                .background(Theme.brand.opacity(0.14), in: Circle())
+                            PersonInitial(name: member.displayName, size: 36)
 
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(member.displayName)
-                                    .font(Typography.callout)
+                                    .font(.system(size: 16, weight: .medium))
                                     .foregroundStyle(Theme.text)
                                     .lineLimit(1)
                                 Text(assignment?.roleLabel ?? "Оператор")
-                                    .font(Typography.caption)
+                                    .font(.system(size: 13))
                                     .foregroundStyle(Theme.textDim)
                             }
 
                             Spacer(minLength: Spacing.sm)
 
                             if assignment?.isPrimary == true {
-                                StatusChip("основная", kind: .info)
+                                Text("основная")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(Theme.info)
                             }
                             if assignment?.isSenior == true {
                                 Image(systemName: "star.fill")
@@ -896,35 +942,30 @@ private struct LeadsCard: View {
     let structure: TeamStructure
 
     var body: some View {
-        Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Руководители", subtitle: "кто за кого отвечает")
-
-                ForEach(Array(structure.leads.enumerated()), id: \.element.id) { index, lead in
-                    if index > 0 { RowDivider() }
+        OwnerSection("Руководители") {
+            SectionNote(text: "кто за кого отвечает")
+        } content: {
+            VStack(spacing: Spacing.sm) {
+                ForEach(structure.leads) { lead in
                     let team = structure.subordinates(ofLead: lead.id)
                     VStack(alignment: .leading, spacing: Spacing.xs) {
                         HStack(spacing: Spacing.md) {
-                            Text(lead.initials)
-                                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                                .foregroundStyle(Theme.accent)
-                                .frame(width: 28, height: 28)
-                                .background(Theme.accent.opacity(0.14), in: Circle())
+                            PersonInitial(name: lead.fullName, size: 36)
 
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(lead.fullName)
-                                    .font(Typography.callout)
+                                    .font(.system(size: 16, weight: .medium))
                                     .foregroundStyle(Theme.text)
                                     .lineLimit(1)
                                 Text(lead.roleLabel)
-                                    .font(Typography.caption)
+                                    .font(.system(size: 13))
                                     .foregroundStyle(Theme.textDim)
                             }
 
                             Spacer(minLength: Spacing.sm)
 
                             Text("\(team.count)")
-                                .font(Typography.callout.weight(.medium))
+                                .font(.system(size: 16, weight: .semibold, design: .rounded))
                                 .monospacedDigit()
                                 .foregroundStyle(team.isEmpty ? Theme.textDim : Theme.text)
                         }
@@ -934,6 +975,7 @@ private struct LeadsCard: View {
                                 .font(Typography.caption)
                                 .foregroundStyle(Theme.textDim)
                                 .lineLimit(2)
+                                .padding(.leading, 36 + Spacing.md)
                         }
                     }
                 }
@@ -946,31 +988,26 @@ private struct StructureGapCard: View {
     let title: String
     let subtitle: String
     let icon: String
-    /// Цвет значка. Рамку им не красим: `Card` рисует акцент с прозрачностью
-    /// 0.35, и на приглушённом цвете обводка выходила ярче, чем у карточек
-    /// с настоящей тревогой.
+    /// Цвет значка и подписи.
     let accent: Color
     let operators: [TeamOperator]
 
-    /// Разрыв в структуре — это предупреждение, но разной силы: оператор без
-    /// точки не попадёт ни в график, ни в расчёт, а без руководителя — просто
-    /// некому спросить. Рамкой выделяем только первое.
-    var isBlocking: Bool { accent == Theme.warning || accent == Theme.negative }
-
     var body: some View {
-        Card(accent: isBlocking ? accent : nil) {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader(title, subtitle: subtitle) {
-                    Image(systemName: icon)
-                        .font(.system(size: 14))
-                        .foregroundStyle(accent)
-                }
-
-                ForEach(Array(operators.enumerated()), id: \.element.id) { index, member in
-                    if index > 0 { RowDivider() }
+        OwnerSection(title) {
+            TintedIcon(systemName: icon, tint: accent, size: 32)
+        } content: {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                // Разрыв в структуре — предупреждение разной силы: без точки
+                // человек выпадает из графика и расчёта, без руководителя —
+                // просто некому спросить. Сила — цветом подписи.
+                Text(subtitle)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(accent == Theme.textDim ? Theme.textDim : accent)
+                ForEach(operators) { member in
                     HStack(spacing: Spacing.md) {
+                        PersonInitial(name: member.displayName, size: 32)
                         Text(member.displayName)
-                            .font(Typography.callout)
+                            .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(Theme.text)
                             .lineLimit(1)
                         Spacer(minLength: Spacing.sm)
@@ -1094,14 +1131,11 @@ private struct RoleAccessRow: View {
 
     var body: some View {
         HStack(spacing: Spacing.md) {
-            Image(systemName: icon)
-                .font(.system(size: 14))
-                .foregroundStyle(role.ignoresMatrix ? Theme.warning : Theme.info)
-                .frame(width: 24)
+            TintedIcon(systemName: icon, tint: role.ignoresMatrix ? Theme.warning : Color(hex: 0x3B82F6))
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(role.roleLabel)
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
                 Text("\(role.openPages.count) \(pluralize(role.openPages.count, "раздел", "раздела", "разделов")) открыто")
@@ -1112,16 +1146,22 @@ private struct RoleAccessRow: View {
 
             Spacer(minLength: Spacing.sm)
 
-            if role.ignoresMatrix {
-                StatusChip("всё", kind: .warning)
-            } else if role.grantsNothing {
-                StatusChip("нет доступа", kind: .neutral)
-            } else if role.dangerousCount > 0 {
-                StatusChip("\(role.dangerousCount) опасных", kind: .warning)
-            } else {
-                StatusChip("без опасных", kind: .good)
-            }
+            // Статус подписью, а не плашкой — роль с длинным названием
+            // иначе обрезалась.
+            Text(status.0)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(status.1)
+                .lineLimit(1)
+                .fixedSize()
         }
+        .padding(.vertical, 2)
+    }
+
+    private var status: (String, Color) {
+        if role.ignoresMatrix { return ("всё", Theme.warning) }
+        if role.grantsNothing { return ("нет доступа", Theme.textDim) }
+        if role.dangerousCount > 0 { return ("\(role.dangerousCount) опасных", Theme.warning) }
+        return ("без опасных", Theme.positive)
     }
 
     private var icon: String {
@@ -1138,54 +1178,54 @@ private struct RoleAccessDetail: View {
     var body: some View {
         ScreenScroll {
             if let note = specialNote {
-                Card(accent: Theme.warning) {
+                OwnerSection(role.roleLabel) {
+                    SectionNote(text: "вне настроек", color: Theme.warning)
+                } content: {
                     VStack(alignment: .leading, spacing: Spacing.sm) {
-                        SectionHeader(role.roleLabel, subtitle: "настройки на эту роль не влияют")
+                        Text("Настройки на эту роль не влияют")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Theme.warning)
                         Text(note)
-                            .font(Typography.callout)
+                            .font(.system(size: 15))
                             .foregroundStyle(Theme.textMuted)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
 
-            Card {
-                VStack(spacing: Spacing.md) {
-                    SectionHeader(role.roleLabel, subtitle: "что открыто роли")
-                    StatRow("Прав открыто", value: "\(role.grantedCount) из \(catalogSize)", icon: "checkmark.circle")
-                    StatRow(
-                        "Прав снято",
-                        value: "\(role.revokedCount)",
-                        valueColor: role.revokedCount > 0 ? Theme.info : Theme.textDim,
-                        icon: "minus.circle"
-                    )
-                    StatRow("Разделов открыто", value: "\(role.openPages.count)", icon: "square.grid.2x2")
-                    RowDivider()
-                    StatRow(
-                        "Необратимых прав",
-                        value: "\(role.dangerousCount)",
-                        valueColor: role.dangerousCount > 0 ? Theme.warning : Theme.positive,
-                        icon: "exclamationmark.triangle",
-                        emphasized: true
-                    )
-                }
-            }
+            // Открытые права — главная цифра роли; необратимые — то, из-за
+            // чего сюда заходят, поэтому карточка краснеет, когда они есть.
+            HeroSummary(
+                title: "\(role.roleLabel): прав открыто",
+                value: "\(role.grantedCount) из \(catalogSize)",
+                caption: "\(role.openPages.count) \(pluralize(role.openPages.count, "раздел", "раздела", "разделов")) открыто",
+                footer: [
+                    ("Необратимых", "\(role.dangerousCount)"),
+                    ("Прав снято", "\(role.revokedCount)"),
+                    ("Разделов", "\(role.openPages.count)"),
+                ],
+                colors: role.dangerousCount > 0
+                    ? [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
+                    : [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+            )
 
             if !role.pagesWithDanger.isEmpty {
-                Card(accent: Theme.warning) {
+                OwnerSection("Необратимые права") {
+                    SectionNote(text: "удаления, выгрузки", color: Theme.warning)
+                } content: {
                     VStack(alignment: .leading, spacing: Spacing.md) {
-                        SectionHeader("Необратимые права", subtitle: "удаления, выгрузки, списания")
-
-                        ForEach(Array(role.pagesWithDanger.prefix(20).enumerated()), id: \.element.id) { index, page in
-                            if index > 0 { RowDivider() }
-                            VStack(alignment: .leading, spacing: Spacing.xs) {
-                                Text(page.label)
-                                    .font(Typography.callout.weight(.medium))
-                                    .foregroundStyle(Theme.text)
-                                Text(page.dangerousGranted.map(\.label).joined(separator: " · "))
-                                    .font(Typography.caption)
-                                    .foregroundStyle(Theme.warning)
-                                    .fixedSize(horizontal: false, vertical: true)
+                        ForEach(Array(role.pagesWithDanger.prefix(20))) { page in
+                            HStack(alignment: .top, spacing: Spacing.md) {
+                                TintedIcon(systemName: "exclamationmark.triangle.fill", tint: Theme.warning, size: 32)
+                                VStack(alignment: .leading, spacing: Spacing.xs) {
+                                    Text(page.label)
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundStyle(Theme.text)
+                                    Text(page.dangerousGranted.map(\.label).joined(separator: " · "))
+                                        .font(Typography.caption)
+                                        .foregroundStyle(Theme.warning)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
@@ -1194,26 +1234,27 @@ private struct RoleAccessDetail: View {
             }
 
             if !role.closedPages.isEmpty {
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        SectionHeader("Разделы закрыты", subtitle: "роль их не увидит")
-                        Text(role.closedPages.map(\.label).sorted().joined(separator: " · "))
-                            .font(Typography.callout)
-                            .foregroundStyle(Theme.textMuted)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
+                OwnerSection("Разделы закрыты") {
+                    SectionNote(text: "роль их не увидит")
+                } content: {
+                    Text(role.closedPages.map(\.label).sorted().joined(separator: " · "))
+                        .font(.system(size: 15))
+                        .foregroundStyle(Theme.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
 
             if !role.closedPaths.isEmpty {
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        // Отдельный рубильник страниц (role_permissions) живёт
-                        // рядом с матрицей и режет доступ независимо от неё.
-                        SectionHeader("Страницы выключены вручную", subtitle: "рубильник поверх прав")
+                // Отдельный рубильник страниц (role_permissions) живёт рядом с
+                // матрицей и режет доступ независимо от неё.
+                OwnerSection("Страницы выключены вручную") {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        Text("рубильник поверх прав")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.textDim)
                         Text(role.closedPageLabels.joined(separator: " · "))
-                            .font(Typography.callout)
+                            .font(.system(size: 15))
                             .foregroundStyle(Theme.textMuted)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1222,19 +1263,22 @@ private struct RoleAccessDetail: View {
             }
 
             if role.revokedCount > 0 {
-                Card {
+                OwnerSection("Что снято") {
+                    SectionNote(text: "по разделам")
+                } content: {
                     VStack(alignment: .leading, spacing: Spacing.md) {
-                        SectionHeader("Что снято", subtitle: "по разделам")
-                        ForEach(Array(revokedPages.prefix(20).enumerated()), id: \.element.id) { index, page in
-                            if index > 0 { RowDivider() }
-                            VStack(alignment: .leading, spacing: Spacing.xs) {
-                                Text(page.label)
-                                    .font(Typography.callout.weight(.medium))
-                                    .foregroundStyle(Theme.text)
-                                Text(page.revokedCapabilities.map(\.label).joined(separator: " · "))
-                                    .font(Typography.caption)
-                                    .foregroundStyle(Theme.textDim)
-                                    .fixedSize(horizontal: false, vertical: true)
+                        ForEach(Array(revokedPages.prefix(20))) { page in
+                            HStack(alignment: .top, spacing: Spacing.md) {
+                                TintedIcon(systemName: "minus.circle", tint: Color(hex: 0x3B82F6), size: 32)
+                                VStack(alignment: .leading, spacing: Spacing.xs) {
+                                    Text(page.label)
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundStyle(Theme.text)
+                                    Text(page.revokedCapabilities.map(\.label).joined(separator: " · "))
+                                        .font(Typography.caption)
+                                        .foregroundStyle(Theme.textDim)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
@@ -1419,11 +1463,11 @@ private struct CredentialsRow: View {
 
     var body: some View {
         HStack(spacing: Spacing.md) {
-            Thumbnail(url: account.photoURL, side: 36, cornerRadius: 18, fallbackText: account.initials)
+            OperatorAvatar(person: account, size: 40)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(account.displayName)
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
                 if let login = account.username, !login.isEmpty {
@@ -1443,16 +1487,19 @@ private struct CredentialsRow: View {
             if let last = account.lastLogin {
                 VStack(alignment: .trailing, spacing: 1) {
                     Text(last.formatted(.dateTime.day().month(.abbreviated)))
-                        .font(Typography.caption)
+                        .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(isStale ? Theme.textDim : Theme.textMuted)
                     Text("вход")
                         .font(Typography.caption)
                         .foregroundStyle(Theme.textDim)
                 }
             } else if account.username?.isEmpty == false {
-                StatusChip("ни разу", kind: .warning)
+                Text("ни разу")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.warning)
             }
         }
+        .padding(.vertical, 2)
     }
 }
 
@@ -1461,71 +1508,61 @@ private struct CredentialsDetail: View {
 
     var body: some View {
         ScreenScroll {
-            Card {
-                HStack(spacing: Spacing.lg) {
-                    Thumbnail(url: account.photoURL, side: 64, cornerRadius: 32, fallbackText: account.initials)
+            AdminProfileHeader(
+                name: account.displayName,
+                photoURL: account.photoURL,
+                subtitle: account.position,
+                isActive: account.isActive,
+                badges: [
+                    account.isActive
+                        ? ("работает", "checkmark.circle.fill", Theme.positive)
+                        : ("не работает", "circle.fill", Theme.textDim),
+                    account.hasTelegram
+                        ? ("Telegram привязан", "paperplane.fill", Theme.info)
+                        : ("без Telegram", "paperplane", Theme.textDim),
+                ]
+            )
 
-                    VStack(alignment: .leading, spacing: Spacing.xs) {
-                        Text(account.displayName)
-                            .font(Typography.title)
-                            .foregroundStyle(Theme.text)
-                        if let position = account.position, !position.isEmpty {
-                            Text(position)
-                                .font(Typography.callout)
-                                .foregroundStyle(Theme.textMuted)
-                        }
-                        HStack(spacing: Spacing.sm) {
-                            StatusChip(account.isActive ? "работает" : "не работает", kind: account.isActive ? .good : .neutral)
-                            StatusChip(account.hasTelegram ? "Telegram привязан" : "без Telegram", kind: account.hasTelegram ? .info : .neutral)
-                        }
-                    }
-                    Spacer()
-                }
-            }
-
-            Card {
-                VStack(spacing: Spacing.md) {
-                    SectionHeader("Вход в систему")
-                    StatRow(
-                        "Логин",
-                        value: account.username?.isEmpty == false ? account.username! : "не выдан",
-                        valueColor: account.username?.isEmpty == false ? Theme.text : Theme.warning,
+            OwnerSection("Вход в систему") {
+                VStack(spacing: Spacing.sm) {
+                    AdminInfoRow(
                         icon: "person.text.rectangle",
-                        emphasized: true
+                        tint: Color(hex: 0x3B82F6),
+                        label: "Логин",
+                        value: account.username?.isEmpty == false ? account.username! : "не выдан",
+                        valueColor: account.username?.isEmpty == false ? Theme.text : Theme.warning
                     )
                     if let last = account.lastLogin {
-                        StatRow(
-                            "Последний вход",
-                            value: last.formatted(.dateTime.day().month(.wide).year().hour().minute()),
-                            icon: "clock.arrow.circlepath"
+                        AdminInfoRow(
+                            icon: "clock.arrow.circlepath",
+                            tint: Color(hex: 0x14B8A6),
+                            label: "Последний вход",
+                            value: last.formatted(.dateTime.day().month(.wide).year().hour().minute())
                         )
                     } else if account.username?.isEmpty == false {
-                        StatRow("Последний вход", value: "ни разу", valueColor: Theme.warning, icon: "clock.arrow.circlepath")
+                        AdminInfoRow(icon: "clock.arrow.circlepath", tint: Theme.warning, label: "Последний вход", value: "ни разу", valueColor: Theme.warning)
                     }
                 }
             }
 
-            Card(accent: Theme.info) {
+            OwnerSection("Пароль") {
                 HStack(alignment: .top, spacing: Spacing.md) {
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Theme.info)
+                    TintedIcon(systemName: "lock.fill", tint: Theme.info, size: 36)
                     Text("Пароль в приложении не показывается. Выдать новый можно на сайте — там действие записывается в журнал, и видно, кто его сделал.")
-                        .font(Typography.callout)
+                        .font(.system(size: 14))
                         .foregroundStyle(Theme.textMuted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
             if account.phone != nil || account.hireDate != nil {
-                Card {
-                    VStack(spacing: Spacing.md) {
-                        SectionHeader("Профиль")
+                OwnerSection("Профиль") {
+                    VStack(spacing: Spacing.sm) {
                         if let phone = account.phone, !phone.isEmpty {
-                            StatRow("Телефон", value: phone, icon: "phone")
+                            AdminInfoRow(icon: "phone", tint: Color(hex: 0x10B981), label: "Телефон", value: phone)
                         }
                         if let hired = account.hireDate {
-                            StatRow("Принят", value: hired.formatted(.dateTime.day().month(.wide).year()), icon: "calendar.badge.plus")
+                            AdminInfoRow(icon: "calendar.badge.plus", tint: Color(hex: 0x8B5CF6), label: "Принят", value: hired.formatted(.dateTime.day().month(.wide).year()))
                         }
                     }
                 }

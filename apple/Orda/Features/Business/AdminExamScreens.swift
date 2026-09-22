@@ -83,24 +83,32 @@ struct AdminExamsScreen: View {
         .refreshable { await load() }
     }
 
+    /// Строка экзамена как операция в выписке: иконка в кружке, название,
+    /// точки подписью, статус цветом справа; под ними — сколько сдали.
     private func examCard(_ exam: AdminExam, companies: [Company]) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                HStack(alignment: .firstTextBaseline) {
+        HStack(alignment: .top, spacing: Spacing.md) {
+            TintedIcon(
+                systemName: "graduationcap.fill",
+                tint: exam.isSent ? Color(hex: 0x4F46E5) : Theme.textDim
+            )
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
                     Text(exam.title)
-                        .font(Typography.headline)
+                        .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(Theme.text)
+                        .lineLimit(2)
                     Spacer(minLength: Spacing.sm)
                     Text(exam.statusLabel)
-                        .font(Typography.caption.weight(.medium))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(exam.isSent ? Theme.positive : Theme.warning)
+                        .fixedSize()
                 }
 
                 Text(pointNames(exam.companyIDs, companies: companies))
-                    .font(Typography.caption)
-                    .foregroundStyle(Theme.textMuted)
-
-                RowDivider()
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textDim)
+                    .lineLimit(1)
 
                 HStack(spacing: Spacing.lg) {
                     stat("Назначено", "\(exam.assigned)")
@@ -109,6 +117,7 @@ struct AdminExamsScreen: View {
                         stat("Средний", "\(average)%")
                     }
                 }
+                .padding(.top, 2)
 
                 if let deadline = exam.deadlineAt {
                     Label(
@@ -120,15 +129,18 @@ struct AdminExamsScreen: View {
                 }
             }
         }
+        .padding(.vertical, Spacing.xs)
+        .contentShape(Rectangle())
     }
 
     private func stat(_ title: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title.uppercased())
-                .font(Typography.caption)
-                .foregroundStyle(Theme.textMuted)
+        VStack(alignment: .leading, spacing: 1) {
+            Text(title)
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.textDim)
             Text(value)
-                .font(Typography.callout.weight(.semibold))
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .monospacedDigit()
                 .foregroundStyle(Theme.text)
         }
     }
@@ -182,12 +194,14 @@ struct AdminExamDetailScreen: View {
             } else if isLoading && detail == nil {
                 LoadingRows(count: 3)
             } else if let detail {
+                hero(detail.exam)
+
                 actionsCard(detail.exam)
 
                 if let message {
-                    Card {
+                    OwnerSection("Не получилось") {
                         Text(message)
-                            .font(Typography.callout)
+                            .font(.system(size: 15))
                             .foregroundStyle(Theme.textDim)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -200,10 +214,13 @@ struct AdminExamDetailScreen: View {
                         message: "Пока экзамен черновик, его видите только вы."
                     )
                 } else {
-                    Card {
+                    OwnerSection("Билеты") {
+                        Text("\(detail.attempts.count) \(pluralize(detail.attempts.count, "человек", "человека", "человек"))")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.textDim)
+                    } content: {
                         VStack(spacing: Spacing.sm) {
-                            ForEach(Array(detail.attempts.enumerated()), id: \.element.id) { index, attempt in
-                                if index > 0 { RowDivider() }
+                            ForEach(detail.attempts) { attempt in
                                 attemptRow(attempt)
                             }
                         }
@@ -234,76 +251,107 @@ struct AdminExamDetailScreen: View {
         }
     }
 
+    /// Сколько сдали — главная цифра экзамена, назначено и средний балл —
+    /// подписи. Карточка зелёная, когда сдали все, кто дошёл до конца.
+    private func hero(_ exam: AdminExam) -> some View {
+        let allPassed = exam.completed > 0 && exam.passed == exam.completed
+        return HeroSummary(
+            title: "Сдали",
+            value: "\(exam.passed) из \(exam.completed)",
+            caption: "\(exam.questionCount) вопросов, порог \(exam.passScore)%",
+            footer: [
+                ("Назначено", "\(exam.assigned)"),
+                ("Средний балл", exam.averageScore.map { "\($0)%" } ?? "—"),
+                ("Статус", exam.statusLabel.isEmpty ? "—" : exam.statusLabel),
+            ],
+            colors: allPassed
+                ? [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+                : [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+        )
+    }
+
+    /// Действия строками с иконкой в кружке — как меню счёта в банке.
+    @ViewBuilder
     private func actionsCard(_ exam: AdminExam) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                // Заголовком — что это за карточка, а не состояние экзамена:
-                // раньше здесь стояло состояние, и на экране крупными буквами
-                // висело слово из базы вроде «finished». Состояние — отметкой
-                // справа, где ему и место.
-                HStack(alignment: .firstTextBaseline) {
-                    SectionHeader(
-                        "Экзамен",
-                        subtitle: "\(exam.questionCount) вопросов, порог \(exam.passScore)%"
-                    )
-                    Spacer(minLength: Spacing.sm)
-                    if !exam.statusLabel.isEmpty {
-                        StatusChip(exam.statusLabel, kind: exam.isSent ? .good : .neutral)
+        let canClose = canFinish && exam.status != "closed" && exam.status != "cancelled"
+        if (!exam.isSent && canSend) || (exam.isSent && canRemind) || canClose {
+            OwnerSection("Действия") {
+                if busy { ProgressView().controlSize(.small) }
+            } content: {
+                VStack(spacing: Spacing.sm) {
+                    if !exam.isSent, canSend {
+                        // Черновик существует, чтобы посмотреть вопросы до
+                        // рассылки. Отозвать разосланный билет уже нельзя.
+                        Button {
+                            Task { await run { try await AdminExamService(api: api).send(examID: examID) } }
+                        } label: {
+                            actionRow("paperplane.fill", "Разослать билеты", tint: Color(hex: 0x4F46E5))
+                        }
+                        .buttonStyle(.pressable)
+                        .disabled(busy)
+                    } else if exam.isSent, canRemind {
+                        Button {
+                            Task { await run { try await AdminExamService(api: api).remind(examID: examID) } }
+                        } label: {
+                            actionRow("bell.fill", "Напомнить не сдавшим", tint: Color(hex: 0xF59E0B))
+                        }
+                        .buttonStyle(.pressable)
+                        .disabled(busy)
                     }
-                }
 
-                if !exam.isSent, canSend {
-                    // Черновик существует, чтобы посмотреть вопросы до
-                    // рассылки. Отозвать разосланный билет уже нельзя.
-                    Button {
-                        Task { await run { try await AdminExamService(api: api).send(examID: examID) } }
-                    } label: {
-                        Label("Разослать билеты", systemImage: "paperplane")
-                    }
-                    .buttonStyle(PrimaryButtonStyle())
-                    .disabled(busy)
-                } else if exam.isSent, canRemind {
-                    Button {
-                        Task { await run { try await AdminExamService(api: api).remind(examID: examID) } }
-                    } label: {
-                        Label("Напомнить не сдавшим", systemImage: "bell")
-                    }
-                    .buttonStyle(SecondaryButtonStyle())
-                    .disabled(busy)
-                }
-
-                // Закрыть экзамен. Завершение — норма: все сдали, ждать
-                // остальных незачем. Отмена — ошиблись при назначении. Оба
-                // оставляют экзамен в истории.
-                if canFinish, exam.status != "closed", exam.status != "cancelled" {
-                    RowDivider()
-                    HStack(spacing: Spacing.sm) {
-                        Button("Завершить") { closing = false }
-                            .buttonStyle(SecondaryButtonStyle())
-                            .disabled(busy)
-                        Button("Отменить экзамен") { closing = true }
-                            .buttonStyle(DestructiveButtonStyle())
-                            .disabled(busy)
+                    // Закрыть экзамен. Завершение — норма: все сдали, ждать
+                    // остальных незачем. Отмена — ошиблись при назначении. Оба
+                    // оставляют экзамен в истории.
+                    if canClose {
+                        Button { closing = false } label: {
+                            actionRow("checkmark.circle.fill", "Завершить", tint: Theme.positive)
+                        }
+                        .buttonStyle(.pressable)
+                        .disabled(busy)
+                        Button { closing = true } label: {
+                            actionRow("xmark.circle.fill", "Отменить экзамен", tint: Theme.negative, destructive: true)
+                        }
+                        .buttonStyle(.pressable)
+                        .disabled(busy)
                     }
                 }
             }
         }
     }
 
+    private func actionRow(_ icon: String, _ title: String, tint: Color, destructive: Bool = false) -> some View {
+        HStack(spacing: Spacing.md) {
+            TintedIcon(systemName: icon, tint: tint)
+            Text(title)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(destructive ? Theme.negative : Theme.text)
+            Spacer(minLength: Spacing.sm)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Theme.textDim)
+        }
+        .padding(.vertical, Spacing.xs)
+        .contentShape(Rectangle())
+    }
+
     private func attemptRow(_ attempt: AdminExamAttempt) -> some View {
-        HStack(alignment: .top, spacing: Spacing.md) {
+        let person = name(for: attempt.operatorID)
+        return HStack(spacing: Spacing.md) {
+            PersonInitial(name: person, size: 40)
+
             VStack(alignment: .leading, spacing: 2) {
-                Text(name(for: attempt.operatorID))
-                    .font(Typography.callout)
+                Text(person)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Theme.text)
+                    .lineLimit(1)
                 HStack(spacing: Spacing.xs) {
                     Text(attempt.statusLabel)
-                        .font(Typography.caption.weight(.medium))
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(color(for: attempt))
                     if let correct = attempt.correctAnswers, let total = attempt.totalQuestions, total > 0 {
                         Text("· \(correct) из \(total)")
-                            .font(Typography.caption)
-                            .foregroundStyle(Theme.textMuted)
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.textDim)
                     }
                 }
             }
@@ -312,7 +360,8 @@ struct AdminExamDetailScreen: View {
 
             if let score = attempt.score {
                 Text("\(score)%")
-                    .font(Typography.callout.weight(.semibold).monospacedDigit())
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
                     .foregroundStyle(color(for: attempt))
             }
 
@@ -322,12 +371,14 @@ struct AdminExamDetailScreen: View {
                 Button {
                     Task { await run { try await AdminExamService(api: api).retake(attemptID: attempt.id) } }
                 } label: {
-                    Image(systemName: "arrow.clockwise")
+                    TintedIcon(systemName: "arrow.clockwise", tint: Color(hex: 0x3B82F6), size: 32)
                 }
                 .buttonStyle(.pressable)
                 .disabled(busy)
+                .accessibilityLabel("Пересдача")
             }
         }
+        .padding(.vertical, 2)
     }
 
     private func name(for operatorID: String) -> String {
@@ -400,19 +451,18 @@ struct AssignExamSheet: View {
     var body: some View {
         NavigationStack {
             ScreenScroll {
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        FieldLabel("Название")
-                        TextField("Аттестация по регламентам", text: $assignment.title)
-                            .textFieldStyle(.plain)
-                            .padding(Spacing.md)
-                            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-                    }
+                OwnerSection("Название") {
+                    TextField("Аттестация по регламентам", text: $assignment.title)
+                        .textFieldStyle(.plain)
+                        .padding(Spacing.md)
+                        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
                 }
 
-                Card {
+                OwnerSection("Точки") {
                     VStack(alignment: .leading, spacing: Spacing.sm) {
-                        SectionHeader("Точки", subtitle: "Вопросы берутся из их базы знаний")
+                        Text("Вопросы берутся из их базы знаний")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.textDim)
                         ForEach(companies) { company in
                             Button {
                                 toggleCompany(company.id)
@@ -424,12 +474,19 @@ struct AssignExamSheet: View {
                     }
                 }
 
-                Card {
+                OwnerSection("Кому") {
+                    if !assignment.operatorIDs.isEmpty {
+                        Text("выбрано \(assignment.operatorIDs.count)")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Theme.textDim)
+                    }
+                } content: {
                     VStack(alignment: .leading, spacing: Spacing.sm) {
-                        SectionHeader(
-                            "Кому",
-                            subtitle: availableOperators.isEmpty ? "Сначала выберите точку" : nil
-                        )
+                        if availableOperators.isEmpty {
+                            Text("Сначала выберите точку")
+                                .font(.system(size: 13))
+                                .foregroundStyle(Theme.textDim)
+                        }
                         ForEach(availableOperators) { person in
                             Button {
                                 toggleOperator(person.id)
@@ -445,7 +502,7 @@ struct AssignExamSheet: View {
                     }
                 }
 
-                Card {
+                OwnerSection("Условия") {
                     VStack(alignment: .leading, spacing: Spacing.md) {
                         stepper("Вопросов", value: $assignment.questionCount, range: 3...20)
                         RowDivider()
@@ -500,11 +557,12 @@ struct AssignExamSheet: View {
     }
 
     private func checkRow(_ title: String, checked: Bool, note: String? = nil) -> some View {
-        HStack(spacing: Spacing.sm) {
+        HStack(spacing: Spacing.md) {
             Image(systemName: checked ? "checkmark.circle.fill" : "circle")
-                .foregroundStyle(checked ? Theme.brand : Theme.textMuted)
+                .font(.system(size: 22))
+                .foregroundStyle(checked ? Theme.brand : Theme.textDim)
             Text(title)
-                .font(Typography.callout)
+                .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(Theme.text)
             Spacer(minLength: Spacing.xs)
             if let note {
@@ -513,6 +571,7 @@ struct AssignExamSheet: View {
                     .foregroundStyle(Theme.textMuted)
             }
         }
+        .padding(.vertical, 2)
         .contentShape(Rectangle())
     }
 

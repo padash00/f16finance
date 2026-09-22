@@ -49,7 +49,10 @@ private struct RankBadge: View {
     }
 }
 
-/// Кружок с фото или инициалами — для людей, у которых нет `TeamOperator`.
+/// Кружок с фото или буквой — для людей, у которых нет `TeamOperator`.
+///
+/// Без фото — цветная буква, как в зарплате и списке операторов: серый
+/// кружок с инициалами на весь лидерборд выглядел заглушкой.
 private struct PersonAvatar: View {
     let name: String
     let photoURL: String?
@@ -60,31 +63,36 @@ private struct PersonAvatar: View {
     }
 
     var body: some View {
-        Thumbnail(url: photoURL, side: size, cornerRadius: size / 2, fallbackText: initials)
-            .overlay(Circle().stroke(Theme.border, lineWidth: 0.5))
+        if photoURL == nil {
+            PersonInitial(name: name, size: size)
+        } else {
+            Thumbnail(url: photoURL, side: size, cornerRadius: size / 2, fallbackText: initials)
+                .overlay(Circle().stroke(Theme.border, lineWidth: 0.5))
+        }
     }
 }
 
-/// Стрелка изменения к прошлому периоду.
-private struct DeltaLabel: View {
-    let change: Double?
+/// Шапка карточки человека как профиль в банке: крупный кружок по центру,
+/// имя и одна строка пояснения. Цифры идут ниже отдельной карточкой.
+private struct PersonProfileHeader: View {
+    let name: String
+    var photoURL: String? = nil
+    let subtitle: String
+    var subtitleColor: Color = Theme.textMuted
 
     var body: some View {
-        if let change {
-            let up = change >= 0
-            HStack(spacing: 1) {
-                Image(systemName: up ? "arrow.up" : "arrow.down")
-                    .font(.system(size: 9, weight: .bold))
-                Text(Percent.format(abs(change)))
-                    .font(Typography.caption.weight(.medium))
-                    .monospacedDigit()
-            }
-            .foregroundStyle(up ? Theme.positive : Theme.negative)
-        } else {
-            Text("—")
-                .font(Typography.caption)
-                .foregroundStyle(Theme.textDim)
+        VStack(spacing: Spacing.sm) {
+            PersonAvatar(name: name, photoURL: photoURL, size: 84)
+            Text(name)
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .foregroundStyle(Theme.text)
+                .multilineTextAlignment(.center)
+            Text(subtitle)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(subtitleColor)
         }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, Spacing.md)
     }
 }
 
@@ -232,64 +240,53 @@ struct PerformanceScreen: View {
         }
     }
 
+    /// Средний PI — главная цифра, раскладка «выше · в норме · ниже» — её
+    /// расшифровка. Четыре равные плитки не говорили, на что смотреть.
     private func metrics(_ report: PerformanceRanking) -> some View {
         let people = report.qualified
         let above = people.filter { $0.pi >= 1.05 }.count
         let norm = people.filter { $0.pi >= 0.95 && $0.pi < 1.05 }.count
         let below = people.filter { $0.pi < 0.95 }.count
 
-        return DashboardGrid {
-            MetricTile(
-                label: "Средний PI",
-                value: report.averagePI.map { String(format: "%.2f", $0) } ?? "—",
-                icon: "speedometer",
-                accent: Theme.brand
-            )
-            MetricTile(
-                label: "Выше нормы",
-                value: "\(above)",
-                icon: "arrow.up.right",
-                accent: Theme.positive
-            )
-            MetricTile(
-                label: "В норме",
-                value: "\(norm)",
-                icon: "equal",
-                accent: Theme.textMuted
-            )
-            MetricTile(
-                label: "Ниже нормы",
-                value: "\(below)",
-                icon: "arrow.down.right",
-                accent: below > 0 ? Theme.warning : Theme.positive
-            )
-        }
+        return HeroSummary(
+            title: "Средний PI",
+            value: report.averagePI.map { String(format: "%.2f", $0) } ?? "—",
+            caption: "факт ÷ норма смены",
+            footer: [
+                ("Выше нормы", "\(above)"),
+                ("В норме", "\(norm)"),
+                ("Ниже нормы", "\(below)"),
+            ],
+            colors: [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+        )
     }
 
     private func rankingCard(_ store: PerformanceStore, _ report: PerformanceRanking) -> some View {
         let people = report.qualified
+        // Полоса — PI относительно лучшего: сразу видно, насколько отстаёт
+        // хвост рейтинга от лидера.
+        let best = max(people.map(\.pi).max() ?? 1, 0.01)
 
-        return Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader(
-                    "Рейтинг",
-                    subtitle: "\(people.count) \(pluralize(people.count, "оператор", "оператора", "операторов"))"
+        return OwnerSection("Рейтинг") {
+            Text("\(people.count) \(pluralize(people.count, "оператор", "оператора", "операторов"))")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.textDim)
+        } content: {
+            if people.isEmpty {
+                InlineEmpty(
+                    icon: "hourglass",
+                    text: "Ни у кого нет \(report.minQualifyingShifts) смен — сравнивать пока не с чем",
+                    tint: Theme.textDim
                 )
-
-                if people.isEmpty {
-                    InlineEmpty(
-                        icon: "hourglass",
-                        text: "Ни у кого нет \(report.minQualifyingShifts) смен — сравнивать пока не с чем",
-                        tint: Theme.textDim
-                    )
-                } else {
+            } else {
+                VStack(spacing: Spacing.sm) {
                     ForEach(Array(people.enumerated()), id: \.element.id) { index, item in
-                        if index > 0 { RowDivider() }
                         NavigationLink(value: PerformanceRoute(item: item)) {
                             PerformanceRowView(
                                 rank: index + 1,
                                 item: item,
-                                previousPI: store.previousPI[item.operatorID]
+                                previousPI: store.previousPI[item.operatorID],
+                                share: item.pi / best
                             )
                         }
                         .buttonStyle(.pressable)
@@ -305,18 +302,16 @@ struct PerformanceScreen: View {
     private func coldStartCard(_ report: PerformanceRanking) -> some View {
         let people = report.coldStart
         if !people.isEmpty {
-            Card {
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    SectionHeader(
-                        "Мало смен",
-                        subtitle: "меньше \(report.minQualifyingShifts) — в рейтинг не идут"
-                    )
+            OwnerSection("Мало смен") {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    Text("меньше \(report.minQualifyingShifts) — в рейтинг не идут")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.textDim)
                     ForEach(people) { item in
-                        StatRow(
-                            item.displayName,
-                            value: "\(item.shifts) \(pluralize(item.shifts, "смена", "смены", "смен"))",
-                            valueColor: Theme.textMuted,
-                            icon: "person"
+                        AmountRow(
+                            leading: { PersonInitial(name: item.displayName, isActive: false, size: 36) },
+                            title: item.displayName,
+                            amount: "\(item.shifts) \(pluralize(item.shifts, "смена", "смены", "смен"))"
                         )
                     }
                 }
@@ -327,11 +322,9 @@ struct PerformanceScreen: View {
     private func baselineCard(_ report: PerformanceRanking) -> some View {
         let baseline = report.baseline
 
-        return Card {
+        return OwnerSection("Как считается") {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Как считается", subtitle: "PI = факт ÷ норма смены")
-
-                Text("Норма — медианная выручка этого же слота: та же точка, тот же день недели, та же смена. Собственные смены оператора в норму не входят.")
+                Text("PI = факт ÷ норма смены. Норма — медианная выручка этого же слота: та же точка, тот же день недели, та же смена. Собственные смены оператора в норму не входят.")
                     .font(Typography.caption)
                     .foregroundStyle(Theme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -346,10 +339,14 @@ struct PerformanceScreen: View {
 }
 
 /// Строка рейтинга: место, имя, PI и деньги сверх нормы.
+///
+/// Оценка — цветом полосы и подписью, а не плашкой: плашка справа съедала
+/// полстроки, и имя обрезалось.
 private struct PerformanceRowView: View {
     let rank: Int
     let item: PerformanceRankingItem
     let previousPI: Double?
+    let share: Double
 
     private var tint: Color {
         switch item.grade {
@@ -360,54 +357,24 @@ private struct PerformanceRowView: View {
         }
     }
 
-    private var chipKind: StatusChip.Kind {
-        switch item.grade {
-        case .excellent, .good: .good
-        case .norm: .neutral
-        case .below: .warning
-        case .weak: .danger
-        }
-    }
-
     var body: some View {
-        HStack(spacing: Spacing.md) {
-            RankBadge(rank: rank)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(item.displayName)
-                    .font(Typography.callout)
-                    .foregroundStyle(Theme.text)
-                    .lineLimit(1)
-                Text("\(item.shifts) \(pluralize(item.shifts, "смена", "смены", "смен")) · \(Money.format(item.totalRevenue))")
-                    .font(Typography.caption)
-                    .monospacedDigit()
-                    .foregroundStyle(Theme.textDim)
-            }
-
-            Spacer(minLength: Spacing.sm)
-
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(String(format: "%.2f", item.pi))
-                    .font(Typography.headline)
-                    .monospacedDigit()
-                    .foregroundStyle(tint)
-                // Сверх нормы — то, ради чего раздел и открывают: это деньги,
-                // которых без этого человека не было бы.
-                Text(Money.signed(item.aboveNorm))
-                    .font(Typography.caption)
-                    .monospacedDigit()
-                    .foregroundStyle(item.aboveNorm >= 0 ? Theme.positive : Theme.negative)
-            }
-
-            if let previousPI {
-                DeltaLabel(change: Percent.change(current: item.pi, previous: previousPI))
-                    .frame(width: 44, alignment: .trailing)
-            }
-
-            StatusChip(item.grade.label, kind: chipKind)
-        }
-        .padding(.vertical, Spacing.xs)
-        .contentShape(Rectangle())
+        AmountRow(
+            leading: {
+                HStack(spacing: Spacing.sm) {
+                    RankBadge(rank: rank)
+                    PersonInitial(name: item.displayName, size: 36)
+                }
+            },
+            title: item.displayName,
+            // Сверх нормы — то, ради чего раздел и открывают: это деньги,
+            // которых без этого человека не было бы.
+            subtitle: "\(item.grade.label.lowercased()) · \(Money.signed(item.aboveNorm)) · \(item.shifts) \(pluralize(item.shifts, "смена", "смены", "смен"))",
+            amount: "PI \(String(format: "%.2f", item.pi))",
+            change: previousPI.flatMap { Percent.change(current: item.pi, previous: $0) },
+            share: share,
+            tint: tint,
+            showsChevron: true
+        )
     }
 }
 
@@ -423,32 +390,27 @@ private struct PerformanceDetail: View {
     var body: some View {
         ScreenScroll {
             VStack(spacing: Spacing.lg) {
-                DashboardGrid {
-                    MetricTile(
-                        label: "PI",
-                        value: String(format: "%.2f", item.pi),
-                        icon: "speedometer",
-                        accent: Theme.brand
-                    )
-                    MetricTile(
-                        label: "Сверх нормы",
-                        value: Money.format(item.aboveNorm),
-                        icon: "plusminus",
-                        accent: item.aboveNorm >= 0 ? Theme.positive : Theme.negative
-                    )
-                    MetricTile(
-                        label: "Выручка",
-                        value: Money.format(item.totalRevenue),
-                        icon: "banknote.fill",
-                        accent: Theme.info
-                    )
-                    MetricTile(
-                        label: "В среднем за смену",
-                        value: Money.format(item.avgRevenuePerShift),
-                        icon: "chart.bar.fill",
-                        accent: Theme.textMuted
-                    )
-                }
+                PersonProfileHeader(
+                    name: item.displayName,
+                    subtitle: item.grade.label,
+                    subtitleColor: gradeColor
+                )
+
+                // PI — главная цифра; выручка и деньги сверх нормы — то, из
+                // чего она сложилась. Зелёный, если человек тянет выше нормы.
+                HeroSummary(
+                    title: "Эффективность, PI",
+                    value: String(format: "%.2f", item.pi),
+                    caption: "сверх нормы \(Money.signed(item.aboveNorm))",
+                    footer: [
+                        ("Выручка", Money.format(item.totalRevenue)),
+                        ("За смену", Money.format(item.avgRevenuePerShift)),
+                        ("Смен", "\(item.shifts)"),
+                    ],
+                    colors: item.pi >= 1
+                        ? [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+                        : [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
+                )
 
                 if !trend.isEmpty {
                     TrendChart(
@@ -482,15 +444,25 @@ private struct PerformanceDetail: View {
             .sorted { $0.date < $1.date }
     }
 
+    private var gradeColor: Color {
+        switch item.grade {
+        case .excellent, .good: Theme.positive
+        case .norm: Theme.textMuted
+        case .below: Theme.warning
+        case .weak: Theme.negative
+        }
+    }
+
     private var shiftsCard: some View {
         let shifts = item.shiftDetails.sorted { $0.date > $1.date }
 
-        return Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Смены", subtitle: "факт против нормы слота")
-
-                ForEach(Array(shifts.enumerated()), id: \.element.id) { index, shift in
-                    if index > 0 { RowDivider() }
+        return OwnerSection("Смены") {
+            Text("факт против нормы")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.textDim)
+        } content: {
+            VStack(spacing: Spacing.sm) {
+                ForEach(shifts) { shift in
                     shiftRow(shift)
                 }
             }
@@ -499,15 +471,16 @@ private struct PerformanceDetail: View {
 
     private func shiftRow(_ shift: PerformanceShift) -> some View {
         HStack(spacing: Spacing.md) {
+            // День или ночь — иконкой в кружке, как тип операции в выписке.
+            TintedIcon(
+                systemName: shift.isNight ? "moon.fill" : "sun.max.fill",
+                tint: shift.isNight ? Color(hex: 0x4F46E5) : Color(hex: 0xF59E0B),
+                size: 36
+            )
             VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: Spacing.xs) {
-                    Text(shift.day?.formatted(.dateTime.day().month(.abbreviated)) ?? shift.date)
-                        .font(Typography.callout)
-                        .foregroundStyle(Theme.text)
-                    Image(systemName: shift.isNight ? "moon.fill" : "sun.max.fill")
-                        .font(.system(size: 10))
-                        .foregroundStyle(shift.isNight ? Theme.info : Theme.warning)
-                }
+                Text(shift.day?.formatted(.dateTime.day().month(.abbreviated)) ?? shift.date)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Theme.text)
                 Text(companyName(shift.companyID))
                     .font(Typography.caption)
                     .foregroundStyle(Theme.textDim)
@@ -518,7 +491,7 @@ private struct PerformanceDetail: View {
 
             VStack(alignment: .trailing, spacing: 1) {
                 Text(Money.format(shift.actual))
-                    .font(Typography.callout.weight(.medium))
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(Theme.text)
                 Text("норма \(Money.format(shift.expected))")
@@ -653,37 +626,31 @@ struct RatingsScreen: View {
         }
     }
 
+    /// Суммарная выручка — главная цифра, сколько людей её сделали и кто
+    /// лидер — подписи. Имя лидера в плитке обрезалось до трёх букв.
     private func metrics(_ store: RatingsStore, _ working: [LeaderboardEntry]) -> some View {
-        DashboardGrid {
-            MetricTile(
-                label: "Суммарная выручка",
-                value: Money.format(store.totalRevenue),
-                icon: "banknote.fill",
-                accent: Theme.brand
-            )
-            MetricTile(
-                label: "Работали",
-                value: "\(working.count)",
-                icon: "person.2.fill",
-                accent: Theme.info
-            )
-            MetricTile(
-                label: "Лидер",
-                value: working.first?.name ?? "—",
-                icon: "trophy.fill",
-                accent: Theme.positive
-            )
-        }
+        let shifts = working.reduce(0) { $0 + $1.shifts }
+        return HeroSummary(
+            title: "Выручка операторов",
+            value: Money.format(store.totalRevenue),
+            footer: [
+                ("Работали", "\(working.count)"),
+                ("Смен", "\(shifts)"),
+                ("Лидер", working.first?.name ?? "—"),
+            ],
+            colors: [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+        )
     }
 
     private func leaderboardCard(_ entries: [LeaderboardEntry]) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Таблица лидеров", subtitle: "по выручке за период")
-
+        OwnerSection("Таблица лидеров") {
+            Text("по выручке")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.textDim)
+        } content: {
+            VStack(spacing: Spacing.sm) {
                 ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
-                    if index > 0 { RowDivider() }
-                    LeaderboardRowView(rank: index + 1, entry: entry)
+                    LeaderboardRowView(rank: index + 1, entry: entry, tint: OwnerTint.point(index))
                 }
             }
         }
@@ -697,57 +664,34 @@ struct RatingsScreen: View {
     }
 }
 
-/// Строка лидерборда.
+/// Строка лидерборда: место, человек, выручка, доля полосой и изменение к
+/// прошлому периоду — как строка расходов по категориям в банке.
 private struct LeaderboardRowView: View {
     let rank: Int
     let entry: LeaderboardEntry
+    let tint: Color
+
+    private var subtitle: String {
+        guard entry.shifts > 0 else { return "нет смен за период" }
+        return "\(entry.shifts) \(pluralize(entry.shifts, "смена", "смены", "смен")) · \(Money.format(entry.avgPerShift)) · \(Percent.format(entry.share))"
+    }
 
     var body: some View {
-        HStack(spacing: Spacing.md) {
-            RankBadge(rank: rank)
-            PersonAvatar(name: entry.name, photoURL: entry.photoURL, size: 30)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(entry.name)
-                    .font(Typography.callout)
-                    .foregroundStyle(entry.revenue > 0 ? Theme.text : Theme.textDim)
-                    .lineLimit(1)
-
-                if entry.revenue > 0 {
-                    HStack(spacing: Spacing.sm) {
-                        ProportionBar(ratio: entry.share / 100, color: Theme.brand)
-                            .frame(maxWidth: 120)
-                        Text(Percent.format(entry.share))
-                            .font(Typography.caption)
-                            .monospacedDigit()
-                            .foregroundStyle(Theme.textDim)
-                    }
-                } else {
-                    Text("нет смен за период")
-                        .font(Typography.caption)
-                        .foregroundStyle(Theme.textDim)
+        AmountRow(
+            leading: {
+                HStack(spacing: Spacing.sm) {
+                    RankBadge(rank: rank)
+                    PersonAvatar(name: entry.name, photoURL: entry.photoURL, size: 36)
+                        .opacity(entry.revenue > 0 ? 1 : 0.55)
                 }
-            }
-
-            Spacer(minLength: Spacing.sm)
-
-            VStack(alignment: .trailing, spacing: 1) {
-                Text(entry.revenue > 0 ? Money.format(entry.revenue) : "—")
-                    .font(Typography.callout.weight(.medium))
-                    .monospacedDigit()
-                    .foregroundStyle(entry.revenue > 0 ? Theme.text : Theme.textDim)
-                if entry.shifts > 0 {
-                    Text("\(entry.shifts) \(pluralize(entry.shifts, "смена", "смены", "смен")) · \(Money.format(entry.avgPerShift))")
-                        .font(Typography.caption)
-                        .monospacedDigit()
-                        .foregroundStyle(Theme.textDim)
-                }
-            }
-
-            DeltaLabel(change: entry.change)
-                .frame(width: 44, alignment: .trailing)
-        }
-        .padding(.vertical, Spacing.xs)
+            },
+            title: entry.name,
+            subtitle: subtitle,
+            amount: entry.revenue > 0 ? Money.format(entry.revenue) : "—",
+            change: entry.change,
+            share: entry.revenue > 0 ? entry.share / 100 : nil,
+            tint: tint
+        )
     }
 }
 
@@ -887,15 +831,13 @@ struct AchievementsScreen: View {
     }
 
     private func peopleCard(_ results: [AchievementResult]) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader(
-                    "Операторы",
-                    subtitle: "\(results.count) \(pluralize(results.count, "человек", "человека", "человек")) за период"
-                )
-
-                ForEach(Array(results.enumerated()), id: \.element.id) { index, result in
-                    if index > 0 { RowDivider() }
+        OwnerSection("Операторы") {
+            Text("\(results.count) \(pluralize(results.count, "человек", "человека", "человек"))")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.textDim)
+        } content: {
+            VStack(spacing: Spacing.sm) {
+                ForEach(results) { result in
                     NavigationLink(value: AchievementRoute(result: result)) {
                         AchievementRowView(result: result)
                     }
@@ -908,35 +850,26 @@ struct AchievementsScreen: View {
     /// Сколько человек получило каждое достижение — видно, какие пороги
     /// работают, а какие недостижимы и потому бесполезны.
     private func catalogCard(_ summary: [OperatorAchievement: Int], people: Int) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Каталог", subtitle: "кто сколько раз получил")
-
+        OwnerSection("Каталог") {
+            Text("кто сколько получил")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.textDim)
+        } content: {
+            VStack(spacing: Spacing.sm) {
                 ForEach(OperatorAchievement.allCases) { achievement in
                     let count = summary[achievement] ?? 0
-                    HStack(spacing: Spacing.md) {
-                        Image(systemName: achievement.icon)
-                            .font(.system(size: 13))
-                            .foregroundStyle(count > 0 ? achievement.tint : Theme.textDim)
-                            .frame(width: 20)
-
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(achievement.title)
-                                .font(Typography.callout)
-                                .foregroundStyle(Theme.text)
-                            Text(achievement.detail)
-                                .font(Typography.caption)
-                                .foregroundStyle(Theme.textDim)
-                                .lineLimit(2)
-                        }
-
-                        Spacer(minLength: Spacing.sm)
-
-                        Text("\(count) из \(people)")
-                            .font(Typography.caption)
-                            .monospacedDigit()
-                            .foregroundStyle(count > 0 ? Theme.textMuted : Theme.textDim)
-                    }
+                    AmountRow(
+                        leading: {
+                            TintedIcon(systemName: achievement.icon, tint: count > 0 ? achievement.tint : Theme.textDim)
+                        },
+                        title: achievement.title,
+                        subtitle: achievement.detail,
+                        amount: "\(count) из \(people)",
+                        // Полоса — доля людей с наградой: порог, который никто не
+                        // берёт, виден сразу пустой строкой.
+                        share: people > 0 ? Double(count) / Double(people) : 0,
+                        tint: achievement.tint
+                    )
                 }
             }
         }
@@ -950,41 +883,47 @@ private struct AchievementRowView: View {
     var body: some View {
         HStack(spacing: Spacing.md) {
             RankBadge(rank: result.rank)
-            PersonAvatar(name: result.stat.name, photoURL: result.stat.photoURL, size: 30)
+            PersonAvatar(name: result.stat.name, photoURL: result.stat.photoURL, size: 40)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(result.stat.name)
-                    .font(Typography.callout)
-                    .foregroundStyle(Theme.text)
-                    .lineLimit(1)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+                    Text(result.stat.name)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(Theme.text)
+                        .lineLimit(1)
+                    Spacer(minLength: Spacing.sm)
+                    Text(Money.format(result.stat.revenue))
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.text)
+                        .lineLimit(1)
+                }
 
-                if result.earned.isEmpty {
-                    Text("пока без достижений")
-                        .font(Typography.caption)
-                        .foregroundStyle(Theme.textDim)
-                } else {
-                    HStack(spacing: Spacing.xs) {
-                        ForEach(result.earned) { achievement in
-                            Image(systemName: achievement.icon)
-                                .font(.system(size: 11))
-                                .foregroundStyle(achievement.tint)
+                HStack(spacing: Spacing.sm) {
+                    if result.earned.isEmpty {
+                        Text("пока без достижений")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.textDim)
+                    } else {
+                        // Значки маленькими цветными кружками — как иконки
+                        // категорий в банке, а не россыпью голых символов.
+                        HStack(spacing: 4) {
+                            ForEach(result.earned) { achievement in
+                                TintedIcon(systemName: achievement.icon, tint: achievement.tint, size: 22)
+                            }
                         }
                     }
+                    Spacer(minLength: Spacing.sm)
+                    Text("\(result.stat.shifts) \(pluralize(result.stat.shifts, "смена", "смены", "смен"))")
+                        .font(.system(size: 13))
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.textDim)
                 }
             }
 
-            Spacer(minLength: Spacing.sm)
-
-            VStack(alignment: .trailing, spacing: 1) {
-                Text(Money.format(result.stat.revenue))
-                    .font(Typography.callout.weight(.medium))
-                    .monospacedDigit()
-                    .foregroundStyle(Theme.text)
-                Text("\(result.stat.shifts) \(pluralize(result.stat.shifts, "смена", "смены", "смен"))")
-                    .font(Typography.caption)
-                    .monospacedDigit()
-                    .foregroundStyle(Theme.textDim)
-            }
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Theme.textDim)
         }
         .padding(.vertical, Spacing.xs)
         .contentShape(Rectangle())
@@ -998,37 +937,33 @@ private struct AchievementDetail: View {
     var body: some View {
         ScreenScroll {
             VStack(spacing: Spacing.lg) {
-                DashboardGrid {
-                    MetricTile(
-                        label: "Место",
-                        value: "\(result.rank)",
-                        icon: "number",
-                        accent: result.rank <= 3 ? Theme.positive : Theme.textMuted
-                    )
-                    MetricTile(
-                        label: "Выручка",
-                        value: Money.format(result.stat.revenue),
-                        icon: "banknote.fill",
-                        accent: Theme.brand
-                    )
-                    MetricTile(
-                        label: "Смен",
-                        value: "\(result.stat.shifts)",
-                        icon: "calendar",
-                        accent: Theme.info
-                    )
-                    MetricTile(
-                        label: "Доля выручки",
-                        value: Percent.format(result.stat.share),
-                        icon: "chart.pie.fill",
-                        accent: Theme.accent
-                    )
-                }
+                PersonProfileHeader(
+                    name: result.stat.name,
+                    photoURL: result.stat.photoURL,
+                    subtitle: "\(result.rank)-е место · \(result.earned.count) из \(OperatorAchievement.allCases.count) достижений",
+                    subtitleColor: result.rank <= 3 ? Theme.positive : Theme.textMuted
+                )
+
+                // Выручка — главная цифра: все пороги достижений считаются от
+                // неё и от смен. Место и доля — подписи.
+                HeroSummary(
+                    title: "Выручка за период",
+                    value: Money.format(result.stat.revenue),
+                    footer: [
+                        ("Место", "\(result.rank)"),
+                        ("Смен", "\(result.stat.shifts)"),
+                        ("Доля", Percent.format(result.stat.share)),
+                    ],
+                    colors: [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
+                )
 
                 if !result.earned.isEmpty {
-                    Card {
+                    OwnerSection("Получено") {
+                        Text("\(result.earned.count) из \(OperatorAchievement.allCases.count)")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.textDim)
+                    } content: {
                         VStack(alignment: .leading, spacing: Spacing.md) {
-                            SectionHeader("Получено", subtitle: "\(result.earned.count) из \(OperatorAchievement.allCases.count)")
                             ForEach(result.earned) { achievement in
                                 badge(achievement, isEarned: true)
                             }
@@ -1037,9 +972,8 @@ private struct AchievementDetail: View {
                 }
 
                 if !result.locked.isEmpty {
-                    Card {
+                    OwnerSection("Осталось") {
                         VStack(alignment: .leading, spacing: Spacing.md) {
-                            SectionHeader("Осталось")
                             ForEach(result.locked) { achievement in
                                 badge(achievement, isEarned: false)
                             }
@@ -1060,14 +994,11 @@ private struct AchievementDetail: View {
         let progress = isEarned ? nil : achievement.progress(for: result.stat)
 
         HStack(alignment: .top, spacing: Spacing.md) {
-            Image(systemName: achievement.icon)
-                .font(.system(size: 16))
-                .foregroundStyle(isEarned ? achievement.tint : Theme.textDim)
-                .frame(width: 24)
+            TintedIcon(systemName: achievement.icon, tint: isEarned ? achievement.tint : Theme.textDim)
 
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 Text(achievement.title)
-                    .font(Typography.callout.weight(.medium))
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(isEarned ? Theme.text : Theme.textMuted)
                 Text(achievement.detail)
                     .font(Typography.caption)
