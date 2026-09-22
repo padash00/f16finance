@@ -141,11 +141,11 @@ struct SalesKpiScreen: View {
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 8)
                                     .background(
-                                        selectedStore?.id == store.id ? Theme.text : Theme.surface,
+                                        selectedStore?.id == store.id ? Theme.brand : Theme.surface,
                                         in: Capsule()
                                     )
                                     .foregroundStyle(
-                                        selectedStore?.id == store.id ? Theme.background : Theme.textMuted
+                                        selectedStore?.id == store.id ? Color.white : Theme.textMuted
                                     )
                             }
                             .buttonStyle(.pressable)

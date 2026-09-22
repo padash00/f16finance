@@ -192,7 +192,7 @@ struct PnlScreen: View {
                 .foregroundStyle(isOn ? .white : Theme.text)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
-                .background(isOn ? AnyShapeStyle(Theme.text) : AnyShapeStyle(Theme.surface), in: Capsule())
+                .background(isOn ? AnyShapeStyle(Theme.brand) : AnyShapeStyle(Theme.surface), in: Capsule())
         }
         .buttonStyle(.pressable)
     }

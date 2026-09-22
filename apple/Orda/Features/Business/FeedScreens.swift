@@ -1909,7 +1909,7 @@ private struct ThreadRow: View {
                     Text("\(thread.unreadCount)")
                         .font(Typography.caption.weight(.bold))
                         .monospacedDigit()
-                        .foregroundStyle(Theme.background)
+                        .foregroundStyle(.white)
                         .padding(.horizontal, Spacing.sm)
                         .padding(.vertical, 2)
                         .background(Theme.brand, in: Capsule())

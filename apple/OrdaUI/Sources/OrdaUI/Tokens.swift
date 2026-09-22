@@ -19,6 +19,9 @@ public enum Theme {
     public static let surface = Color.adaptive(dark: 0x0F2544, light: 0xFFFFFF)
     /// Карточка второго уровня (внутри карточки).
     public static let surfaceRaised = Color.adaptive(dark: 0x15305A, light: 0xF3F4F6)
+    /// Выбранный сегмент переключателя: в светлой — белый на сером, в тёмной —
+    /// светлый navy на глубоком (иначе выбранное темнее дорожки и теряется).
+    public static let segmentSelected = Color.adaptive(dark: 0x2A4E86, light: 0xFFFFFF)
 
     // ── Границы ──────────────────────────────────────────────────────────────
 

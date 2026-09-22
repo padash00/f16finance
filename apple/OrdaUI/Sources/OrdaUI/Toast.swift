@@ -22,7 +22,7 @@ public struct ToastBanner: View {
                 .font(Typography.callout.weight(.medium))
                 .lineLimit(2)
         }
-        .foregroundStyle(Color.black.opacity(0.85))
+        .foregroundStyle(.white)
         .padding(.horizontal, Spacing.lg)
         .padding(.vertical, Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -91,9 +91,11 @@ struct AdaptiveWorkspace<Detail: View>: View {
                                     }
                                 }
                             }
+                            .listRowBackground(Theme.surface)
                         }
                     }
                     .listStyle(.insetGrouped)
+                    .brandedListBackground()
                     .navigationTitle("Ещё")
                     .navigationDestination(for: WorkspaceItem.self) { item in
                         detail(item)
@@ -117,8 +119,10 @@ struct AdaptiveWorkspace<Detail: View>: View {
                     NavigationLink(value: item) {
                         itemLabel(item)
                     }
+                    .listRowBackground(Theme.surface)
                 }
                 .listStyle(.insetGrouped)
+                .brandedListBackground()
                 .navigationDestination(for: WorkspaceItem.self) { item in
                     detail(item)
                 }
@@ -174,6 +178,9 @@ struct AdaptiveWorkspace<Detail: View>: View {
             .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 340)
             #else
             .listStyle(.sidebar)
+            // Боковая панель — на navy бренда, а не на системном сером.
+            .scrollContentBackground(.hidden)
+            .background(Theme.elevated)
             .navigationSplitViewColumnWidth(min: 260, ideal: 300, max: 380)
             #endif
         } detail: {

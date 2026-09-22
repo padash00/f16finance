@@ -318,6 +318,7 @@ struct MentionPicker: View {
                         .font(Typography.callout)
                         .foregroundStyle(Theme.text)
                 }
+                .listRowBackground(Theme.surface)
 
                 if isLoading && contacts.isEmpty {
                     ForEach(0..<4, id: \.self) { _ in
@@ -342,9 +343,11 @@ struct MentionPicker: View {
                                 }
                             }
                         }
+                        .listRowBackground(Theme.surface)
                     }
                 }
             }
+            .brandedListBackground()
             .searchable(text: $search, prompt: "Кого позвать")
             .navigationTitle("Упомянуть")
             #if os(iOS)

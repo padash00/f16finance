@@ -107,7 +107,7 @@ public struct NavigationRow: View {
                 Text("\(badge)")
                     .font(Typography.caption.weight(.bold))
                     .monospacedDigit()
-                    .foregroundStyle(Color.black.opacity(0.85))
+                    .foregroundStyle(.white)
                     .padding(.horizontal, Spacing.sm)
                     .padding(.vertical, 2)
                     .background(badgeColor, in: Capsule())

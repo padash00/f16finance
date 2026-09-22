@@ -664,7 +664,7 @@ struct ChecklistItemCard: View {
         } label: {
             Text(title)
                 .font(Typography.headline)
-                .foregroundStyle(answer?.answer == value ? Color.black.opacity(0.85) : Theme.text)
+                .foregroundStyle(answer?.answer == value ? Color.white : Theme.text)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, Spacing.md)
                 .background(

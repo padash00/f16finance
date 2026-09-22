@@ -263,12 +263,17 @@ struct PillSegment<Value: Hashable>: View {
                     Text(option.title)
                         .font(.system(size: 14, weight: isOn ? .semibold : .medium))
                         .foregroundStyle(isOn ? Theme.text : Theme.textMuted)
+                        // Длинные подписи («Подтверждённые») не переносим по
+                        // буквам — ужимаем шрифт.
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .padding(.horizontal, 4)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 9)
                         .background {
                             if isOn {
                                 Capsule()
-                                    .fill(Theme.surface)
+                                    .fill(Theme.segmentSelected)
                                     .shadow(color: .black.opacity(0.08), radius: 4, y: 1)
                             }
                         }

@@ -47,13 +47,14 @@ struct OrdaApp: App {
     }
 
     #if os(iOS)
-    /// Системные переключатели — в тон банковскому: белая выбранная кнопка на
-    /// сером, жирная подпись. Большая часть экранов уже на своём `PillSegment`,
+    /// Системные переключатели — в тон ORDA CONTROL: в светлой теме белая
+    /// выбранная кнопка на светло-сером, в тёмной — светлый navy на глубоком
+    /// navy (серые тона на синем фоне смотрелись грязно). Большая часть экранов уже на своём `PillSegment`,
     /// это — для остальных, чтобы они не выбивались.
     private static func styleSegmentedControls() {
         let control = UISegmentedControl.appearance()
-        control.selectedSegmentTintColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.22, alpha: 1) : .white }
-        control.backgroundColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.12, alpha: 1) : UIColor(red: 0.95, green: 0.96, blue: 0.97, alpha: 1) }
+        control.selectedSegmentTintColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0x2A / 255, green: 0x4E / 255, blue: 0x86 / 255, alpha: 1) : .white }
+        control.backgroundColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0x08 / 255, green: 0x18 / 255, blue: 0x30 / 255, alpha: 1) : UIColor(red: 0xF3 / 255, green: 0xF4 / 255, blue: 0xF6 / 255, alpha: 1) }
         control.setTitleTextAttributes([.font: UIFont.systemFont(ofSize: 14, weight: .semibold)], for: .selected)
         control.setTitleTextAttributes([.font: UIFont.systemFont(ofSize: 14, weight: .medium), .foregroundColor: UIColor.secondaryLabel], for: .normal)
     }

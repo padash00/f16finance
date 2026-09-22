@@ -1006,7 +1006,7 @@ private struct SysStatusRow: View {
     }
 }
 
-/// Пилюля фильтра: выбранная — тёмная, как в выписке.
+/// Пилюля фильтра: выбранная — кобальтовая, как в выписке.
 private struct SysChip: View {
     let title: String
     let isOn: Bool
@@ -1021,7 +1021,7 @@ private struct SysChip: View {
                 .foregroundStyle(isOn ? Color.white : Theme.text)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
-                .background(isOn ? AnyShapeStyle(Theme.text) : AnyShapeStyle(Theme.surface), in: Capsule())
+                .background(isOn ? AnyShapeStyle(Theme.brand) : AnyShapeStyle(Theme.surface), in: Capsule())
         }
         .buttonStyle(.pressable)
     }

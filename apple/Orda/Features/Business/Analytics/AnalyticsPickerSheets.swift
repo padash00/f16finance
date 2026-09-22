@@ -37,6 +37,7 @@ struct PeriodPickerSheet: View {
                         }
                     }
                 }
+                .listRowBackground(Theme.surface)
 
                 Section("Свои даты") {
                     DatePicker("С", selection: $customFrom, displayedComponents: .date)
@@ -60,7 +61,9 @@ struct PeriodPickerSheet: View {
                     }
                     .disabled(customTo < customFrom)
                 }
+                .listRowBackground(Theme.surface)
             }
+            .brandedListBackground()
             .navigationTitle("Период")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -106,6 +109,7 @@ struct CompanyPickerSheet: View {
                         row(title: "Все точки", subtitle: nil, isOn: draft.isEmpty)
                     }
                 }
+                .listRowBackground(Theme.surface)
                 Section("Точки") {
                     ForEach(companies) { company in
                         Button {
@@ -123,7 +127,9 @@ struct CompanyPickerSheet: View {
                         }
                     }
                 }
+                .listRowBackground(Theme.surface)
             }
+            .brandedListBackground()
             .navigationTitle("Точки")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)

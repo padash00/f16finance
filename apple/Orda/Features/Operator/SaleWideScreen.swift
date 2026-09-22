@@ -346,7 +346,7 @@ struct ProductTile: View {
                     Text("\(Quantity.format(inCart))")
                         .font(Typography.caption.weight(.bold))
                         .monospacedDigit()
-                        .foregroundStyle(Color.black.opacity(0.85))
+                        .foregroundStyle(.white)
                         .padding(.horizontal, Spacing.sm)
                         .padding(.vertical, 2)
                         .background(Theme.accent(for: .operator), in: Capsule())

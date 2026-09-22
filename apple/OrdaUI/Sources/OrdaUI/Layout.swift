@@ -281,3 +281,18 @@ public struct SplitDashboard<Main: View, Side: View>: View {
         }
     }
 }
+
+// ── Системные списки в цветах бренда ─────────────────────────────────────────
+
+public extension View {
+    /// Системный `List` на фоне ORDA CONTROL. Без этого список рисует свой
+    /// фон — чёрный с серыми строками в тёмной теме, — и лист выбора точек
+    /// или периода выпадает из navy-интерфейса вокруг.
+    ///
+    /// Строкам нужен ещё `.listRowBackground(Theme.surface)` на секциях:
+    /// у самого списка его не задать.
+    func brandedListBackground() -> some View {
+        scrollContentBackground(.hidden)
+            .background(Theme.background)
+    }
+}

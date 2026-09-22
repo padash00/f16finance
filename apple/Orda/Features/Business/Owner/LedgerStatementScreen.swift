@@ -53,7 +53,7 @@ struct LedgerStatementScreen: View {
 
     private var isIncome: Bool { kind == .income }
     private var title: String { isIncome ? "Доходы" : "Расходы" }
-    private var tint: Color { isIncome ? Color(hex: 0x10B981) : Color(hex: 0xEF4444) }
+    private var tint: Color { isIncome ? Theme.positive : Theme.negative }
 
     private var canCreate: Bool { access?.can(isIncome ? "income.create" : "expenses.create") ?? false }
     private var canEdit: Bool { access?.can(isIncome ? "income.edit" : "expenses.edit") ?? false }
@@ -195,7 +195,7 @@ struct LedgerStatementScreen: View {
                             .font(.system(size: 15, weight: .bold))
                             .foregroundStyle(.white)
                             .frame(width: 32, height: 32)
-                            .background(tint, in: Circle())
+                            .background(Theme.brand, in: Circle())
                     }
                 }
             }
@@ -342,7 +342,7 @@ struct LedgerStatementScreen: View {
             .foregroundStyle(.white)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Theme.text, in: Capsule())
+            .background(Theme.brand, in: Capsule())
         }
         .buttonStyle(.pressable)
     }

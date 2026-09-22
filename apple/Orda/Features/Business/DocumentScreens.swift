@@ -1045,5 +1045,9 @@ struct LoadingRows: View {
             }
         }
         .padding(Spacing.lg)
+        // На весь экран и на фоне бренда: иначе вокруг заглушек — чёрные
+        // поля, пока грузится список.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Theme.background)
     }
 }

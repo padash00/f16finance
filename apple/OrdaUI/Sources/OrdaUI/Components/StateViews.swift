@@ -150,6 +150,9 @@ public struct ErrorStateView: View {
         }
         .frame(maxWidth: 360)
         .padding(Spacing.xxl)
+        // Как пустое состояние — занимает экран, чтобы вокруг не проступал
+        // системный чёрный фон вместо navy.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var icon: String {
@@ -185,7 +188,7 @@ public struct PrimaryButtonStyle: ButtonStyle {
     public func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(Typography.headline)
-            .foregroundStyle(Color.black.opacity(0.85))
+            .foregroundStyle(.white)
             .padding(.horizontal, Spacing.xl)
             .padding(.vertical, Spacing.md)
             .frame(maxWidth: .infinity)
