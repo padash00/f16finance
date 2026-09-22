@@ -35,9 +35,11 @@ struct PlatformRootView: View {
         SurfaceReader { _ in
         Group {
             if let store, let business {
-                VStack(spacing: 0) {
-                    OrganizationContextBanner()
-                    content
+                OwnerAnalyticsScope {
+                    VStack(spacing: 0) {
+                        OrganizationContextBanner()
+                        content
+                    }
                 }
                 .environment(store)
                 .environment(business)
@@ -130,7 +132,7 @@ struct PlatformRootView: View {
                 .tag(PlatformTab.organizations)
 
             NavigationStack {
-                BusinessDashboardScreen(resolver: resolver)
+                companyHome
                     .toolbar { OrganizationSwitcher() }
             }
             .tabItem { Label("Моя компания", systemImage: "square.grid.2x2.fill") }
@@ -147,6 +149,16 @@ struct PlatformRootView: View {
                 .tag(PlatformTab.profile)
         }
         .tint(Theme.accent(for: .platform))
+    }
+
+    /// «Моя компания» — та же аналитика, что у владельца.
+    @ViewBuilder
+    private var companyHome: some View {
+        if resolver.canSeeOwnerAnalytics {
+            OwnerOverviewScreen(resolver: resolver)
+        } else {
+            BusinessDashboardScreen(resolver: resolver)
+        }
     }
 
     private var splitLayout: some View {
@@ -213,7 +225,7 @@ struct PlatformRootView: View {
         case "platform.organizations":
             OrganizationsScreen()
         case "business.dashboard":
-            BusinessDashboardScreen(resolver: resolver)
+            companyHome
         case "business.ledger":
             LedgerScreen()
         default:

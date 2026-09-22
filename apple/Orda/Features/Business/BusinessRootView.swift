@@ -53,7 +53,7 @@ struct BusinessRootView: View {
         SurfaceReader { _ in
             Group {
                 if let store {
-                    content
+                    OwnerAnalyticsScope { content }
                         .environment(store)
                         .environment(\.access, resolver)
                 } else {
@@ -187,7 +187,7 @@ struct BusinessRootView: View {
     @ViewBuilder
     private func contentTab(_ tab: PhoneTab) -> some View {
         switch tab {
-        case .home: BusinessDashboardScreen(resolver: resolver)
+        case .home: homeScreen
         case .approvals: ApprovalsScreen()
         case .tasks: TeamTasksScreen()
         case .chat: TeamChatScreen()
@@ -213,6 +213,16 @@ struct BusinessRootView: View {
         }
         .onAppear {
             if selection == nil { selection = sections.first?.items.first }
+        }
+    }
+
+    /// Главный экран: аналитика — тем, кому открыты деньги, иначе прежняя сводка.
+    @ViewBuilder
+    private var homeScreen: some View {
+        if resolver.canSeeOwnerAnalytics {
+            OwnerOverviewScreen(resolver: resolver)
+        } else {
+            BusinessDashboardScreen(resolver: resolver)
         }
     }
 
@@ -304,7 +314,7 @@ struct BusinessRootView: View {
     private func destination(for item: WorkspaceItem?) -> some View {
         switch item?.id {
         case "home.dashboard":
-            BusinessDashboardScreen(resolver: resolver)
+            homeScreen
         default:
             if let item, item.id.hasPrefix("native."),
                let section = NativeSection(rawValue: String(item.id.dropFirst("native.".count))) {
