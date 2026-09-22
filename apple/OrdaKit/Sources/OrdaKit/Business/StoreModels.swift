@@ -166,12 +166,28 @@ public struct StockMovement: Decodable, Sendable, Identifiable, Hashable {
     public let fromName: String?
     public let toName: String?
 
+    /// Названия — те же, что в журнале движений на сайте
+    /// (`app/(main)/store/movements`). Раньше половина видов падала в общее
+    /// «Движение», и фильтр показывал три одинаковые кнопки.
     public var kindLabel: String {
         switch kind {
-        case "receipt", "purchase": "Приход"
-        case "transfer": "Перемещение"
+        case "receipt", "purchase": "Приёмка"
+        case "receipt_cancel": "Отмена приёмки"
+        case "transfer", "transfer_to_point": "Выдача на точку"
+        case "transfer_cancel": "Откат выдачи"
+        case "transfer_warehouse_to_showcase": "Получение точкой"
+        case "transfer_showcase_to_warehouse": "Возврат на склад"
+        case "auto_warehouse_to_showcase": "Авто-перенос"
+        case "reservation": "Резерв"
+        case "reservation_release": "Снятие резерва"
         case "writeoff": "Списание"
         case "sale": "Продажа"
+        case "debt": "Долг"
+        case "return": "Возврат с кассы"
+        case "inventory_adjustment": "Корректировка"
+        case "set_stock": "Синхронизация"
+        case "posting": "Оприходование"
+        case "migration_initial": "Миграция"
         case "revision", "audit": "Ревизия"
         // Незнакомый вид движения показываем нейтрально: английское слово из
         // базы в журнале склада ничего не объясняет.

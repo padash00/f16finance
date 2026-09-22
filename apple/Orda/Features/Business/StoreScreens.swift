@@ -85,32 +85,17 @@ struct StoreScreen: View {
         let today = Calendar.current.startOfDay(for: Date())
         let todayMovements = overview.movements.filter { ($0.createdAt ?? .distantPast) >= today }
 
-        return DashboardGrid {
-            MetricTile(
-                label: "Позиций",
-                value: "\(totals.count)",
-                icon: "shippingbox.fill",
-                accent: Theme.brand
-            )
-            MetricTile(
-                label: "Заканчивается",
-                value: "\(low)",
-                icon: "exclamationmark.triangle.fill",
-                accent: low > 0 ? Theme.warning : Theme.positive
-            )
-            MetricTile(
-                label: "Заявок ждёт",
-                value: "\(pending)",
-                icon: "tray.full.fill",
-                accent: pending > 0 ? Theme.info : Theme.textDim
-            )
-            MetricTile(
-                label: "Движений сегодня",
-                value: "\(todayMovements.count)",
-                icon: "arrow.left.arrow.right",
-                accent: Theme.textMuted
-            )
-        }
+        return HeroSummary(
+            title: "Позиций на складе",
+            value: "\(totals.count)",
+            caption: low > 0 ? "\(low) заканчивается — ниже порога" : "всего хватает",
+            footer: [
+                ("Заканчивается", "\(low)"),
+                ("Заявок ждёт", "\(pending)"),
+                ("Движений сегодня", "\(todayMovements.count)"),
+            ],
+            colors: [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
+        )
     }
 
     // ── Заканчивается ────────────────────────────────────────────────────────

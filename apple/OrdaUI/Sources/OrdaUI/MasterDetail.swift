@@ -66,28 +66,37 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
                 // перезагрузиться: ссылка держит вид внутри себя, и замена
                 // массива уносила его вместе с переходом. Экран «не
                 // открывался», хотя открывался и тут же закрывался.
+                // Строки — на белой скруглённой подложке с разделителями,
+                // как операции в банковском приложении. Раньше они лежали
+                // прямо на сером фоне и читались как текст, а не как список.
                 List {
-                    header()
-                        .listRowInsets(EdgeInsets(top: Spacing.sm, leading: Spacing.lg, bottom: Spacing.sm, trailing: Spacing.lg))
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-
-                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                    Button { selection = item } label: {
-                        row(item)
+                    Section {
+                        header()
+                            .listRowInsets(EdgeInsets(top: Spacing.sm, leading: 0, bottom: Spacing.sm, trailing: 0))
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
                     }
-                    .buttonStyle(.pressable)
-                    // Каскад: строки проявляются одна за другой. Список,
-                    // возникающий целиком и мгновенно, читается как подмена
-                    // экрана — глазу не за что зацепиться.
-                    .staggeredAppear(index: index)
-                    .listRowInsets(EdgeInsets(top: Spacing.xs, leading: Spacing.lg, bottom: Spacing.xs, trailing: Spacing.lg))
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-                    .rowActions(actions(item))
+
+                    Section {
+                        ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                        Button { selection = item } label: {
+                            row(item)
+                                .padding(.vertical, Spacing.xs)
+                        }
+                        .buttonStyle(.pressable)
+                        // Каскад: строки проявляются одна за другой. Список,
+                        // возникающий целиком и мгновенно, читается как подмена
+                        // экрана — глазу не за что зацепиться.
+                        .staggeredAppear(index: index)
+                        .listRowInsets(EdgeInsets(top: Spacing.xs, leading: Spacing.md, bottom: Spacing.xs, trailing: Spacing.md))
+                        .listRowBackground(Theme.surface)
+                        .listRowSeparatorTint(Theme.borderSoft)
+                        .rowActions(actions(item))
+                        }
                     }
                 }
-                .listStyle(.plain)
+                .listStyle(.insetGrouped)
+                .listSectionSpacing(.compact)
                 .scrollContentBackground(.hidden)
                 // Список меняется на глазах: пришло сообщение, закрылась
                 // заявка. Мгновенная подмена строк выглядит как сбой.

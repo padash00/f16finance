@@ -119,15 +119,13 @@ struct ReceiptsScreen: View {
 
         return Group {
             if !rows.isEmpty {
-                HStack(spacing: Spacing.md) {
-                    SummaryPill(title: kind.amountLabel, value: Money.format(active.reduce(0) { $0 + $1.totalAmount }), tint: Theme.brand)
-                    SummaryPill(title: kind.countLabel, value: "\(active.count)", tint: Theme.textMuted)
-                    if expiring > 0 {
-                        SummaryPill(title: "Истекает срок", value: "\(expiring)", tint: Theme.warning)
-                    }
-                }
-                .padding(.horizontal, Spacing.lg)
-                .padding(.vertical, Spacing.md)
+                HeroSummary(
+                    title: kind.amountLabel,
+                    value: Money.format(active.reduce(0) { $0 + $1.totalAmount }),
+                    footer: [(kind.countLabel, "\(active.count)")]
+                        + (expiring > 0 ? [("Истекает срок", "\(expiring)")] : []),
+                    colors: [Color(hex: 0x0EA5E9), Color(hex: 0x2563EB)]
+                )
             }
         }
     }
