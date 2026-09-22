@@ -1,3 +1,4 @@
+import Charts
 import OrdaKit
 import OrdaUI
 import SwiftUI
@@ -12,34 +13,8 @@ struct OwnerAnalyticsScreen: View {
 
     @Environment(AnalyticsStore.self) private var analytics
     @State private var metric: OverviewMetric = .revenue
-    @State private var showsPeriod = false
     @State private var showsCompanies = false
     @State private var showsAllExpenses = false
-
-    private enum QuickPeriod: Hashable { case day, week, month, year, other }
-
-    private var quickPeriod: Binding<QuickPeriod> {
-        Binding(
-            get: {
-                switch analytics.filter.period {
-                case .today: .day
-                case .thisWeek: .week
-                case .thisMonth: .month
-                case .thisYear: .year
-                default: .other
-                }
-            },
-            set: { value in
-                switch value {
-                case .day: analytics.filter.period = .today
-                case .week: analytics.filter.period = .thisWeek
-                case .month: analytics.filter.period = .thisMonth
-                case .year: analytics.filter.period = .thisYear
-                case .other: showsPeriod = true
-                }
-            }
-        )
-    }
 
     var body: some View {
         ScrollView {
@@ -78,10 +53,7 @@ struct OwnerAnalyticsScreen: View {
         .toolbar(.hidden, for: .navigationBar)
         #endif
         .task { if analytics.data == nil { await analytics.load() } }
-        .sheet(isPresented: $showsPeriod) {
-            PeriodPickerSheet(selection: Binding(get: { analytics.filter.period }, set: { analytics.filter.period = $0 }))
-                .presentationDetents([.medium, .large])
-        }
+        .onChange(of: ExtraCashPreference.shared.includeExtra) { _, _ in analytics.reload() }
         .sheet(isPresented: $showsCompanies) {
             CompanyPickerSheet(
                 companies: analytics.companies,
@@ -127,50 +99,26 @@ struct OwnerAnalyticsScreen: View {
     }
 
     private var periodBar: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            HStack(spacing: Spacing.sm) {
-                PillSegment(
-                    options: [(.day, "День"), (.week, "Неделя"), (.month, "Месяц"), (.year, "Год")],
-                    selection: quickPeriod
-                )
-                Button {
-                    showsPeriod = true
-                } label: {
-                    Image(systemName: "calendar")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(quickPeriod.wrappedValue == .other ? Color.white : Theme.text)
-                        .frame(width: 44, height: 44)
-                        .background(quickPeriod.wrappedValue == .other ? AnyShapeStyle(Theme.brand) : AnyShapeStyle(Theme.surfaceRaised), in: Circle())
-                }
-                .buttonStyle(.pressable)
-            }
-            HStack(spacing: 4) {
-                Text(periodCaption)
-                Text("·")
-                Menu {
-                    Picker("Сравнение", selection: Binding(get: { analytics.filter.compare }, set: { analytics.filter.compare = $0 })) {
-                        ForEach(AnalyticsCompare.allCases) { Text($0.title).tag($0) }
-                    }
-                } label: {
-                    HStack(spacing: 2) {
-                        Text("сравнение: \(analytics.filter.compare.shortTitle)")
-                        Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
-                    }
-                    .foregroundStyle(Theme.brand)
-                }
-            }
-            .font(.system(size: 13))
-            .foregroundStyle(Theme.textDim)
-            .padding(.horizontal, Spacing.xs)
-        }
+        PeriodBar(
+            selection: Binding(get: { analytics.filter.period }, set: { analytics.filter.period = $0 }),
+            quick: [.today, .thisWeek, .thisMonth, .thisYear],
+            trailing: AnyView(compareMenu),
+            showsExtra: true
+        )
     }
 
-    private var periodCaption: String {
-        if let p = analytics.data?.period {
-            return AnalyticsPeriod.rangeLabel(from: p.from, to: min(p.through, p.to))
+    private var compareMenu: some View {
+        Menu {
+            Picker("Сравнение", selection: Binding(get: { analytics.filter.compare }, set: { analytics.filter.compare = $0 })) {
+                ForEach(AnalyticsCompare.allCases) { Text($0.title).tag($0) }
+            }
+        } label: {
+            HStack(spacing: 2) {
+                Text("сравнение: \(analytics.filter.compare.shortTitle)")
+                Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
+            }
+            .foregroundStyle(Theme.brand)
         }
-        let b = analytics.bounds
-        return AnalyticsPeriod.rangeLabel(from: b.from, to: b.to)
     }
 
     // ── Главная цифра ────────────────────────────────────────────────────────
@@ -178,10 +126,19 @@ struct OwnerAnalyticsScreen: View {
     private func mainCard(_ data: OwnerAnalytics) -> some View {
         let cur = data.kpi.current
         let prev = data.kpi.previous
-        let (value, previous): (Double, Double) = switch metric {
-        case .revenue: (cur.revenue, prev.revenue)
-        case .expense: (cur.expense, prev.expense)
-        case .profit: (cur.profit, prev.profit)
+        // Один день: отчёты смен приходят в конце смены, и днём по ним выручка
+        // почти ноль против целого вчерашнего дня. Выручку дня берём по кассе
+        // к этому часу, а вместо графика из одного столбика — часы.
+        let isDay = data.period.from == data.period.to
+        let livePos = isDay && metric == .revenue ? data.pos : nil
+        let (value, previous): (Double, Double) = if let livePos {
+            (livePos.amount, livePos.previous.amount)
+        } else {
+            switch metric {
+            case .revenue: (cur.revenue, prev.revenue)
+            case .expense: (cur.expense, prev.expense)
+            case .profit: (cur.profit, prev.profit)
+            }
         }
         let change = Percent.change(current: value, previous: previous)
         return VStack(alignment: .leading, spacing: Spacing.md) {
@@ -218,19 +175,28 @@ struct OwnerAnalyticsScreen: View {
                     if let change {
                         ChangeText(change: change, higherIsBetter: metric.higherIsBetter)
                     }
-                    Text("было \(Money.format(previous))")
+                    Text(livePos?.previous.sameTime == true ? "в это время было \(Money.format(previous))" : "было \(Money.format(previous))")
                         .font(.system(size: 13))
                         .monospacedDigit()
                         .foregroundStyle(Theme.textDim)
                 }
+                if isDay {
+                    Text(livePos != nil ? "по кассе" : "по отчётам смен — они закрываются в конце смены")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.textDim)
+                }
             }
 
-            ComparisonChart(
-                points: OwnerOverviewScreen.points(data, metric: metric),
-                color: metric.color,
-                asBars: data.period.group != .day || data.series.count <= 7,
-                height: 190
-            )
+            if let livePos {
+                HourBars(hours: livePos.byHour, color: metric.color)
+            } else if data.series.count > 1 {
+                ComparisonChart(
+                    points: OwnerOverviewScreen.points(data, metric: metric),
+                    color: metric.color,
+                    asBars: data.period.group != .day || data.series.count <= 7,
+                    height: 190
+                )
+            }
         }
         .padding(Spacing.lg)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
@@ -540,6 +506,57 @@ struct OwnerAnalyticsScreen: View {
                     }
                 }
             }
+        }
+    }
+}
+
+/// Выручка по часам за день — столбики только в рабочие часы.
+private struct HourBars: View {
+    let hours: [OwnerAnalytics.POS.Hour]
+    let color: Color
+
+    @State private var selected: Int?
+
+    private var shown: [OwnerAnalytics.POS.Hour] {
+        let active = hours.filter { $0.amount > 0 }.map(\.hour)
+        guard let first = active.min(), let last = active.max() else { return [] }
+        return hours.filter { $0.hour >= first && $0.hour <= last }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            if let selected, let hour = hours.first(where: { $0.hour == selected }) {
+                Text("\(hour.hour):00–\(hour.hour + 1):00 · \(Money.format(hour.amount)) · \(hour.count) чеков")
+                    .font(.system(size: 13, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.text)
+            } else {
+                Text("По часам")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textDim)
+            }
+            Chart(shown) { hour in
+                BarMark(x: .value("Час", hour.hour), y: .value("Сумма", hour.amount))
+                    .foregroundStyle(color.opacity(selected == nil || selected == hour.hour ? 1 : 0.35))
+                    .cornerRadius(4)
+            }
+            .chartXAxis {
+                AxisMarks(values: .stride(by: 3)) { value in
+                    AxisValueLabel {
+                        if let h = value.as(Int.self) { Text("\(h):00").font(.system(size: 10)) }
+                    }
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { value in
+                    AxisGridLine().foregroundStyle(Theme.border.opacity(0.5))
+                    AxisValueLabel {
+                        if let v = value.as(Double.self) { Text(Money.axisTick(v)).font(.system(size: 10)) }
+                    }
+                }
+            }
+            .chartXSelection(value: $selected)
+            .frame(height: 170)
         }
     }
 }

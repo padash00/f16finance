@@ -145,10 +145,7 @@ struct LedgerStatementScreen: View {
         return ScrollView {
             LazyVStack(spacing: Spacing.lg, pinnedViews: []) {
                 summary
-                PillSegment(
-                    options: DateRange.allCases.map { ($0, $0.label) },
-                    selection: $bindable.range
-                )
+                PeriodBar(selection: $bindable.range)
                 if operations.isEmpty {
                     if let error {
                         ErrorStateView(error: error) { Task { await reload() } }
@@ -249,9 +246,10 @@ struct LedgerStatementScreen: View {
     }
 
     private var summaryCaption: String {
-        let period = store.range.label.lowercased()
+        let bounds = store.range.bounds()
+        let period = AnalyticsPeriod.rangeLabel(from: bounds.from, to: bounds.to)
         if let bucket { return "\(bucket) · \(period)" }
-        return (isIncome ? "Пришло за " : "Потрачено за ") + (store.range == .week ? "неделю" : period)
+        return (isIncome ? "Пришло · " : "Потрачено · ") + period
     }
 
     static func operationsWord(_ n: Int) -> String {

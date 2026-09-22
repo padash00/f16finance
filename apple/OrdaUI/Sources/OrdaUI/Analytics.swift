@@ -263,9 +263,11 @@ public struct ComparisonChart: View {
         Chart {
             ForEach(points) { point in
                 if asBars {
-                    BarMark(x: .value("Дата", point.date, unit: .day), y: .value("Сумма", point.value))
+                    // Ширина столбика ограничена: при двух днях автоматическая
+                    // растягивала их на полэкрана.
+                    BarMark(x: .value("Дата", point.date, unit: .day), y: .value("Сумма", point.value), width: .fixed(points.count <= 12 ? 22 : 8))
                         .foregroundStyle(color.opacity(selectedID == nil || selectedID == point.id ? 1 : 0.35))
-                        .cornerRadius(3)
+                        .cornerRadius(4)
                 } else {
                     AreaMark(x: .value("Дата", point.date), y: .value("Сумма", point.value), series: .value("Ряд", "cur"))
                         .foregroundStyle(
@@ -278,7 +280,11 @@ public struct ComparisonChart: View {
                         .interpolationMethod(.monotone)
                 }
                 if showsPrevious {
-                    LineMark(x: .value("Дата", point.date), y: .value("Сумма", point.previous), series: .value("Ряд", "prev"))
+                    LineMark(
+                        x: asBars ? .value("Дата", point.date, unit: .day) : .value("Дата", point.date),
+                        y: .value("Сумма", point.previous),
+                        series: .value("Ряд", "prev")
+                    )
                         .foregroundStyle(Theme.textDim.opacity(0.8))
                         .lineStyle(StrokeStyle(lineWidth: 1.4, lineCap: .round, dash: [4, 4]))
                         .interpolationMethod(.monotone)
@@ -309,11 +315,21 @@ public struct ComparisonChart: View {
             }
         }
         .chartXAxis {
-            AxisMarks(values: .automatic(desiredCount: 5)) { _ in
-                AxisGridLine().foregroundStyle(ChartPalette.grid.opacity(0.25))
-                AxisValueLabel(format: .dateTime.day().month(.abbreviated))
-                    .font(.system(size: 10))
-                    .foregroundStyle(Theme.textDim)
+            // Мало точек — подпись ровно у каждой: автоматические деления на
+            // трёх днях повторяли одну дату дважды.
+            if points.count <= 8 {
+                AxisMarks(values: points.map(\.date)) { _ in
+                    AxisValueLabel(format: .dateTime.day().month(.abbreviated), centered: true)
+                        .font(.system(size: 10))
+                        .foregroundStyle(Theme.textDim)
+                }
+            } else {
+                AxisMarks(values: .automatic(desiredCount: 5)) { _ in
+                    AxisGridLine().foregroundStyle(ChartPalette.grid.opacity(0.25))
+                    AxisValueLabel(format: .dateTime.day().month(.abbreviated))
+                        .font(.system(size: 10))
+                        .foregroundStyle(Theme.textDim)
+                }
             }
         }
         .chartXSelection(value: Binding(

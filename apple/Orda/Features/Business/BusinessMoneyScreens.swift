@@ -250,12 +250,7 @@ struct LedgerScreen: View {
 
         return ScreenScroll {
             VStack(spacing: Spacing.lg) {
-                Picker("Период", selection: $bindableStore.range) {
-                    ForEach(DateRange.allCases) { range in
-                        Text(range.label).tag(range)
-                    }
-                }
-                .pickerStyle(.segmented)
+                PeriodBar(selection: $bindableStore.range)
 
                 if let error = store.ledgerError {
                     ErrorStateView(error: error) { Task { await store.loadLedger() } }
@@ -310,7 +305,7 @@ struct LedgerScreen: View {
         }
         return TrendChart(
             title: "Доходы по дням",
-            subtitle: store.range.label.lowercased(),
+            subtitle: store.range.title.lowercased(),
             points: points
         )
     }

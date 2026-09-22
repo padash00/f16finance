@@ -1124,9 +1124,11 @@ public struct BusinessService: Sendable {
     // ── Отчёты ───────────────────────────────────────────────────────────────
 
     /// Сводный отчёт за период: итоги, сравнение с прошлым периодом, разрезы.
-    public func report(from: String, to: String) async throws -> ReportAggregate {
+    public func report(from: String, to: String, includeExtra: Bool = false) async throws -> ReportAggregate {
+        var query = ["from": from, "to": to]
+        if includeExtra { query["include_extra"] = "1" }
         let response: Envelope<ReportBundle> = try await api.send(
-            APIRequest(path: "/api/admin/reports/bundle", query: ["from": from, "to": to])
+            APIRequest(path: "/api/admin/reports/bundle", query: query)
         )
         return response.data.aggregate
     }
@@ -1169,9 +1171,11 @@ public struct BusinessService: Sendable {
     ///
     /// Величины приходят посчитанными: формула живёт на сервере, чтобы сайт и
     /// приложение показывали одну и ту же EBITDA.
-    public func pnl(from: String, to: String) async throws -> PnlReport {
+    public func pnl(from: String, to: String, includeExtra: Bool = false) async throws -> PnlReport {
+        var query = ["from": from, "to": to]
+        if includeExtra { query["include_extra"] = "1" }
         let response: Envelope<PnlReport> = try await api.send(
-            APIRequest(path: "/api/admin/profitability/summary", query: ["from": from, "to": to])
+            APIRequest(path: "/api/admin/profitability/summary", query: query)
         )
         return response.data
     }

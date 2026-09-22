@@ -15,10 +15,7 @@ struct ReportsScreen: View {
 
         return ScreenScroll {
             VStack(spacing: Spacing.lg) {
-                Picker("Период", selection: $bindable.range) {
-                    ForEach(DateRange.allCases) { Text($0.label).tag($0) }
-                }
-                .pickerStyle(.segmented)
+                PeriodBar(selection: $bindable.range, showsExtra: true)
 
                 if let error = store.reportError, store.report == nil {
                     ErrorStateView(error: error) { Task { await store.loadReport() } }
@@ -30,6 +27,7 @@ struct ReportsScreen: View {
             }
         }
         .background(Theme.background)
+        .onChange(of: ExtraCashPreference.shared.includeExtra) { _, _ in Task { await store.loadReport() } }
         .navigationTitle("Отчёты")
         .toolbar { LogoutToolbarItem() }
         .task { await store.loadReport() }

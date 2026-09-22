@@ -2,52 +2,6 @@ import OrdaKit
 import OrdaUI
 import SwiftUI
 
-// ── Общее ────────────────────────────────────────────────────────────────────
-
-/// Дата в формате API по местному календарю.
-///
-/// Не `DateParsing.dateOnlyString`: она разбирает дату в UTC, а «сегодня» у
-/// владельца местное. В UTC+5 период иначе заканчивался бы вчера, и выручка
-/// текущего дня в налог не попадала бы.
-private func localDayString(_ date: Date) -> String {
-    let parts = Calendar.current.dateComponents([.year, .month, .day], from: date)
-    return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
-}
-
-/// Период налогового расчёта.
-///
-/// Год с начала — основной: и ставка ИПН, и пороги НДС считаются нарастающим
-/// итогом с 1 января, а не за скользящее окно.
-private enum TaxPeriod: String, CaseIterable, Identifiable {
-    case year, quarter, month
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .year: "С начала года"
-        case .quarter: "Квартал"
-        case .month: "Месяц"
-        }
-    }
-
-    var bounds: (from: String, to: String) {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-        let start: Date = switch self {
-        case .year: calendar.date(from: calendar.dateComponents([.year], from: today)) ?? today
-        case .quarter: calendar.date(byAdding: .month, value: -2, to: startOfMonth(today)) ?? today
-        case .month: startOfMonth(today)
-        }
-        return (localDayString(start), localDayString(today))
-    }
-
-    private func startOfMonth(_ date: Date) -> Date {
-        let calendar = Calendar.current
-        return calendar.date(from: calendar.dateComponents([.year, .month], from: date)) ?? date
-    }
-}
-
 // ── Налоги ───────────────────────────────────────────────────────────────────
 
 @MainActor @Observable
@@ -64,7 +18,7 @@ final class TaxStore {
         isLoading = true
         defer { isLoading = false }
         do {
-            summary = try await service.load(from: from, to: to, rate: rate)
+            summary = try await service.load(from: from, to: to, rate: rate, includeExtra: ExtraCashPreference.shared.includeExtra)
             error = nil
         } catch let apiError as APIError {
             error = apiError
@@ -84,16 +38,15 @@ struct TaxScreen: View {
     @Environment(\.api) private var api
 
     @State private var store: TaxStore?
-    @State private var period: TaxPeriod = .year
+    /// Год с начала — основной: ставка ИПН и порог НДС считаются нарастающим
+    /// итогом с 1 января. Любой другой период — под календарём.
+    @State private var period: AnalyticsPeriod = .thisYear
     @State private var rate: Double = 2
 
     var body: some View {
         ScreenScroll {
             VStack(spacing: Spacing.lg) {
-                Picker("Период", selection: $period) {
-                    ForEach(TaxPeriod.allCases) { Text($0.label).tag($0) }
-                }
-                .pickerStyle(.segmented)
+                PeriodBar(selection: $period, quick: [.thisMonth, .thisQuarter, .thisYear], showsExtra: true)
 
                 if let store {
                     if let error = store.error, store.summary == nil {
@@ -115,17 +68,18 @@ struct TaxScreen: View {
             if store == nil {
                 let created = TaxStore(api: api)
                 store = created
-                let bounds = period.bounds
+                let bounds = period.bounds()
                 await created.load(from: bounds.from, to: bounds.to, rate: rate)
             }
         }
         .onChange(of: period) { _, _ in Task { await reload() } }
         .onChange(of: rate) { _, _ in Task { await reload() } }
+        .onChange(of: ExtraCashPreference.shared.includeExtra) { _, _ in Task { await reload() } }
         .refreshable { await reload() }
     }
 
     private func reload() async {
-        let bounds = period.bounds
+        let bounds = period.bounds()
         await store?.load(from: bounds.from, to: bounds.to, rate: rate)
     }
 
@@ -368,12 +322,12 @@ final class CashflowStore {
 
     init(api: APIClient) { service = CashflowService(api: api) }
 
-    func load(range: DateRange) async {
+    func load(range: AnalyticsPeriod) async {
         isLoading = true
         defer { isLoading = false }
         do {
-            let bounds = range.bounds
-            report = try await service.load(from: bounds.from, to: bounds.to)
+            let bounds = range.bounds()
+            report = try await service.load(from: bounds.from, to: bounds.to, includeExtra: ExtraCashPreference.shared.includeExtra)
             error = nil
         } catch let apiError as APIError {
             error = apiError
@@ -392,15 +346,12 @@ struct CashflowScreen: View {
     @Environment(\.api) private var api
 
     @State private var store: CashflowStore?
-    @State private var range: DateRange = .month
+    @State private var range: AnalyticsPeriod = .thisMonth
 
     var body: some View {
         ScreenScroll {
             VStack(spacing: Spacing.lg) {
-                Picker("Период", selection: $range) {
-                    ForEach(DateRange.allCases) { Text($0.label).tag($0) }
-                }
-                .pickerStyle(.segmented)
+                PeriodBar(selection: $range, showsExtra: true)
 
                 if let store {
                     if let error = store.error, store.report == nil {
@@ -426,6 +377,7 @@ struct CashflowScreen: View {
             }
         }
         .onChange(of: range) { _, new in Task { await store?.load(range: new) } }
+        .onChange(of: ExtraCashPreference.shared.includeExtra) { _, _ in Task { await store?.load(range: range) } }
         .refreshable { await store?.load(range: range) }
     }
 

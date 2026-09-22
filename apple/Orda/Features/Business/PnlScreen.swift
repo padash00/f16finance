@@ -32,8 +32,16 @@ struct PnlScreen: View {
     }
 
     var body: some View {
-        ScreenScroll {
+        @Bindable var bindable = store
+
+        return ScreenScroll {
             VStack(spacing: Spacing.lg) {
+                PeriodBar(
+                    selection: $bindable.pnlPeriod,
+                    quick: [.thisMonth, .thisQuarter, .thisYear, .last12Months],
+                    trailing: AnyView(Text("по целым месяцам")),
+                    showsExtra: true
+                )
                 if let error = store.pnlError, store.pnl == nil {
                     ErrorStateView(error: error) { Task { await store.loadPnl() } }
                 } else if let report = store.pnl {
@@ -48,6 +56,7 @@ struct PnlScreen: View {
             }
         }
         .background(Theme.background)
+        .onChange(of: ExtraCashPreference.shared.includeExtra) { _, _ in Task { await store.loadPnl() } }
         .navigationTitle("ОПиУ и EBITDA")
         .toolbar { LogoutToolbarItem() }
         .task { await store.loadPnl() }

@@ -356,9 +356,11 @@ public struct CashflowService: Sendable {
     private let api: APIClient
     public init(api: APIClient) { self.api = api }
 
-    public func load(from: String, to: String) async throws -> CashflowReport {
+    public func load(from: String, to: String, includeExtra: Bool = false) async throws -> CashflowReport {
+        var query = ["from": from, "to": to]
+        if includeExtra { query["include_extra"] = "1" }
         let response: Envelope<CashflowReport> = try await api.send(
-            APIRequest(path: "/api/admin/cashflow/summary", query: ["from": from, "to": to])
+            APIRequest(path: "/api/admin/cashflow/summary", query: query)
         )
         return response.data
     }

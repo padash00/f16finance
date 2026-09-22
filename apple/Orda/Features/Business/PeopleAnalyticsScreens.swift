@@ -6,24 +6,17 @@ import SwiftUI
 
 /// Переключатель периода.
 ///
-/// Периоды календарные, а не «последние N дней»: премию и место в рейтинге
-/// владелец объявляет за месяц или неделю, и скользящее окно с этим разговором
-/// не стыкуется.
+/// Быстрые кнопки — календарные неделя и месяц: премию и место в рейтинге
+/// владелец объявляет за них. Любые другие даты — под календарём.
 private struct PeoplePeriodPicker: View {
-    let period: PeoplePeriod
-    let select: (PeoplePeriod) -> Void
+    let period: AnalyticsPeriod
+    let select: (AnalyticsPeriod) -> Void
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: Spacing.sm) {
-                ForEach(PeoplePeriod.allCases) { candidate in
-                    FilterChip(title: candidate.label, isOn: candidate == period) {
-                        select(candidate)
-                    }
-                }
-            }
-        }
-        .scrollClipDisabled()
+        PeriodBar(
+            selection: Binding(get: { period }, set: { select($0) }),
+            quick: [.thisWeek, .lastWeek, .thisMonth, .lastMonth]
+        )
     }
 }
 
@@ -106,7 +99,7 @@ final class PerformanceStore {
     private(set) var isLoading = false
     private(set) var error: APIError?
 
-    private(set) var period: PeoplePeriod = .thisMonth
+    private(set) var period: AnalyticsPeriod = .thisMonth
     private(set) var companyID = ""
 
     private let service: PeopleAnalyticsService
@@ -117,7 +110,7 @@ final class PerformanceStore {
         companies.first { $0.id == companyID }?.name ?? "Все точки"
     }
 
-    func select(period: PeoplePeriod) async {
+    func select(period: AnalyticsPeriod) async {
         guard period != self.period else { return }
         self.period = period
         await load()
@@ -558,7 +551,7 @@ final class RatingsStore {
     private(set) var entries: [LeaderboardEntry]?
     private(set) var isLoading = false
     private(set) var error: APIError?
-    private(set) var period: PeoplePeriod = .thisMonth
+    private(set) var period: AnalyticsPeriod = .thisMonth
 
     private let service: PeopleAnalyticsService
 
@@ -566,7 +559,7 @@ final class RatingsStore {
 
     var totalRevenue: Double { (entries ?? []).reduce(0) { $0 + $1.revenue } }
 
-    func select(period: PeoplePeriod) async {
+    func select(period: AnalyticsPeriod) async {
         guard period != self.period else { return }
         self.period = period
         await load()
@@ -765,7 +758,7 @@ final class AchievementsStore {
     private(set) var results: [AchievementResult]?
     private(set) var isLoading = false
     private(set) var error: APIError?
-    private(set) var period: PeoplePeriod = .thisMonth
+    private(set) var period: AnalyticsPeriod = .thisMonth
 
     private let service: PeopleAnalyticsService
 
@@ -775,7 +768,7 @@ final class AchievementsStore {
         OperatorAchievements.summary(results ?? [])
     }
 
-    func select(period: PeoplePeriod) async {
+    func select(period: AnalyticsPeriod) async {
         guard period != self.period else { return }
         self.period = period
         await load()

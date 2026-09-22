@@ -33,6 +33,8 @@ struct AnalyticsPeriodTests {
         #expect(AnalyticsPeriod.thisQuarter.bounds(now: now, timeZone: almaty) == ("2026-07-01", "2026-09-30"))
         #expect(AnalyticsPeriod.thisYear.bounds(now: now, timeZone: almaty) == ("2026-01-01", "2026-12-31"))
         #expect(AnalyticsPeriod.last30Days.bounds(now: now, timeZone: almaty) == ("2026-08-24", "2026-09-22"))
+        #expect(AnalyticsPeriod.last7Days.bounds(now: now, timeZone: almaty) == ("2026-09-16", "2026-09-22"))
+        #expect(AnalyticsPeriod.last12Months.bounds(now: now, timeZone: almaty) == ("2025-10-01", "2026-09-22"))
         #expect(AnalyticsPeriod.today.bounds(now: now, timeZone: almaty) == ("2026-09-22", "2026-09-22"))
         #expect(AnalyticsPeriod.yesterday.bounds(now: now, timeZone: almaty) == ("2026-09-21", "2026-09-21"))
     }

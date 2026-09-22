@@ -2255,22 +2255,22 @@ public struct InsightService: Sendable {
     }
 
     /// Полный финансовый аудит за период.
-    public func cfo(days: InsightPeriod) async throws -> CfoReport {
-        struct Body: Encodable, Sendable { let days: Int }
-        let request = try APIRequest.json("/api/ai/cfo", body: Body(days: days.rawValue))
+    public func cfo(from: String, to: String) async throws -> CfoReport {
+        struct Body: Encodable, Sendable { let dateFrom: String; let dateTo: String }
+        let request = try APIRequest.json("/api/ai/cfo", body: Body(dateFrom: from, dateTo: to))
         return try await api.send(request)
     }
 
     /// Разбор расходов по категориям.
-    public func expenseAnalysis(days: InsightPeriod, companyID: String? = nil) async throws -> ExpenseAnalysisReport {
-        var query = ["days": String(days.rawValue)]
+    public func expenseAnalysis(from: String, to: String, companyID: String? = nil) async throws -> ExpenseAnalysisReport {
+        var query = ["from": from, "to": to]
         if let companyID, !companyID.isEmpty { query["company_id"] = companyID }
         return try await api.send(APIRequest(path: "/api/ai/expense-analysis", query: query))
     }
 
     /// Разбор команды по операторам.
-    public func teamAnalysis(days: InsightPeriod, companyID: String? = nil) async throws -> TeamAnalysisReport {
-        var query = ["days": String(days.rawValue)]
+    public func teamAnalysis(from: String, to: String, companyID: String? = nil) async throws -> TeamAnalysisReport {
+        var query = ["from": from, "to": to]
         if let companyID, !companyID.isEmpty { query["company_id"] = companyID }
         return try await api.send(APIRequest(path: "/api/ai/team-analysis", query: query))
     }

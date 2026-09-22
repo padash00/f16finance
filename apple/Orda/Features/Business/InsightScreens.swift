@@ -1467,12 +1467,13 @@ final class AiCfoStore {
 
     init(api: APIClient) { service = InsightService(api: api) }
 
-    func generate(days: InsightPeriod) async {
+    func generate(days: AnalyticsPeriod) async {
         guard !isGenerating else { return }
         isGenerating = true
         defer { isGenerating = false }
         do {
-            report = try await service.cfo(days: days)
+            let bounds = days.bounds()
+            report = try await service.cfo(from: bounds.from, to: bounds.to)
             error = nil
         } catch let e as APIError {
             error = e
@@ -1489,7 +1490,7 @@ final class AiCfoStore {
 struct AiCfoScreen: View {
     @Environment(\.api) private var api
     @State private var store: AiCfoStore?
-    @State private var period: InsightPeriod = .quarter
+    @State private var period: AnalyticsPeriod = .last90Days
 
     var body: some View {
         ScreenScroll {
@@ -1529,15 +1530,12 @@ struct AiCfoScreen: View {
 
     private func periodPicker(_ store: AiCfoStore) -> some View {
         VStack(spacing: Spacing.sm) {
-            Picker("Период", selection: $period) {
-                ForEach(InsightPeriod.cfoOptions) { Text($0.label).tag($0) }
-            }
-            .pickerStyle(.segmented)
+            PeriodBar(selection: $period, quick: [.last7Days, .last30Days, .last90Days, .thisYear])
 
             // Смена периода сама разбор не запускает: это был бы новый платный
             // запрос от одного касания сегментированного переключателя.
             if store.report != nil || store.error != nil {
-                Button("Разобрать за \(period.label.lowercased())") {
+                Button("Разобрать за \(period.title.lowercased())") {
                     Task { await store.generate(days: period) }
                 }
                 .buttonStyle(SecondaryButtonStyle())
@@ -2066,18 +2064,19 @@ final class ExpenseAnalysisStore {
     /// Период, за который посчитан показанный разбор. Переключатель наверху
     /// меняется свободно, а цифры остаются старыми — подписывать их новым
     /// периодом значило бы врать.
-    private(set) var reportPeriod: InsightPeriod?
+    private(set) var reportPeriod: AnalyticsPeriod?
 
     private let service: InsightService
 
     init(api: APIClient) { service = InsightService(api: api) }
 
-    func generate(days: InsightPeriod) async {
+    func generate(days: AnalyticsPeriod) async {
         guard !isGenerating else { return }
         isGenerating = true
         defer { isGenerating = false }
         do {
-            report = try await service.expenseAnalysis(days: days)
+            let bounds = days.bounds()
+            report = try await service.expenseAnalysis(from: bounds.from, to: bounds.to)
             reportPeriod = days
             error = nil
         } catch let e as APIError {
@@ -2093,16 +2092,13 @@ final class ExpenseAnalysisStore {
 struct ExpenseAnalysisScreen: View {
     @Environment(\.api) private var api
     @State private var store: ExpenseAnalysisStore?
-    @State private var period: InsightPeriod = .quarter
+    @State private var period: AnalyticsPeriod = .last90Days
 
     var body: some View {
         ScreenScroll {
             if let store {
                 VStack(spacing: Spacing.lg) {
-                    Picker("Период", selection: $period) {
-                        ForEach(InsightPeriod.expenseOptions) { Text($0.label).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
+                    PeriodBar(selection: $period, quick: [.last7Days, .last30Days, .last90Days, .thisYear])
 
                     if store.isGenerating {
                         AiWaitCard(title: "Разбираем расходы")
@@ -2142,7 +2138,7 @@ struct ExpenseAnalysisScreen: View {
                         Text(Money.format(report.total))
                             .font(Typography.monospacedDigits(Typography.metric))
                             .foregroundStyle(Theme.text)
-                        Text("расходы за \((store.reportPeriod ?? period).label.lowercased())")
+                        Text("расходы за \((store.reportPeriod ?? period).title.lowercased())")
                             .font(Typography.caption)
                             .foregroundStyle(Theme.textDim)
                     }
@@ -2152,7 +2148,7 @@ struct ExpenseAnalysisScreen: View {
                             .font(Typography.headline)
                             .monospacedDigit()
                             .foregroundStyle(report.totalChangePct > 0 ? Theme.negative : Theme.positive)
-                        Button(store.reportPeriod == period ? "Пересчитать" : "Разобрать за \(period.label.lowercased())") {
+                        Button(store.reportPeriod == period ? "Пересчитать" : "Разобрать за \(period.title.lowercased())") {
                             Task { await store.generate(days: period) }
                         }
                         .buttonStyle(SecondaryButtonStyle())
@@ -2288,12 +2284,13 @@ final class TeamAnalysisStore {
 
     init(api: APIClient) { service = InsightService(api: api) }
 
-    func generate(days: InsightPeriod) async {
+    func generate(days: AnalyticsPeriod) async {
         guard !isGenerating else { return }
         isGenerating = true
         defer { isGenerating = false }
         do {
-            report = try await service.teamAnalysis(days: days)
+            let bounds = days.bounds()
+            report = try await service.teamAnalysis(from: bounds.from, to: bounds.to)
             error = nil
         } catch let e as APIError {
             error = e
@@ -2307,16 +2304,13 @@ final class TeamAnalysisStore {
 struct TeamAnalysisScreen: View {
     @Environment(\.api) private var api
     @State private var store: TeamAnalysisStore?
-    @State private var period: InsightPeriod = .month
+    @State private var period: AnalyticsPeriod = .last30Days
 
     var body: some View {
         ScreenScroll {
             if let store {
                 VStack(spacing: Spacing.lg) {
-                    Picker("Период", selection: $period) {
-                        ForEach(InsightPeriod.teamOptions) { Text($0.label).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
+                    PeriodBar(selection: $period, quick: [.last7Days, .last30Days, .last90Days, .thisYear])
 
                     if store.isGenerating {
                         AiWaitCard(title: "Разбираем команду")
@@ -2417,7 +2411,7 @@ struct TeamAnalysisScreen: View {
                     .font(Typography.caption)
                     .foregroundStyle(Theme.textDim)
                 Spacer(minLength: Spacing.md)
-                Button("Разобрать за \(period.label.lowercased())") {
+                Button("Разобрать за \(period.title.lowercased())") {
                     Task { await store.generate(days: period) }
                 }
                 .buttonStyle(SecondaryButtonStyle())

@@ -111,11 +111,12 @@ final class BusinessStore {
     private(set) var isLoadingPnl = false
     private(set) var pnlError: APIError?
 
-    /// Сколько месяцев показывать в ОПиУ. Двенадцать — полный год для
-    /// сравнения сезонов; меньше не даёт увидеть цикл.
-    var pnlMonths = 12 {
+    /// Период ОПиУ. По умолчанию двенадцать месяцев — полный год для
+    /// сравнения сезонов. ОПиУ помесячный: свои даты расширяются до целых
+    /// месяцев, в которые попадают.
+    var pnlPeriod: AnalyticsPeriod = .last12Months {
         didSet {
-            guard oldValue != pnlMonths else { return }
+            guard oldValue != pnlPeriod else { return }
             Task { await loadPnl() }
         }
     }
@@ -173,7 +174,8 @@ final class BusinessStore {
     private(set) var isLoadingKnowledge = false
     private(set) var knowledgeError: APIError?
 
-    var range: DateRange = .week {
+    /// Период денег и отчётов — любой: готовый или свои даты.
+    var range: AnalyticsPeriod = .thisMonth {
         didSet {
             guard oldValue != range else { return }
             // Период общий для денег и отчётов: переключив его в одном месте,
@@ -267,7 +269,7 @@ final class BusinessStore {
     }
 
     func loadIncomes() async {
-        let bounds = range.bounds
+        let bounds = range.bounds()
         // Прошлый ответ — сразу, свежий — на ходу. Скелет показываем только
         // когда показывать нечего.
         if incomes.isEmpty, let cached = await service.cachedIncomes(from: bounds.from, to: bounds.to) {
@@ -286,7 +288,7 @@ final class BusinessStore {
     }
 
     func loadExpenses() async {
-        let bounds = range.bounds
+        let bounds = range.bounds()
         if expenses.isEmpty, let cached = await service.cachedExpenses(from: bounds.from, to: bounds.to) {
             expenses = cached
         }
@@ -711,9 +713,9 @@ final class BusinessStore {
     func loadReport() async {
         isLoadingReport = true
         defer { isLoadingReport = false }
-        let bounds = range.bounds
+        let bounds = range.bounds()
         do {
-            report = try await service.report(from: bounds.from, to: bounds.to)
+            report = try await service.report(from: bounds.from, to: bounds.to, includeExtra: ExtraCashPreference.shared.includeExtra)
             reportError = nil
         } catch let error as APIError {
             reportError = error
@@ -846,9 +848,10 @@ final class BusinessStore {
     func loadPnl() async {
         isLoadingPnl = true
         defer { isLoadingPnl = false }
-        let bounds = PnlPeriod.lastMonths(pnlMonths)
+        let days = pnlPeriod.bounds()
+        let bounds = (from: String(days.from.prefix(7)), to: String(days.to.prefix(7)))
         do {
-            pnl = try await service.pnl(from: bounds.from, to: bounds.to)
+            pnl = try await service.pnl(from: bounds.from, to: bounds.to, includeExtra: ExtraCashPreference.shared.includeExtra)
             pnlError = nil
         } catch let error as APIError {
             pnlError = error

@@ -75,7 +75,8 @@ final class AnalyticsStore {
                 from: bounds.from,
                 to: bounds.to,
                 companyIDs: Array(filter.companyIDs),
-                compare: filter.compare
+                compare: filter.compare,
+                includeExtra: ExtraCashPreference.shared.includeExtra
             )
             guard !Task.isCancelled, filter == self.filter else { return }
             data = result

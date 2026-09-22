@@ -288,7 +288,10 @@ struct OwnerOverviewScreen: View {
 
     static func points(_ data: OwnerAnalytics, metric: OverviewMetric) -> [ComparisonPoint] {
         data.series.enumerated().compactMap { index, p in
-            guard let date = DateParsing.parseDateOnly(p.date) else { return nil }
+            guard let parsed = DateParsing.parseDateOnly(p.date) else { return nil }
+            // Начало дня: столбик занимает день целиком, и подпись с пунктиром
+            // базы должны стоять по той же сетке, а не на полдень.
+            let date = Calendar.current.startOfDay(for: parsed)
             return ComparisonPoint(
                 id: index,
                 date: date,

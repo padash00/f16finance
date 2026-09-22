@@ -12,7 +12,7 @@ final class ProductionStore {
     private(set) var error: APIError?
     private(set) var analysisError: APIError?
     private(set) var isLoading = false
-    private(set) var range: DateRange = .month
+    private(set) var range: AnalyticsPeriod = .thisMonth
 
     private let service: ProductionService
 
@@ -38,7 +38,7 @@ final class ProductionStore {
     /// (`production.view`), и отказ по нему не должен прятать сами техкарты —
     /// себестоимость видна и без статистики продаж.
     func loadAnalysis() async {
-        let bounds = range.bounds
+        let bounds = range.bounds()
         do {
             analysis = try await service.analysis(from: bounds.from, to: bounds.to)
             analysisError = nil
@@ -51,7 +51,7 @@ final class ProductionStore {
         }
     }
 
-    func select(range newValue: DateRange) async {
+    func select(range newValue: AnalyticsPeriod) async {
         guard newValue != range else { return }
         range = newValue
         await loadAnalysis()
@@ -151,15 +151,15 @@ struct ProductionScreen: View {
                 HStack(spacing: Spacing.sm) {
                     FilterChip(title: "Блюда", isOn: tab == .dishes) { tab = .dishes }
                     FilterChip(title: "Сырьё", isOn: tab == .ingredients) { tab = .ingredients }
-                    Divider().frame(height: 18)
-                    ForEach(DateRange.allCases) { range in
-                        FilterChip(title: range.label, isOn: store.range == range) {
-                            Task { await store.select(range: range) }
-                        }
-                    }
                 }
                 .padding(.horizontal, Spacing.lg)
             }
+
+            PeriodBar(selection: Binding(
+                get: { store.range },
+                set: { value in Task { await store.select(range: value) } }
+            ))
+            .padding(.horizontal, Spacing.lg)
 
             if let totals = store.analysis?.totals, totals.revenue > 0 {
                 // Четыре плашки в один ряд на телефоне превращаются в четыре
@@ -297,7 +297,7 @@ private struct RecipeRow: View {
 private struct RecipeDetailView: View {
     let card: RecipeEconomics
     let fact: ProductionAnalysisRow?
-    let range: DateRange
+    let range: AnalyticsPeriod
 
     var body: some View {
         ScreenScroll {
@@ -404,7 +404,7 @@ private struct RecipeDetailView: View {
     private var salesFact: some View {
         Card {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Продажи", subtitle: range.label.lowercased())
+                SectionHeader("Продажи", subtitle: range.title.lowercased())
                 if let fact, fact.soldQty > 0 {
                     StatRow("Продано порций", value: Quantity.format(fact.soldQty), icon: "cart")
                     StatRow("Выручка", value: Money.format(fact.revenue), valueColor: Theme.brand)

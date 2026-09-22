@@ -216,9 +216,11 @@ public struct OwnerAnalyticsService: Sendable {
         from: String,
         to: String,
         companyIDs: [String],
-        compare: AnalyticsCompare
+        compare: AnalyticsCompare,
+        includeExtra: Bool = false
     ) async throws -> OwnerAnalytics {
         var query = ["from": from, "to": to, "compare": compare.rawValue]
+        if includeExtra { query["include_extra"] = "1" }
         if !companyIDs.isEmpty { query["company_ids"] = companyIDs.sorted().joined(separator: ",") }
         let response: Envelope<OwnerAnalytics> = try await api.send(
             APIRequest(path: "/api/admin/owner-analytics", query: query)

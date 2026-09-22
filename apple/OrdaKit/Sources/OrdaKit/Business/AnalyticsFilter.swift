@@ -16,13 +16,40 @@ public enum AnalyticsPeriod: Hashable, Sendable, Codable {
     case lastMonth
     case thisQuarter
     case thisYear
+    case last7Days
     case last30Days
+    case last90Days
+    case last12Months
     case custom(from: String, to: String)
 
     /// Готовые варианты в порядке показа.
     public static let presets: [AnalyticsPeriod] = [
-        .today, .yesterday, .thisWeek, .lastWeek, .thisMonth, .lastMonth, .last30Days, .thisQuarter, .thisYear,
+        .today, .yesterday, .thisWeek, .lastWeek, .thisMonth, .lastMonth,
+        .last7Days, .last30Days, .last90Days, .thisQuarter, .thisYear, .last12Months,
     ]
+
+    /// Короткое имя для кнопки быстрого выбора.
+    public var shortTitle: String {
+        switch self {
+        case .today: "День"
+        case .lastWeek: "Прошлая"
+        case .lastMonth: "Прошлый"
+        case .thisWeek: "Неделя"
+        case .thisMonth: "Месяц"
+        case .thisQuarter: "Квартал"
+        case .thisYear: "Год"
+        case .last7Days: "7 дней"
+        case .last30Days: "30 дней"
+        case .last90Days: "90 дней"
+        case .last12Months: "12 мес"
+        default: title
+        }
+    }
+
+    public var isCustom: Bool {
+        if case .custom = self { return true }
+        return false
+    }
 
     public var title: String {
         switch self {
@@ -32,9 +59,12 @@ public enum AnalyticsPeriod: Hashable, Sendable, Codable {
         case .lastWeek: "Прошлая неделя"
         case .thisMonth: "Этот месяц"
         case .lastMonth: "Прошлый месяц"
-        case .thisQuarter: "Квартал"
-        case .thisYear: "Год"
-        case .last30Days: "30 дней"
+        case .thisQuarter: "Этот квартал"
+        case .thisYear: "Этот год"
+        case .last7Days: "Последние 7 дней"
+        case .last30Days: "Последние 30 дней"
+        case .last90Days: "Последние 90 дней"
+        case .last12Months: "Последние 12 месяцев"
         case let .custom(from, to): Self.rangeLabel(from: from, to: to)
         }
     }
@@ -85,8 +115,17 @@ public enum AnalyticsPeriod: Hashable, Sendable, Codable {
         case .thisYear:
             let year = calendar.component(.year, from: today)
             return ("\(year)-01-01", "\(year)-12-31")
+        case .last7Days:
+            return (iso(add(.day, -6, today)), iso(today))
         case .last30Days:
             return (iso(add(.day, -29, today)), iso(today))
+        case .last90Days:
+            return (iso(add(.day, -89, today)), iso(today))
+        case .last12Months:
+            // Двенадцать целых месяцев, включая текущий: помесячные отчёты
+            // (ОПиУ, налог) иначе начинались бы с середины месяца.
+            let first = calendar.date(from: calendar.dateComponents([.year, .month], from: today)) ?? today
+            return (iso(add(.month, -11, first)), iso(today))
         case let .custom(from, to):
             return from <= to ? (from, to) : (to, from)
         }

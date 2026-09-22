@@ -28,8 +28,9 @@ final class OwnerHomeStore {
         let todayBounds = AnalyticsPeriod.today.bounds()
         let monthBounds = AnalyticsPeriod.thisMonth.bounds()
         do {
-            async let t = service.load(from: todayBounds.from, to: todayBounds.to, companyIDs: ids, compare: .previous)
-            async let m = service.load(from: monthBounds.from, to: monthBounds.to, companyIDs: ids, compare: .previous)
+            let extra = ExtraCashPreference.shared.includeExtra
+            async let t = service.load(from: todayBounds.from, to: todayBounds.to, companyIDs: ids, compare: .previous, includeExtra: extra)
+            async let m = service.load(from: monthBounds.from, to: monthBounds.to, companyIDs: ids, compare: .previous, includeExtra: extra)
             let (todayData, monthData) = try await (t, m)
             today = todayData
             month = monthData
@@ -97,7 +98,7 @@ struct OwnerHomeScreen: View {
         #if os(iOS)
         .toolbar(.hidden, for: .navigationBar)
         #endif
-        .task(id: analytics.filter.companyIDs) {
+        .task(id: [analytics.filter.companyIDs.sorted().joined(), String(ExtraCashPreference.shared.includeExtra)]) {
             if home == nil { home = OwnerHomeStore(api: api) }
             await reload()
         }
@@ -175,19 +176,23 @@ struct OwnerHomeScreen: View {
             // страничный TabView внутри прокрутки при перерисовке застревал
             // между карточками.
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: Spacing.md) {
+                // Страница — ровно ширина экрана, без промежутков: постраничное
+                // листание тогда останавливается точно на карточке. Зазор между
+                // карточками — внутренний отступ самой страницы.
+                HStack(spacing: 0) {
                     todayCard
+                        .padding(.trailing, Spacing.xs)
                         .containerRelativeFrame(.horizontal)
                         .id(0)
                     monthCard
+                        .padding(.leading, Spacing.xs)
                         .containerRelativeFrame(.horizontal)
                         .id(1)
                 }
                 .scrollTargetLayout()
             }
-            .scrollTargetBehavior(.viewAligned)
+            .scrollTargetBehavior(.paging)
             .scrollPosition(id: Binding(get: { heroPage }, set: { heroPage = $0 ?? 0 }))
-            .scrollClipDisabled()
             .frame(height: 196)
 
             HStack(spacing: 6) {
