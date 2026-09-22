@@ -55,95 +55,89 @@ struct SubscriptionScreen: View {
         }
     }
 
+    /// Сколько платим в месяц — главной цифрой, тариф и сроки — под ней.
+    /// Цвет карточки — состояние подписки: красный при просрочке оплаты.
     private func header(_ billing: OrganizationBilling) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: Spacing.xs) {
-                        Text(billing.organizationName ?? "Организация")
-                            .font(Typography.title)
-                            .foregroundStyle(Theme.text)
-                        if let domain = billing.primaryDomain {
-                            Text(domain)
-                                .font(Typography.caption)
-                                .monospaced()
-                                .foregroundStyle(Theme.textDim)
-                        }
-                    }
-                    Spacer()
-                    if let subscription = billing.subscription {
-                        StatusChip(subscription.statusLabel, kind: chipKind(subscription.status))
-                    }
-                }
+        let subscription = billing.subscription
+        var footer: [(String, String)] = []
+        if let subscription {
+            footer.append(("Тариф", subscription.planName ?? "—"))
+            if let period = subscription.billingPeriod {
+                footer.append(("Период оплаты", period == "yearly" ? "Год" : "Месяц"))
+            }
+            if let ends = subscription.endsAt {
+                footer.append(("Действует до", ends.formatted(.dateTime.day().month(.abbreviated).year())))
+            }
+        }
+        let caption = [
+            subscription?.statusLabel ?? "Подписка не оформлена",
+            billing.primaryDomain,
+        ].compactMap { $0 }.joined(separator: " · ")
 
-                RowDivider()
+        return VStack(alignment: .leading, spacing: Spacing.sm) {
+            HeroSummary(
+                title: "\(billing.organizationName ?? "Организация") · в месяц",
+                value: Money.format(billing.monthlyTotal),
+                caption: caption,
+                footer: footer,
+                colors: heroColors(subscription?.status)
+            )
 
-                if let subscription = billing.subscription {
-                    StatRow("Тариф", value: subscription.planName ?? "—", icon: "star")
-                    if let period = subscription.billingPeriod {
-                        StatRow("Период оплаты", value: period == "yearly" ? "Год" : "Месяц", icon: "calendar")
-                    }
-                    if let ends = subscription.endsAt {
-                        StatRow(
-                            "Действует до",
-                            value: ends.formatted(.dateTime.day().month(.wide).year()),
-                            valueColor: (subscription.daysLeft ?? 1) < 0 ? Theme.negative : Theme.text,
-                            icon: "clock"
-                        )
-                    }
-                    // Предупреждаем только когда до конца меньше двух недель:
-                    // раньше это шум, а не польза.
-                    if let days = subscription.daysLeft, days >= 0, days <= 14 {
-                        StatusChip("осталось \(days) \(pluralize(days, "день", "дня", "дней"))", kind: .warning)
-                    }
-                } else {
-                    InlineEmpty(icon: "creditcard", text: "Подписка не оформлена", tint: Theme.textDim)
-                }
-
-                RowDivider()
-                StatRow("В месяц", value: Money.format(billing.monthlyTotal), emphasized: true)
+            // Предупреждаем только когда до конца меньше двух недель:
+            // раньше это шум, а не польза.
+            if let days = subscription?.daysLeft, days >= 0, days <= 14 {
+                Text("Подписка кончается: осталось \(days) \(pluralize(days, "день", "дня", "дней"))")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.warning)
+                    .padding(.horizontal, Spacing.xs)
+            } else if let days = subscription?.daysLeft, days < 0 {
+                Text("Срок подписки истёк")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.negative)
+                    .padding(.horizontal, Spacing.xs)
             }
         }
     }
 
-    private func chipKind(_ status: String) -> StatusChip.Kind {
+    private func heroColors(_ status: String?) -> [Color] {
         switch status {
-        case "active": .good
-        case "trialing": .info
-        case "past_due": .danger
-        default: .neutral
+        case "past_due": [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
+        case "trialing": [Color(hex: 0x0EA5E9), Color(hex: 0x2563EB)]
+        case "active": [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+        default: [Color(hex: 0x64748B), Color(hex: 0x475569)]
         }
     }
 
     private func overdueBanner(_ billing: OrganizationBilling) -> some View {
-        Card(accent: Theme.negative) {
-            HStack(spacing: Spacing.md) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 18))
-                    .foregroundStyle(Theme.negative)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("\(billing.overdueCount) \(pluralize(billing.overdueCount, "счёт просрочен", "счёта просрочено", "счетов просрочено"))")
-                        .font(Typography.headline)
-                        .foregroundStyle(Theme.text)
-                    Text("При долгой просрочке часть разделов отключается.")
-                        .font(Typography.caption)
-                        .foregroundStyle(Theme.textMuted)
-                }
-                Spacer()
+        HStack(spacing: Spacing.md) {
+            TintedIcon(systemName: "exclamationmark.triangle.fill", tint: Theme.negative, size: 44)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(billing.overdueCount) \(pluralize(billing.overdueCount, "счёт просрочен", "счёта просрочено", "счетов просрочено"))")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Theme.text)
+                Text("При долгой просрочке часть разделов отключается.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textMuted)
             }
+            Spacer()
         }
+        .padding(Spacing.lg)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 
     private func invoices(_ billing: OrganizationBilling) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Счета", subtitle: billing.invoices.isEmpty ? nil : "последние \(billing.invoices.count)")
-
-                if billing.invoices.isEmpty {
-                    InlineEmpty(icon: "doc.text", text: "Счетов пока нет", tint: Theme.textDim)
-                } else {
-                    ForEach(Array(billing.invoices.enumerated()), id: \.element.id) { index, invoice in
-                        if index > 0 { RowDivider() }
+        OwnerSection("Счета") {
+            if !billing.invoices.isEmpty {
+                Text("последние \(billing.invoices.count)")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textDim)
+            }
+        } content: {
+            if billing.invoices.isEmpty {
+                InlineEmpty(icon: "doc.text", text: "Счетов пока нет", tint: Theme.textDim)
+            } else {
+                VStack(spacing: Spacing.md) {
+                    ForEach(billing.invoices, id: \.id) { invoice in
                         InvoiceRow(invoice: invoice)
                     }
                 }
@@ -152,21 +146,15 @@ struct SubscriptionScreen: View {
     }
 
     private func modules(_ billing: OrganizationBilling) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Что подключено")
-
+        OwnerSection("Что подключено") {
+            VStack(spacing: Spacing.md) {
                 if let package = billing.package {
-                    HStack {
-                        Label(package.name, systemImage: "shippingbox.fill")
-                            .font(Typography.callout)
-                            .foregroundStyle(Theme.text)
-                        Spacer()
-                        Text(Money.format(package.priceKzt))
-                            .font(Typography.callout.weight(.medium))
-                            .monospacedDigit()
-                            .foregroundStyle(Theme.textMuted)
-                    }
+                    AmountRow(
+                        leading: { TintedIcon(systemName: "shippingbox.fill", tint: Color(hex: 0x4F46E5), size: 40) },
+                        title: package.name,
+                        subtitle: "пакет",
+                        amount: Money.format(package.priceKzt)
+                    )
                 }
 
                 if billing.addons.isEmpty {
@@ -174,18 +162,13 @@ struct SubscriptionScreen: View {
                         InlineEmpty(icon: "square.stack", text: "Модули не подключены", tint: Theme.textDim)
                     }
                 } else {
-                    ForEach(billing.addons) { addon in
-                        RowDivider()
-                        HStack {
-                            Label(addon.name, systemImage: "puzzlepiece.extension.fill")
-                                .font(Typography.callout)
-                                .foregroundStyle(Theme.text)
-                            Spacer()
-                            Text(Money.format(addon.priceKzt))
-                                .font(Typography.callout.weight(.medium))
-                                .monospacedDigit()
-                                .foregroundStyle(Theme.textMuted)
-                        }
+                    ForEach(Array(billing.addons.enumerated()), id: \.element.id) { index, addon in
+                        AmountRow(
+                            leading: { TintedIcon(systemName: "puzzlepiece.extension.fill", tint: OwnerTint.point(index), size: 40) },
+                            title: addon.name,
+                            subtitle: "модуль",
+                            amount: Money.format(addon.priceKzt)
+                        )
                     }
                 }
             }
@@ -196,38 +179,47 @@ struct SubscriptionScreen: View {
 private struct InvoiceRow: View {
     let invoice: OrganizationBilling.Invoice
 
-    private var kind: StatusChip.Kind {
-        if invoice.isPaid { return .good }
-        if invoice.isOverdue { return .danger }
-        return .warning
+    private var tint: Color {
+        if invoice.isPaid { return Theme.positive }
+        if invoice.isOverdue { return Theme.negative }
+        return Theme.warning
     }
 
     var body: some View {
         HStack(spacing: Spacing.md) {
-            VStack(alignment: .leading, spacing: 1) {
+            TintedIcon(systemName: invoice.isPaid ? "checkmark" : "doc.text.fill", tint: tint, size: 40)
+
+            VStack(alignment: .leading, spacing: 2) {
                 Text(period)
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Theme.text)
+                    .lineLimit(1)
                 if let due = invoice.dueDate, !invoice.isPaid {
                     Text("до \(due.formatted(.dateTime.day().month(.abbreviated)))")
-                        .font(Typography.caption)
+                        .font(.system(size: 13))
                         .foregroundStyle(invoice.isOverdue ? Theme.negative : Theme.textDim)
                 } else if let paid = invoice.paidAt {
                     Text("оплачен \(paid.formatted(.dateTime.day().month(.abbreviated)))")
-                        .font(Typography.caption)
+                        .font(.system(size: 13))
                         .foregroundStyle(Theme.textDim)
                 }
             }
 
             Spacer(minLength: Spacing.sm)
 
-            Text(Money.format(invoice.amount))
-                .font(Typography.callout.weight(.medium))
-                .monospacedDigit()
-                .foregroundStyle(Theme.text)
-
-            StatusChip(invoice.statusLabel, kind: kind)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(Money.format(invoice.amount))
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.text)
+                // Статус подписью, а не плашкой — плашка съедала полстроки.
+                Text(invoice.statusLabel.lowercased())
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(tint)
+            }
+            .fixedSize()
         }
+        .padding(.vertical, Spacing.xs)
     }
 
     private var period: String {
@@ -313,16 +305,25 @@ struct IncidentsScreen: View {
         .refreshable { await store.loadIncidents() }
     }
 
+    /// Итог штрафов и бонусов — одной цветной карточкой над списком.
     private var summary: some View {
         let fines = store.incidents.reduce(0) { $0 + $1.fineAmount }
         let bonuses = store.incidents.reduce(0) { $0 + $1.bonusAmount }
         let pending = store.incidents.filter(\.isPending).count
 
-        return HStack(spacing: Spacing.md) {
-            SummaryPill(title: "Штрафы", value: Money.format(fines), tint: Theme.negative)
-            SummaryPill(title: "Бонусы", value: Money.format(bonuses), tint: Theme.positive)
-            SummaryPill(title: "Ждут решения", value: "\(pending)", tint: pending > 0 ? Theme.warning : Theme.textDim)
-        }
+        return HeroSummary(
+            title: "Бонусы минус штрафы",
+            value: Money.signed(bonuses - fines),
+            caption: pending > 0 ? "\(pending) ждут решения" : "всё разобрано",
+            footer: [
+                ("Штрафы", Money.format(fines)),
+                ("Бонусы", Money.format(bonuses)),
+                ("Ждут решения", "\(pending)"),
+            ],
+            colors: fines > bonuses
+                ? [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
+                : [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+        )
         .padding(.horizontal, Spacing.lg)
         .padding(.vertical, Spacing.md)
     }
@@ -363,20 +364,25 @@ struct SummaryPill: View {
 struct IncidentRow: View {
     let incident: Incident
 
+    private var tint: Color {
+        incident.isBonus ? Theme.positive : (incident.isFine ? Theme.negative : Theme.textDim)
+    }
+
     var body: some View {
         HStack(spacing: Spacing.md) {
-            Image(systemName: incident.isBonus ? "gift.fill" : (incident.isFine ? "exclamationmark.triangle.fill" : "note.text"))
-                .font(.system(size: 14))
-                .foregroundStyle(incident.isBonus ? Theme.positive : (incident.isFine ? Theme.negative : Theme.textDim))
-                .frame(width: 22)
+            TintedIcon(
+                systemName: incident.isBonus ? "gift.fill" : (incident.isFine ? "exclamationmark.triangle.fill" : "note.text"),
+                tint: tint,
+                size: 40
+            )
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(incident.title)
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
                 Text([incident.subjectName, incident.companyName].compactMap { $0 }.joined(separator: " · "))
-                    .font(Typography.caption)
+                    .font(.system(size: 13))
                     .foregroundStyle(Theme.textDim)
                     .lineLimit(1)
             }
@@ -386,15 +392,19 @@ struct IncidentRow: View {
             VStack(alignment: .trailing, spacing: 2) {
                 if incident.netAmount != 0 {
                     Text(Money.signed(incident.netAmount))
-                        .font(Typography.callout.weight(.medium))
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(incident.netAmount > 0 ? Theme.positive : Theme.negative)
                 }
                 if incident.isPending {
-                    StatusChip("ждёт", kind: .warning)
+                    Text("ждёт")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.warning)
                 }
             }
+            .fixedSize()
         }
+        .padding(.vertical, Spacing.xs)
     }
 }
 
@@ -404,23 +414,30 @@ private struct IncidentDetail: View {
     var body: some View {
         ScreenScroll {
             VStack(spacing: Spacing.lg) {
-                Card {
+                // Сумма — цветной карточкой, если она есть; у заметки суммы
+                // нет, и карточка с нулём была бы пустым местом.
+                if incident.netAmount != 0 {
+                    HeroSummary(
+                        title: incident.kindLabel,
+                        value: Money.signed(incident.netAmount),
+                        caption: incident.statusLabel,
+                        colors: incident.netAmount > 0
+                            ? [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+                            : [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
+                    )
+                }
+
+                OwnerSection(incident.title) {
+                    Text(incident.statusLabel.lowercased())
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(incident.isPending ? Theme.warning : Theme.positive)
+                } content: {
                     VStack(alignment: .leading, spacing: Spacing.md) {
-                        HStack(alignment: .top) {
-                            VStack(alignment: .leading, spacing: Spacing.xs) {
-                                Text(incident.kindLabel)
-                                    .font(Typography.caption)
-                                    .foregroundStyle(Theme.textDim)
-                                Text(incident.title)
-                                    .font(Typography.title)
-                                    .foregroundStyle(Theme.text)
-                            }
-                            Spacer()
-                            StatusChip(incident.statusLabel, kind: incident.isPending ? .warning : .good)
-                        }
+                        Text(incident.kindLabel)
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.textDim)
 
                         if let details = incident.details, !details.isEmpty {
-                            RowDivider()
                             Text(details)
                                 .font(Typography.callout)
                                 .foregroundStyle(Theme.textMuted)

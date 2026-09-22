@@ -75,24 +75,23 @@ struct ExpenseWhitelistScreen: View {
 
         ScreenScroll {
             VStack(spacing: Spacing.lg) {
-                HStack(spacing: Spacing.md) {
-                    SummaryPill(title: "Всего", value: "\(board.vendors.count)", tint: Theme.brand)
-                    SummaryPill(
-                        title: "На все точки",
-                        value: "\(board.vendors.count - board.companyScopedCount)",
-                        tint: Theme.warning
-                    )
-                    SummaryPill(
-                        title: "Ограничены точкой",
-                        value: "\(board.companyScopedCount)",
-                        tint: Theme.info
-                    )
-                }
+                // Главное — сколько получателей снимают требование чека и
+                // сколько из них действуют на всех точках сразу.
+                HeroSummary(
+                    title: "Доверенных поставщиков",
+                    value: "\(board.vendors.count)",
+                    caption: "расход в их пользу проводится без чека",
+                    footer: [
+                        ("На все точки", "\(board.vendors.count - board.companyScopedCount)"),
+                        ("Ограничены точкой", "\(board.companyScopedCount)"),
+                    ],
+                    colors: [Color(hex: 0x0F766E), Color(hex: 0x0E7490)]
+                )
 
                 explainer
 
                 if vendors.isEmpty {
-                    Card {
+                    OwnerSection("Список") {
                         InlineEmpty(
                             icon: search.isEmpty ? "shield.slash" : "magnifyingglass",
                             text: search.isEmpty
@@ -102,11 +101,13 @@ struct ExpenseWhitelistScreen: View {
                         )
                     }
                 } else {
-                    Card {
+                    OwnerSection("Список") {
+                        Text("сначала на всех точках")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.textDim)
+                    } content: {
                         VStack(spacing: Spacing.md) {
-                            SectionHeader("Список", subtitle: "сначала действующие на всех точках")
-                            ForEach(Array(vendors.enumerated()), id: \.element.id) { index, vendor in
-                                if index > 0 { RowDivider() }
+                            ForEach(vendors, id: \.id) { vendor in
                                 TrustedVendorRow(vendor: vendor, board: board)
                             }
                         }
@@ -117,14 +118,14 @@ struct ExpenseWhitelistScreen: View {
     }
 
     private var explainer: some View {
-        Card(accent: Theme.positive) {
+        OwnerSection("Что это значит") {
             VStack(alignment: .leading, spacing: Spacing.sm) {
-                SectionHeader("Что это значит")
                 Text("Расход в пользу такого получателя проводится без фото чека. Удобно для зарплат, аренды, уборки и регулярных услуг — и опасно для всего остального.")
-                    .font(Typography.callout)
+                    .font(.system(size: 15))
                     .foregroundStyle(Theme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text("Категория из строки подставляется в расход автоматически.")
-                    .font(Typography.caption)
+                    .font(.system(size: 13))
                     .foregroundStyle(Theme.textDim)
             }
         }
@@ -147,41 +148,40 @@ private struct TrustedVendorRow: View {
 
     var body: some View {
         HStack(spacing: Spacing.md) {
-            Image(systemName: "checkmark.shield.fill")
-                .font(.system(size: 14))
-                .foregroundStyle(Theme.positive)
-                .frame(width: 34, height: 34)
-                .background(Theme.positive.opacity(0.12), in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+            TintedIcon(systemName: "checkmark.shield.fill", tint: Theme.positive, size: 40)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(vendor.name)
-                    .font(Typography.callout)
-                    .foregroundStyle(Theme.text)
-                    .lineLimit(1)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+                    Text(vendor.name)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(Theme.text)
+                        .lineLimit(1)
+                    Spacer(minLength: Spacing.sm)
+                    // Граница действия подписью, а не плашкой: плашка съедала
+                    // полстроки, и имя обрезалось.
+                    Text(board.companyName(vendor.companyID))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(vendor.isCompanyScoped ? Theme.info : Theme.warning)
+                        .lineLimit(1)
+                }
 
                 HStack(spacing: Spacing.xs) {
                     if let category = board.categoryName(vendor.defaultCategoryID) {
                         Text(category)
-                            .font(Typography.caption)
+                            .font(.system(size: 13))
                             .foregroundStyle(Theme.textDim)
                     }
                     if let notes = vendor.notes, !notes.isEmpty {
                         Text(notes)
-                            .font(Typography.caption)
+                            .font(.system(size: 13))
                             .foregroundStyle(Theme.textDim)
                             .italic()
                             .lineLimit(1)
                     }
                 }
             }
-
-            Spacer(minLength: Spacing.sm)
-
-            StatusChip(
-                board.companyName(vendor.companyID),
-                kind: vendor.isCompanyScoped ? .info : .warning
-            )
         }
+        .padding(.vertical, Spacing.xs)
     }
 }
 
@@ -304,11 +304,10 @@ struct SimulationScreen: View {
 
         VStack(spacing: Spacing.lg) {
             if !projection.isConfigured {
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.sm) {
-                        SectionHeader("Модель не заполнена")
+                OwnerSection("Модель не заполнена") {
+                    VStack(alignment: .leading, spacing: Spacing.md) {
                         Text("Без зон и тарифов считать потенциал не из чего.")
-                            .font(Typography.callout)
+                            .font(.system(size: 15))
                             .foregroundStyle(Theme.textMuted)
 
                         if canEdit {
@@ -320,37 +319,9 @@ struct SimulationScreen: View {
             } else {
                 headline(projection, fact: simulation.fact)
 
-                DashboardGrid {
-                    MetricTile(
-                        label: "Потенциал / мес",
-                        value: Money.format(projection.potentialPerMonth),
-                        icon: "chart.bar.fill",
-                        accent: Theme.brand
-                    )
-                    MetricTile(
-                        label: "Факт / мес",
-                        value: Money.format(projection.factPerMonth),
-                        icon: "banknote.fill",
-                        accent: Theme.positive
-                    )
-                    MetricTile(
-                        label: projection.isUnderPotential ? "Недобор / мес" : "Сверх модели / мес",
-                        value: Money.format(abs(projection.gapPerMonth)),
-                        icon: projection.isUnderPotential ? "arrow.down.right" : "arrow.up.right",
-                        accent: projection.isUnderPotential ? Theme.warning : Theme.positive
-                    )
-                    MetricTile(
-                        label: "Устройств",
-                        value: Quantity.format(projection.totalDevices),
-                        icon: "desktopcomputer",
-                        accent: Theme.info
-                    )
-                }
-
                 occupancy(projection)
 
                 SplitDashboard {
-                    zonesChart(projection)
                     zonesTable(projection)
                 } side: {
                     tariffs(projection)
@@ -362,34 +333,26 @@ struct SimulationScreen: View {
 
     // ── Итог ─────────────────────────────────────────────────────────────────
 
+    /// Разрыв с потенциалом — главной цифрой; потенциал, факт и число
+    /// устройств — её расшифровкой, а не четырьмя плитками под ней.
     private func headline(_ projection: SimulationProjection, fact: SimulationFact?) -> some View {
-        Card(accent: projection.isUnderPotential ? Theme.warning : Theme.positive) {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                Text(projection.isUnderPotential ? "Недозарабатываем за месяц" : "Факт выше расчётного потенциала")
-                    .font(Typography.label)
-                    .foregroundStyle(Theme.textDim)
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HeroSummary(
+                title: projection.isUnderPotential ? "Недозарабатываем за месяц" : "Факт выше расчётного потенциала",
+                value: Money.format(abs(projection.gapPerMonth)),
+                caption: projection.factShare.map { "факт выбирает \(Percent.format($0 * 100)) потенциала" },
+                footer: [
+                    ("Потенциал / мес", Money.format(projection.potentialPerMonth)),
+                    ("Факт / мес", Money.format(projection.factPerMonth)),
+                    ("Устройств", Quantity.format(projection.totalDevices)),
+                ],
+                colors: projection.isUnderPotential
+                    ? [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
+                    : [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+            )
 
-                Text(Money.format(abs(projection.gapPerMonth)))
-                    .font(Typography.hero)
-                    .foregroundStyle(Theme.text)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.5)
-
-                if let share = projection.factShare {
-                    ProportionBar(
-                        ratio: share,
-                        color: projection.isUnderPotential ? Theme.warning : Theme.positive
-                    )
-                    Text("Факт выбирает \(Percent.format(share * 100)) потенциала")
-                        .font(Typography.callout)
-                        .foregroundStyle(Theme.textMuted)
-                }
-
-                if let fact {
-                    Text("Факт — вся выручка точки за \(pluralize(fact.windowDays, "день", "дня", "дней")), включая бар и допуслуги.")
-                        .font(Typography.caption)
-                        .foregroundStyle(Theme.textDim)
-                }
+            if let fact {
+                OwnerFootnote(text: "Факт — вся выручка точки за \(pluralize(fact.windowDays, "день", "дня", "дней")), включая бар и допуслуги.")
             }
         }
     }
@@ -399,9 +362,11 @@ struct SimulationScreen: View {
     @ViewBuilder
     private func occupancy(_ projection: SimulationProjection) -> some View {
         if let implied = projection.impliedOccupancyHours {
-            Card {
+            OwnerSection("Обратный расчёт загрузки") {
                 VStack(alignment: .leading, spacing: Spacing.md) {
-                    SectionHeader("Обратный расчёт загрузки", subtitle: "что должно быть, чтобы сходилось")
+                    Text("что должно быть, чтобы сходилось")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.textDim)
 
                     StatRow(
                         "Нужна загрузка",
@@ -444,23 +409,31 @@ struct SimulationScreen: View {
 
     // ── Зоны ─────────────────────────────────────────────────────────────────
 
-    private func zonesChart(_ projection: SimulationProjection) -> some View {
-        CategoryBarChart(
-            title: "Потенциал по зонам, ₸ / мес",
-            points: projection.zonesByPotential.map {
-                CategoryPoint(label: $0.name, value: $0.potentialPerMonth)
-            },
-            color: ChartPalette.series1
-        )
-    }
-
+    /// Зоны: кольцо долей потенциала и строки под ним — вместо столбиков и
+    /// отдельной таблицы с теми же зонами.
     private func zonesTable(_ projection: SimulationProjection) -> some View {
-        Card {
-            VStack(spacing: Spacing.md) {
-                SectionHeader("Зоны", subtitle: "устройства, загрузка и ставка")
-                ForEach(Array(projection.zonesByPotential.enumerated()), id: \.element.id) { index, zone in
-                    if index > 0 { RowDivider() }
-                    SimulationZoneRow(zone: zone)
+        let zones = projection.zonesByPotential
+        let total = max(zones.reduce(0) { $0 + $1.potentialPerMonth }, 1)
+
+        return OwnerSection("Зоны") {
+            Text("₸ / мес")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.textDim)
+        } content: {
+            VStack(spacing: Spacing.lg) {
+                DonutChart(
+                    slices: zones.enumerated().map { index, zone in
+                        ShareSlice(label: zone.name, value: max(zone.potentialPerMonth, 0), color: OwnerTint.point(index))
+                    },
+                    centerTitle: "Потенциал",
+                    centerValue: Money.format(projection.potentialPerMonth),
+                    showsLegend: false
+                )
+
+                VStack(spacing: Spacing.md) {
+                    ForEach(Array(zones.enumerated()), id: \.element.id) { index, zone in
+                        SimulationZoneRow(zone: zone, tint: OwnerTint.point(index), share: zone.potentialPerMonth / total)
+                    }
                 }
             }
         }
@@ -469,14 +442,18 @@ struct SimulationScreen: View {
     // ── Тарифы ───────────────────────────────────────────────────────────────
 
     private func tariffs(_ projection: SimulationProjection) -> some View {
-        Card {
+        OwnerSection("Тарифы") {
+            Text("₸ за час с бонусами")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.textDim)
+        } content: {
             VStack(spacing: Spacing.md) {
-                SectionHeader("Тарифы", subtitle: "₸ за час с учётом бонусных часов")
-                ForEach(projection.tariffs) { tariff in
-                    StatRow(
-                        "\(tariff.name) · \(tariff.hoursLabel) · \(Money.format(tariff.price))",
-                        value: "\(Money.format(tariff.ratePerHour))/ч",
-                        icon: "tag"
+                ForEach(Array(projection.tariffs.enumerated()), id: \.element.id) { index, tariff in
+                    AmountRow(
+                        leading: { TintedIcon(systemName: "tag.fill", tint: OwnerTint.point(index), size: 40) },
+                        title: tariff.name,
+                        subtitle: "\(tariff.hoursLabel) · \(Money.format(tariff.price))",
+                        amount: "\(Money.format(tariff.ratePerHour))/ч"
                     )
                 }
             }
@@ -485,12 +462,12 @@ struct SimulationScreen: View {
 
     @ViewBuilder
     private func disclaimer(_ fact: SimulationFact?) -> some View {
-        Card {
+        OwnerSection("Как читать") {
             VStack(alignment: .leading, spacing: Spacing.sm) {
-                SectionHeader("Как читать")
                 Text("Потенциал — это только выручка за время устройств при заложенной загрузке. Бар, допуслуги и продажи в него не входят, поэтому факт может оказаться выше.")
-                    .font(Typography.callout)
+                    .font(.system(size: 15))
                     .foregroundStyle(Theme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
                 if let fact, fact.windowDays > 0 {
                     StatRow(
                         "Факт в среднем за сутки",
@@ -505,41 +482,32 @@ struct SimulationScreen: View {
 
 private struct SimulationZoneRow: View {
     let zone: SimulationZone
+    let tint: Color
+    let share: Double
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
-            HStack(spacing: Spacing.md) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(zone.name)
-                        .font(Typography.callout)
-                        .foregroundStyle(Theme.text)
-                        .lineLimit(1)
-                    Text("\(zone.deviceTypeLabel) · \(Quantity.format(zone.deviceCount)) шт · \(Quantity.format(zone.occupancyHours)) ч/сут")
-                        .font(Typography.caption)
-                        .monospacedDigit()
-                        .foregroundStyle(Theme.textDim)
-                }
-
-                Spacer(minLength: Spacing.sm)
-
-                VStack(alignment: .trailing, spacing: 1) {
-                    Text(Money.format(zone.potentialPerMonth))
-                        .font(Typography.callout.weight(.medium))
-                        .monospacedDigit()
-                        .foregroundStyle(Theme.text)
-                    Text("\(Money.format(zone.blendedRate))/ч")
-                        .font(Typography.caption)
-                        .monospacedDigit()
-                        .foregroundStyle(Theme.textDim)
-                }
-            }
+            AmountRow(
+                leading: { TintedIcon(systemName: "desktopcomputer", tint: tint, size: 40) },
+                title: zone.name,
+                subtitle: "\(zone.deviceTypeLabel) · \(Quantity.format(zone.deviceCount)) шт · \(Quantity.format(zone.occupancyHours)) ч/сут · \(Money.format(zone.blendedRate))/ч",
+                amount: Money.format(zone.potentialPerMonth),
+                share: share,
+                tint: tint
+            )
 
             // Незаполненный микс — не косметика: потенциал зоны занижен ровно
             // на долю устройств, которым не назначен тариф.
             if zone.hasNoMix {
-                StatusChip("тарифы не назначены", kind: .danger)
+                Text("тарифы не назначены")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.negative)
+                    .padding(.leading, 40 + Spacing.md)
             } else if zone.hasBrokenMix {
-                StatusChip("микс \(Percent.format(zone.shareSum)) вместо 100 %", kind: .warning)
+                Text("микс \(Percent.format(zone.shareSum)) вместо 100 %")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.warning)
+                    .padding(.leading, 40 + Spacing.md)
             }
         }
     }
@@ -708,36 +676,31 @@ struct SupplierBillingScreen: View {
         }
     }
 
+    /// Долг главной цифрой, просрочка и число счетов — её расшифровкой.
+    /// Цвет карточки говорит сразу: красный — есть просрочка, оранжевый —
+    /// долг в срок, зелёный — никому не должны.
     private func header(_ board: SupplierDebtBoard) -> some View {
-        VStack(spacing: Spacing.md) {
-            HStack(spacing: Spacing.md) {
-                SummaryPill(
-                    title: "Должны",
-                    value: Money.format(board.totals.open),
-                    tint: board.totals.open > 0 ? Theme.warning : Theme.positive
-                )
-                SummaryPill(
-                    title: "Просрочено",
-                    value: Money.format(board.totals.overdue),
-                    tint: board.totals.hasOverdue ? Theme.negative : Theme.textMuted
-                )
-                SummaryPill(
-                    title: "Счетов открыто",
-                    value: "\(board.totals.openCount)",
-                    tint: Theme.textMuted
-                )
-            }
+        let totals = board.totals
+        let options: [(value: DebtFilter, title: String)] = DebtFilter.allCases.map { (value: $0, title: $0.label) }
+        return VStack(spacing: Spacing.md) {
+            HeroSummary(
+                title: totals.open > 0 ? "Должны поставщикам" : "Долгов нет",
+                value: Money.format(totals.open),
+                caption: totals.hasOverdue
+                    ? "просрочено \(Percent.format(totals.overdueShare * 100)) долга"
+                    : nil,
+                footer: [
+                    ("Просрочено", Money.format(totals.overdue)),
+                    ("Счетов открыто", "\(totals.openCount)"),
+                ],
+                colors: totals.hasOverdue
+                    ? [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
+                    : totals.open > 0
+                        ? [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
+                        : [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+            )
 
-            if board.totals.hasOverdue {
-                ProportionBar(ratio: board.totals.overdueShare, color: Theme.negative)
-            }
-
-            HStack(spacing: Spacing.sm) {
-                ForEach(DebtFilter.allCases) { value in
-                    FilterChip(title: value.label, isOn: value == filter) { filter = value }
-                }
-                Spacer()
-            }
+            PillSegment(options: options, selection: $filter)
         }
         .padding(.horizontal, Spacing.lg)
         .padding(.vertical, Spacing.md)
@@ -785,18 +748,18 @@ private struct SupplierDebtRow: View {
     var body: some View {
         HStack(spacing: Spacing.md) {
             Text(debt.initials)
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .font(.system(size: 15, weight: .bold, design: .rounded))
                 .foregroundStyle(tint)
-                .frame(width: 36, height: 36)
+                .frame(width: 40, height: 40)
                 .background(tint.opacity(0.14), in: Circle())
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(debt.supplierName)
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
                 Text(subtitle)
-                    .font(Typography.caption)
+                    .font(.system(size: 13))
                     .foregroundStyle(Theme.textDim)
                     .lineLimit(1)
             }
@@ -805,12 +768,14 @@ private struct SupplierDebtRow: View {
 
             VStack(alignment: .trailing, spacing: 2) {
                 Text(Money.format(debt.amount))
-                    .font(Typography.callout.weight(.medium))
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(debt.isOpen ? Theme.text : Theme.textDim)
-                dueChip
+                dueLabel
             }
+            .fixedSize()
         }
+        .padding(.vertical, Spacing.xs)
     }
 
     private var tint: Color {
@@ -828,20 +793,27 @@ private struct SupplierDebtRow: View {
         return parts.isEmpty ? debt.statusLabel : parts.joined(separator: " · ")
     }
 
+    /// Срок подписью цвета статуса, а не плашкой — плашка съедала полстроки.
     @ViewBuilder
-    private var dueChip: some View {
+    private var dueLabel: some View {
         if debt.isOverdue {
-            StatusChip(overdueLabel, kind: .danger)
+            statusText(overdueLabel, color: Theme.negative)
         } else if debt.isConsignment {
-            StatusChip("реализация", kind: .info)
+            statusText("реализация", color: Theme.info)
         } else if !debt.isOpen {
-            StatusChip(debt.statusLabel, kind: debt.isWrittenOff ? .neutral : .good)
+            statusText(debt.statusLabel.lowercased(), color: debt.isWrittenOff ? Theme.textDim : Theme.positive)
         } else if let days = debt.daysUntilDue, days >= 0, days <= 7 {
-            StatusChip(
+            statusText(
                 days == 0 ? "платить сегодня" : "через \(pluralize(days, "день", "дня", "дней"))",
-                kind: .warning
+                color: Theme.warning
             )
         }
+    }
+
+    private func statusText(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(color)
     }
 
     /// Дни просрочки — только подпись к признаку, а не сам признак.
@@ -875,54 +847,34 @@ private struct SupplierDebtDetail: View {
     var body: some View {
         ScreenScroll {
             VStack(spacing: Spacing.lg) {
+                // Сумма долга — цветной карточкой: цвет сразу говорит, горит
+                // ли срок, как в строке списка.
+                HeroSummary(
+                    title: debt.supplierName,
+                    value: Money.format(debt.amount),
+                    caption: heroCaption,
+                    colors: heroColors
+                )
+
                 if isOpen, canPay || canWriteOff || canReschedule {
-                    Card {
-                        VStack(spacing: Spacing.sm) {
-                            if canPay {
-                                Button("Оплатить") { payOpen = true }
-                                    .buttonStyle(PrimaryButtonStyle())
-                            }
-                            if canReschedule {
-                                Button("Перенести срок") { rescheduleOpen = true }
-                                    .buttonStyle(SecondaryButtonStyle())
-                            }
-                            if canWriteOff {
-                                Button("Списать без оплаты") { writeOffOpen = true }
-                                    .buttonStyle(SecondaryButtonStyle())
-                            }
+                    VStack(spacing: Spacing.sm) {
+                        if canPay {
+                            Button("Оплатить") { payOpen = true }
+                                .buttonStyle(PrimaryButtonStyle())
+                        }
+                        if canReschedule {
+                            Button("Перенести срок") { rescheduleOpen = true }
+                                .buttonStyle(SecondaryButtonStyle())
+                        }
+                        if canWriteOff {
+                            Button("Списать без оплаты") { writeOffOpen = true }
+                                .buttonStyle(SecondaryButtonStyle())
                         }
                     }
                 }
 
-                Card(accent: accent) {
-                    VStack(alignment: .leading, spacing: Spacing.sm) {
-                        Text(debt.supplierName)
-                            .font(Typography.title)
-                            .foregroundStyle(Theme.text)
-                        if let bin = debt.binIIN, !bin.isEmpty {
-                            Text("БИН / ИИН \(bin)")
-                                .font(Typography.caption)
-                                .foregroundStyle(Theme.textDim)
-                        }
-
-                        Text(Money.format(debt.amount))
-                            .font(Typography.hero)
-                            .foregroundStyle(Theme.text)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.5)
-
-                        HStack(spacing: Spacing.sm) {
-                            StatusChip(debt.statusLabel, kind: statusKind)
-                            if debt.isConsignment {
-                                StatusChip("реализация", kind: .info)
-                            }
-                        }
-                    }
-                }
-
-                Card {
+                OwnerSection("Счёт") {
                     VStack(spacing: Spacing.md) {
-                        SectionHeader("Счёт")
                         if let invoice = debt.invoiceNumber, !invoice.isEmpty {
                             StatRow("Накладная", value: "№ \(invoice)", icon: "doc.text")
                         }
@@ -950,9 +902,8 @@ private struct SupplierDebtDetail: View {
                 }
 
                 if !debt.isOpen {
-                    Card {
+                    OwnerSection(debt.isWrittenOff ? "Списание" : "Оплата") {
                         VStack(spacing: Spacing.md) {
-                            SectionHeader(debt.isWrittenOff ? "Списание" : "Оплата")
                             if let paid = debt.paidAt {
                                 StatRow(
                                     "Дата",
@@ -1003,16 +954,19 @@ private struct SupplierDebtDetail: View {
         }
 }
 
-    private var accent: Color {
-        if debt.isOverdue { return Theme.negative }
-        return debt.isOpen ? Theme.warning : Theme.positive
+    /// Статус, признак реализации и БИН — одной подписью под суммой.
+    private var heroCaption: String {
+        var parts = [debt.statusLabel]
+        if debt.isConsignment { parts.append("реализация") }
+        if let bin = debt.binIIN, !bin.isEmpty { parts.append("БИН / ИИН \(bin)") }
+        return parts.joined(separator: " · ")
     }
 
-    private var statusKind: StatusChip.Kind {
-        if debt.isOverdue { return .danger }
-        if debt.isPaid { return .good }
-        if debt.isWrittenOff { return .neutral }
-        return .warning
+    private var heroColors: [Color] {
+        if debt.isOverdue { return [Color(hex: 0xE11D48), Color(hex: 0x9F1239)] }
+        if debt.isOpen { return [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)] }
+        if debt.isWrittenOff { return [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)] }
+        return [Color(hex: 0x059669), Color(hex: 0x0F766E)]
     }
 }
 
@@ -1052,11 +1006,10 @@ private struct DebtPaySheet: View {
                             .labelsHidden()
 
                         FieldLabel("Чем платили")
-                        Picker("Чем платили", selection: $method) {
-                            Text("Наличными").tag("cash")
-                            Text("Kaspi").tag("kaspi")
-                        }
-                        .pickerStyle(.segmented)
+                        PillSegment(
+                            options: [(value: "cash", title: "Наличными"), (value: "kaspi", title: "Kaspi")],
+                            selection: $method
+                        )
 
                         FieldLabel("Чек об оплате")
                         if receiptURL != nil {

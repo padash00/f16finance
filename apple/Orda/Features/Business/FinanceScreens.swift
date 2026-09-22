@@ -97,33 +97,6 @@ struct TaxScreen: View {
             burden(summary)
             rates(summary.constants)
 
-            DashboardGrid {
-                MetricTile(
-                    label: "Облагаемый оборот",
-                    value: Money.format(summary.revenue),
-                    icon: "arrow.down.circle.fill",
-                    accent: Theme.brand
-                )
-                MetricTile(
-                    label: "ИПН \(Percent.format(summary.rate))",
-                    value: Money.format(summary.ipn),
-                    icon: "percent",
-                    accent: Theme.info
-                )
-                MetricTile(
-                    label: "Соцплатежи за себя",
-                    value: Money.format(summary.selfSocial),
-                    icon: "person.fill",
-                    accent: Theme.accent
-                )
-                MetricTile(
-                    label: "За работников",
-                    value: Money.format(summary.burden.payrollTaxes),
-                    icon: "person.3.fill",
-                    accent: Theme.accent
-                )
-            }
-
             SplitDashboard {
                 monthsChart(summary)
                 thresholds(summary.year)
@@ -136,29 +109,25 @@ struct TaxScreen: View {
 
     // ── Итоговая цифра ───────────────────────────────────────────────────────
 
+    /// Одна цифра — сколько отдать в бюджет; оборот, ИПН и соцплатежи — её
+    /// расшифровка под ней, а не четыре плитки стопкой.
     private func burden(_ summary: TaxSummary) -> some View {
-        Card(accent: Theme.brand) {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                Text("К уплате за период")
-                    .font(Typography.label)
-                    .foregroundStyle(Theme.textDim)
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HeroSummary(
+                title: "К уплате за период",
+                value: Money.format(summary.burden.total),
+                caption: "нагрузка \(Percent.format(summary.burden.effectiveRate)) от оборота",
+                footer: [
+                    ("Оборот", Money.format(summary.revenue)),
+                    ("ИПН \(Percent.format(summary.rate))", Money.format(summary.ipn)),
+                    ("Соцплатежи", Money.format(summary.selfSocial)),
+                ],
+                colors: [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
+            )
 
-                Text(Money.format(summary.burden.total))
-                    .font(Typography.hero)
-                    .foregroundStyle(Theme.text)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.5)
-
-                Text("Нагрузка \(Percent.format(summary.burden.effectiveRate)) от оборота")
-                    .font(Typography.callout)
-                    .foregroundStyle(Theme.textMuted)
-
-                if !summary.excludedCompanies.isEmpty {
-                    let names = summary.excludedCompanies.map(\.name).joined(separator: ", ")
-                    Text("Без учёта: \(names)")
-                        .font(Typography.caption)
-                        .foregroundStyle(Theme.textDim)
-                }
+            if !summary.excludedCompanies.isEmpty {
+                let names = summary.excludedCompanies.map(\.name).joined(separator: ", ")
+                OwnerFootnote(text: "Без учёта: \(names)")
             }
         }
     }
@@ -166,50 +135,60 @@ struct TaxScreen: View {
     // ── Ставка ───────────────────────────────────────────────────────────────
 
     private func rates(_ constants: TaxConstants) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Ставка ИПН", subtitle: "устанавливает маслихат")
-                HStack(spacing: Spacing.sm) {
-                    ForEach(constants.allowedRates, id: \.self) { value in
-                        FilterChip(title: Percent.format(value), isOn: value == rate) {
-                            rate = value
-                        }
-                    }
-                }
-            }
+        OwnerSection("Ставка ИПН") {
+            Text("устанавливает маслихат")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.textDim)
+        } content: {
+            let options: [(value: Double, title: String)] = constants.allowedRates.map { (value: $0, title: Percent.format($0)) }
+            PillSegment(options: options, selection: $rate)
         }
     }
 
     // ── Разбор ───────────────────────────────────────────────────────────────
 
     private func breakdown(_ summary: TaxSummary) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Из чего складывается")
-
-                StatRow("Облагаемый оборот", value: Money.format(summary.revenue), icon: "arrow.down")
-                StatRow("ИПН \(Percent.format(summary.rate))", value: Money.format(summary.ipn), icon: "percent")
-                StatRow(
-                    "Соцплатежи за себя",
-                    value: Money.format(summary.selfSocial),
-                    icon: "person"
+        let total = max(summary.burden.total, 1)
+        return OwnerSection("Из чего складывается") {
+            EmptyView()
+        } content: {
+            VStack(spacing: Spacing.md) {
+                AmountRow(
+                    leading: { TintedIcon(systemName: "arrow.down", tint: Color(hex: 0x10B981), size: 40) },
+                    title: "Облагаемый оборот",
+                    subtitle: "база для ИПН",
+                    amount: Money.format(summary.revenue)
                 )
-                if summary.monthsCount > 0 {
-                    Text("\(Money.format(summary.constants.selfSocialMonthly)) × \(pluralize(summary.monthsCount, "месяц", "месяца", "месяцев"))")
-                        .font(Typography.caption)
-                        .foregroundStyle(Theme.textDim)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
+                AmountRow(
+                    leading: { TintedIcon(systemName: "percent", tint: Color(hex: 0x4F46E5), size: 40) },
+                    title: "ИПН \(Percent.format(summary.rate))",
+                    subtitle: Percent.format(summary.ipn / total * 100) + " налога",
+                    amount: Money.format(summary.ipn),
+                    share: summary.ipn / total,
+                    tint: Color(hex: 0x4F46E5)
+                )
+                AmountRow(
+                    leading: { TintedIcon(systemName: "person.fill", tint: Color(hex: 0x3B82F6), size: 40) },
+                    title: "Соцплатежи за себя",
+                    subtitle: summary.monthsCount > 0
+                        ? "\(Money.format(summary.constants.selfSocialMonthly)) × \(pluralize(summary.monthsCount, "месяц", "месяца", "месяцев"))"
+                        : nil,
+                    amount: Money.format(summary.selfSocial),
+                    share: summary.selfSocial / total,
+                    tint: Color(hex: 0x3B82F6)
+                )
                 if summary.burden.payrollTaxes > 0 {
-                    StatRow(
-                        "Налоги за работников",
-                        value: Money.format(summary.burden.payrollTaxes),
-                        icon: "person.3"
+                    AmountRow(
+                        leading: { TintedIcon(systemName: "person.3.fill", tint: Color(hex: 0xF59E0B), size: 40) },
+                        title: "Налоги за работников",
+                        subtitle: Percent.format(summary.burden.payrollTaxes / total * 100) + " налога",
+                        amount: Money.format(summary.burden.payrollTaxes),
+                        share: summary.burden.payrollTaxes / total,
+                        tint: Color(hex: 0xF59E0B)
                     )
                 }
 
-                RowDivider()
-                StatRow("Всего в бюджет", value: Money.format(summary.burden.total), emphasized: true)
+                TaxTotalLine(title: "Всего в бюджет", value: Money.format(summary.burden.total))
             }
         }
     }
@@ -243,15 +222,13 @@ struct TaxScreen: View {
     // ── Пороги ───────────────────────────────────────────────────────────────
 
     private func thresholds(_ outlook: TaxYearOutlook) -> some View {
-        Card(accent: outlook.vatRisk ? Theme.warning : nil) {
+        OwnerSection("Порог НДС") {
+            // Статус подписью, а не плашкой: плашка съедала половину заголовка.
+            Text(outlook.vatRisk ? "темп выводит за порог" : "в пределах порога")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(outlook.vatRisk ? Theme.warning : Theme.positive)
+        } content: {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Порог НДС", subtitle: "оборот с начала года") {
-                    StatusChip(
-                        outlook.vatRisk ? "Темп выводит за порог" : "В пределах порога",
-                        kind: outlook.vatRisk ? .warning : .good
-                    )
-                }
-
                 ProportionBar(
                     ratio: outlook.vatProgress,
                     color: outlook.vatRisk ? Theme.warning : Theme.brand
@@ -286,15 +263,14 @@ struct TaxScreen: View {
 
     @ViewBuilder
     private func payroll(_ payroll: TaxPayroll) -> some View {
-        Card {
+        OwnerSection("Налоги за работников") {
+            if payroll.employees > 0 {
+                Text(pluralize(payroll.employees, "работник", "работника", "работников"))
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textDim)
+            }
+        } content: {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader(
-                    "Налоги за работников",
-                    subtitle: payroll.employees > 0
-                        ? pluralize(payroll.employees, "работник", "работника", "работников")
-                        : nil
-                )
-
                 if payroll.employees == 0 {
                     InlineEmpty(icon: "person.3", text: "Штатных окладов нет", tint: Theme.textDim)
                 } else {
@@ -305,6 +281,28 @@ struct TaxScreen: View {
                     StatRow("В бюджет за месяц", value: Money.format(payroll.monthlyTax), emphasized: true)
                     StatRow("Расход на штат", value: Money.format(payroll.totalCost), icon: "creditcard")
                 }
+            }
+        }
+    }
+}
+
+/// Итоговая строка под разбором: жирно и через черту, как «итого» в выписке.
+private struct TaxTotalLine: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        VStack(spacing: Spacing.md) {
+            RowDivider()
+            HStack {
+                Text(title)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Theme.text)
+                Spacer()
+                Text(value)
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.text)
             }
         }
     }
@@ -588,10 +586,9 @@ struct GoalsScreen: View {
     var body: some View {
         ScreenScroll {
             VStack(spacing: Spacing.lg) {
-                Picker("Год", selection: $year) {
-                    ForEach(years, id: \.self) { Text(String($0)).tag($0) }
-                }
-                .pickerStyle(.segmented)
+                // Годы — кнопками, как в «Аналитике по месяцам».
+                let options: [(value: Int, title: String)] = years.map { (value: $0, title: String($0)) }
+                PillSegment(options: options, selection: $year)
 
                 if let store {
                     if let error = store.error, store.board == nil {
@@ -633,33 +630,21 @@ struct GoalsScreen: View {
             let open = plans.filter { !$0.isClosed }
             let closed = plans.filter(\.isClosed)
 
+            let done = plans.filter(\.isDone).count
+
             VStack(spacing: Spacing.lg) {
-                DashboardGrid {
-                    MetricTile(
-                        label: "Планов на год",
-                        value: "\(plans.count)",
-                        icon: "target",
-                        accent: Theme.brand
-                    )
-                    MetricTile(
-                        label: "В работе",
-                        value: "\(open.count)",
-                        icon: "hourglass",
-                        accent: Theme.info
-                    )
-                    MetricTile(
-                        label: "Выполнено",
-                        value: "\(plans.filter(\.isDone).count)",
-                        icon: "checkmark.seal.fill",
-                        accent: Theme.positive
-                    )
-                    MetricTile(
-                        label: "Закрытых периодов",
-                        value: "\(closed.count)",
-                        icon: "lock.fill",
-                        accent: Theme.textDim
-                    )
-                }
+                // Главное в целях — сколько уже выполнено; остальное — её
+                // расшифровка, а не четыре равные плитки.
+                HeroSummary(
+                    title: "Выполнено планов за \(String(year))",
+                    value: "\(done) из \(plans.count)",
+                    footer: [
+                        ("Планов на год", "\(plans.count)"),
+                        ("В работе", "\(open.count)"),
+                        ("Закрытых периодов", "\(closed.count)"),
+                    ],
+                    colors: [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+                )
 
                 SplitDashboard {
                     plansCard("В работе", plans: open, board: board, empty: "Открытых планов нет")
@@ -676,15 +661,18 @@ struct GoalsScreen: View {
         board: GoalsBoard,
         empty: String
     ) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader(title)
-
-                if plans.isEmpty {
-                    InlineEmpty(icon: "target", text: empty, tint: Theme.textDim)
-                } else {
-                    ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
-                        if index > 0 { RowDivider() }
+        OwnerSection(title) {
+            if !plans.isEmpty {
+                Text("\(plans.count)")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textDim)
+            }
+        } content: {
+            if plans.isEmpty {
+                InlineEmpty(icon: "target", text: empty, tint: Theme.textDim)
+            } else {
+                VStack(spacing: Spacing.md) {
+                    ForEach(plans, id: \.id) { plan in
                         GoalPlanRow(plan: plan, companyName: board.companyName(plan.companyID))
                     }
                 }
@@ -704,36 +692,60 @@ private struct GoalPlanRow: View {
         return Theme.brand
     }
 
+    /// Иконка по метрике — строки разных целей различаются с первого взгляда.
+    private var icon: String {
+        switch plan.metric {
+        case "revenue": "arrow.down.circle.fill"
+        case "profit": "banknote.fill"
+        case "checks": "doc.text.fill"
+        case "avg_check": "cart.fill"
+        case "margin": "percent"
+        default: "target"
+        }
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            HStack(spacing: Spacing.sm) {
-                VStack(alignment: .leading, spacing: 1) {
+        HStack(alignment: .top, spacing: Spacing.md) {
+            TintedIcon(systemName: plan.isDone ? "checkmark" : icon, tint: tint, size: 40)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
                     Text("\(plan.metricLabel) · \(plan.periodLabel)")
-                        .font(Typography.callout.weight(.medium))
+                        .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(Theme.text)
-                    Text(companyName)
-                        .font(Typography.caption)
-                        .foregroundStyle(Theme.textDim)
                         .lineLimit(1)
+                    Spacer(minLength: Spacing.sm)
+                    // Процент текстом цвета статуса, а не плашкой — плашка
+                    // съедала половину строки.
+                    Text(Percent.format(plan.achievement))
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(statusColor)
                 }
 
-                Spacer(minLength: Spacing.sm)
-
-                StatusChip(Percent.format(plan.achievement), kind: chipKind)
-            }
-
-            ProportionBar(ratio: plan.progress, color: tint)
-
-            HStack {
-                Text("Факт \(plan.formattedFact)")
-                    .font(Typography.caption)
-                    .monospacedDigit()
-                    .foregroundStyle(Theme.textMuted)
-                Spacer(minLength: Spacing.sm)
-                Text("План \(plan.formattedTarget)")
-                    .font(Typography.caption)
-                    .monospacedDigit()
+                Text(companyName)
+                    .font(.system(size: 13))
                     .foregroundStyle(Theme.textDim)
+                    .lineLimit(1)
+
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Theme.surfaceRaised)
+                        Capsule().fill(tint).frame(width: max(3, geo.size.width * min(max(plan.progress, 0), 1)))
+                    }
+                }
+                .frame(height: 4)
+                .padding(.top, 2)
+
+                HStack {
+                    Text("Факт \(plan.formattedFact)")
+                        .foregroundStyle(Theme.textMuted)
+                    Spacer(minLength: Spacing.sm)
+                    Text("План \(plan.formattedTarget)")
+                        .foregroundStyle(Theme.textDim)
+                }
+                .font(.system(size: 12))
+                .monospacedDigit()
             }
         }
         .padding(.vertical, Spacing.xs)
@@ -741,10 +753,10 @@ private struct GoalPlanRow: View {
 
     /// Закрытый период с недобором — уже не «в работе», а провал: цвет должен
     /// это говорить, иначе строка выглядит как незаконченная.
-    private var chipKind: StatusChip.Kind {
-        if plan.isDone { return .good }
-        if plan.isClosed { return .danger }
-        return plan.progress >= 0.7 ? .info : .warning
+    private var statusColor: Color {
+        if plan.isDone { return Theme.positive }
+        if plan.isClosed { return Theme.negative }
+        return plan.progress >= 0.7 ? Theme.info : Theme.warning
     }
 }
 
@@ -848,32 +860,20 @@ struct WeeklyReportScreen: View {
             )
         } else {
             VStack(spacing: Spacing.lg) {
-                DashboardGrid {
-                    MetricTile(
-                        label: "Выручка",
-                        value: Money.format(totals.income.total),
-                        icon: "arrow.down.circle.fill",
-                        accent: Theme.brand
-                    )
-                    MetricTile(
-                        label: "Расходы",
-                        value: Money.format(totals.expenseTotal),
-                        icon: "arrow.up.circle.fill",
-                        accent: Theme.negative
-                    )
-                    MetricTile(
-                        label: "Итог недели",
-                        value: Money.format(totals.net),
-                        icon: "equal.circle.fill",
-                        accent: totals.net >= 0 ? Theme.positive : Theme.negative
-                    )
-                    MetricTile(
-                        label: "Остаток наличных",
-                        value: Money.format(totals.remainCash),
-                        icon: "banknote",
-                        accent: totals.remainCash >= 0 ? Theme.info : Theme.negative
-                    )
-                }
+                // Итог недели — главной цифрой; выручка, расходы и остаток в
+                // кассе — её расшифровка, как в «Движении денег».
+                HeroSummary(
+                    title: totals.net >= 0 ? "Итог недели" : "Неделя в минусе",
+                    value: Money.signed(totals.net),
+                    footer: [
+                        ("Выручка", Money.format(totals.income.total)),
+                        ("Расходы", Money.format(totals.expenseTotal)),
+                        ("Остаток наличных", Money.format(totals.remainCash)),
+                    ],
+                    colors: totals.net >= 0
+                        ? [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+                        : [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
+                )
 
                 weekChart(report)
 
@@ -904,78 +904,128 @@ struct WeeklyReportScreen: View {
         }
     }
 
+    /// Способы оплаты — кольцом и строками с долей, как «Чем платили» в
+    /// доходах: одинаковые разделы выглядят одинаково на всех экранах.
     private func payments(_ totals: WeeklyTotals) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Чем платили")
+        let all: [(name: String, icon: String, amount: Double, color: Color)] = [
+            ("Наличные", "banknote.fill", totals.income.cash, ChartPalette.series1),
+            ("Kaspi", "qrcode", totals.income.kaspi, ChartPalette.series2),
+            ("Карта", "creditcard.fill", totals.income.card, ChartPalette.series3),
+            ("Онлайн", "globe", totals.income.online, Theme.textDim),
+        ]
+        let methods = all.filter { $0.amount > 0 }
+        let total = max(totals.income.total, 1)
 
-                if totals.income.total <= 0 {
-                    InlineEmpty(icon: "creditcard", text: "Выручки за неделю нет", tint: Theme.textDim)
-                } else {
-                    SplitBar(segments: [
-                        .init(label: "Наличные", value: totals.income.cash, color: ChartPalette.series1),
-                        .init(label: "Kaspi", value: totals.income.kaspi, color: ChartPalette.series2),
-                        .init(label: "Карта", value: totals.income.card, color: ChartPalette.series3),
-                        .init(label: "Онлайн", value: totals.income.online, color: Theme.textDim),
-                    ])
+        return OwnerSection("Чем платили") {
+            if totals.income.total > 0 {
+                Text("безнал \(Money.format(totals.income.cashless))")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textDim)
+            }
+        } content: {
+            if totals.income.total <= 0 {
+                InlineEmpty(icon: "creditcard", text: "Выручки за неделю нет", tint: Theme.textDim)
+            } else {
+                VStack(spacing: Spacing.lg) {
+                    DonutChart(
+                        slices: methods.map { ShareSlice(label: $0.name, value: $0.amount, color: $0.color) },
+                        centerTitle: "Выручка",
+                        centerValue: Money.format(totals.income.total),
+                        showsLegend: false
+                    )
 
-                    RowDivider()
-                    StatRow("Наличными", value: Money.format(totals.income.cash), icon: "banknote")
-                    StatRow("Безналично", value: Money.format(totals.income.cashless), icon: "creditcard")
-                    RowDivider()
-                    // Остаток — это доход минус расход того же вида оплаты.
-                    // Расхождение с кассой ищут именно по этим двум строкам.
-                    StatRow(
-                        "Остаток наличных",
-                        value: Money.format(totals.remainCash),
-                        valueColor: totals.remainCash >= 0 ? Theme.text : Theme.negative
-                    )
-                    StatRow(
-                        "Остаток безнала",
-                        value: Money.format(totals.remainKaspi),
-                        valueColor: totals.remainKaspi >= 0 ? Theme.text : Theme.negative
-                    )
+                    VStack(spacing: Spacing.md) {
+                        ForEach(methods, id: \.name) { method in
+                            AmountRow(
+                                leading: { TintedIcon(systemName: method.icon, tint: method.color, size: 40) },
+                                title: method.name,
+                                subtitle: Percent.format(method.amount / total * 100),
+                                amount: Money.format(method.amount),
+                                share: method.amount / total,
+                                tint: method.color
+                            )
+                        }
+
+                        RowDivider()
+                        // Остаток — это доход минус расход того же вида оплаты.
+                        // Расхождение с кассой ищут именно по этим двум строкам.
+                        StatRow(
+                            "Остаток наличных",
+                            value: Money.format(totals.remainCash),
+                            valueColor: totals.remainCash >= 0 ? Theme.text : Theme.negative
+                        )
+                        StatRow(
+                            "Остаток безнала",
+                            value: Money.format(totals.remainKaspi),
+                            valueColor: totals.remainKaspi >= 0 ? Theme.text : Theme.negative
+                        )
+                    }
                 }
             }
         }
     }
 
-    @ViewBuilder
+    /// Статьи расходов строками с иконкой и долей — как выписка расходов.
     private func expenses(_ totals: WeeklyTotals) -> some View {
-        if totals.expenses.isEmpty {
-            Card {
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    SectionHeader("Куда ушли деньги")
-                    InlineEmpty(icon: "tray", text: "Расходов за неделю нет", tint: Theme.textDim)
+        let groups = Array(totals.expenses.prefix(8))
+        let total = max(totals.expenseTotal, 1)
+
+        return OwnerSection("Куда ушли деньги") {
+            if !totals.expenses.isEmpty {
+                Text(Money.format(totals.expenseTotal))
+                    .font(.system(size: 13))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.textDim)
+            }
+        } content: {
+            if groups.isEmpty {
+                InlineEmpty(icon: "tray", text: "Расходов за неделю нет", tint: Theme.textDim)
+            } else {
+                VStack(spacing: Spacing.md) {
+                    ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
+                        AmountRow(
+                            leading: {
+                                TintedIcon(
+                                    systemName: OwnerAnalyticsScreen.expenseIcon(group.category),
+                                    tint: OwnerTint.point(index),
+                                    size: 40
+                                )
+                            },
+                            title: group.category,
+                            subtitle: Percent.format(group.amount / total * 100),
+                            amount: Money.format(group.amount),
+                            share: group.amount / total,
+                            tint: OwnerTint.point(index)
+                        )
+                    }
                 }
             }
-        } else {
-            CategoryBarChart(
-                title: "Куда ушли деньги",
-                points: totals.expenses.prefix(8).map {
-                    CategoryPoint(label: $0.category, value: $0.amount)
-                },
-                color: ChartPalette.series3
-            )
         }
     }
 
     private func companies(_ report: WeeklyReport) -> some View {
         let rows = report.activeCompanies
 
-        return Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("По точкам", subtitle: "нажмите точку, чтобы раскрыть")
-
-                if rows.isEmpty {
-                    InlineEmpty(icon: "building.2", text: "Точек с движением нет", tint: Theme.textDim)
-                } else {
+        return OwnerSection("По точкам") {
+            Text("нажмите, чтобы раскрыть")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.textDim)
+        } content: {
+            if rows.isEmpty {
+                InlineEmpty(icon: "building.2", text: "Точек с движением нет", tint: Theme.textDim)
+            } else {
+                VStack(spacing: Spacing.md) {
                     ForEach(Array(rows.enumerated()), id: \.element.id) { index, company in
-                        if index > 0 { RowDivider() }
                         Button {
-                            expanded = expanded == company.id ? nil : company.id
+                            withAnimation(Motion.transition) {
+                                expanded = expanded == company.id ? nil : company.id
+                            }
                         } label: {
-                            WeeklyCompanyRow(company: company, isExpanded: expanded == company.id)
+                            WeeklyCompanyRow(
+                                company: company,
+                                tint: OwnerTint.point(index),
+                                isExpanded: expanded == company.id
+                            )
                         }
                         .buttonStyle(.pressable)
 
@@ -992,33 +1042,43 @@ struct WeeklyReportScreen: View {
 /// Строка точки: выручка недели и итог.
 private struct WeeklyCompanyRow: View {
     let company: WeeklyCompany
+    let tint: Color
     let isExpanded: Bool
 
     var body: some View {
         HStack(spacing: Spacing.md) {
+            LetterBadge(text: company.name, tint: tint)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+                    Text(company.name)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(Theme.text)
+                        .lineLimit(1)
+                    Spacer(minLength: Spacing.sm)
+                    Text(Money.format(company.income.total))
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.text)
+                        .lineLimit(1)
+                }
+                HStack(spacing: Spacing.sm) {
+                    Text("расходы \(Money.format(company.expenseTotal))")
+                        .foregroundStyle(Theme.textDim)
+                    Spacer(minLength: Spacing.sm)
+                    Text("итог \(Money.signed(company.net))")
+                        .foregroundStyle(company.net >= 0 ? Theme.positive : Theme.negative)
+                }
+                .font(.system(size: 13))
+                .monospacedDigit()
+                .lineLimit(1)
+            }
+
             Image(systemName: "chevron.right")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Theme.textDim)
                 .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 .animation(Motion.value, value: isExpanded)
-
-            Text(company.name)
-                .font(Typography.callout)
-                .foregroundStyle(Theme.text)
-                .lineLimit(1)
-
-            Spacer(minLength: Spacing.sm)
-
-            VStack(alignment: .trailing, spacing: 1) {
-                Text(Money.format(company.income.total))
-                    .font(Typography.callout.weight(.medium))
-                    .monospacedDigit()
-                    .foregroundStyle(Theme.text)
-                Text("итог \(Money.signed(company.net))")
-                    .font(Typography.caption)
-                    .monospacedDigit()
-                    .foregroundStyle(company.net >= 0 ? Theme.textDim : Theme.negative)
-            }
         }
         .padding(.vertical, Spacing.xs)
         .contentShape(Rectangle())
@@ -1066,8 +1126,7 @@ private struct WeeklyCompanyDetail: View {
             }
         }
         .padding(Spacing.md)
-        .background(Theme.surfaceRaised)
-        .clipShape(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
 

@@ -70,22 +70,21 @@ struct SalesKpiScreen: View {
                 } else if section == .plans {
                     plans
                 } else {
-                totalsCard(payout)
-                if payout.rows.isEmpty {
-                    WideEmptyState(
-                        icon: "person.2",
-                        title: "Продаж в этом месяце нет",
-                        message: "Оценка появится, когда за прилавком начнут пробивать чеки."
-                    )
-                } else {
-                    ForEach(payout.rows) { row in
-                        sellerCard(row, settings: payout.settings)
+                    totalsCard(payout)
+                    if payout.rows.isEmpty {
+                        WideEmptyState(
+                            icon: "person.2",
+                            title: "Продаж в этом месяце нет",
+                            message: "Оценка появится, когда за прилавком начнут пробивать чеки."
+                        )
+                    } else {
+                        sellersSection(payout)
+                        footnote(payout)
                     }
-                    footnote(payout)
-                }
                 }
             }
         }
+        .background(Theme.background)
         .navigationTitle("Эффективность продавцов")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -106,27 +105,25 @@ struct SalesKpiScreen: View {
     // ── Шапка ────────────────────────────────────────────────────────────────
 
     private var header: some View {
-        VStack(spacing: Spacing.sm) {
-            HStack(spacing: Spacing.sm) {
-                Button { month = SalesKpiScreen.shift(month, by: -1) } label: {
-                    Image(systemName: "chevron.left")
+        VStack(spacing: Spacing.md) {
+            // Месяц листается круглыми кнопками по краям — как неделя в
+            // зарплате и месяц в выписке.
+            HStack(spacing: Spacing.md) {
+                monthButton("chevron.left", enabled: true) {
+                    month = SalesKpiScreen.shift(month, by: -1)
                 }
-                .buttonStyle(.pressable)
 
                 Spacer()
 
                 Text(SalesKpiScreen.title(for: month))
-                    .font(Typography.callout.weight(.semibold))
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
                     .foregroundStyle(Theme.text)
 
                 Spacer()
 
-                Button { month = SalesKpiScreen.shift(month, by: 1) } label: {
-                    Image(systemName: "chevron.right")
+                monthButton("chevron.right", enabled: month < SalesKpiScreen.currentMonth) {
+                    month = SalesKpiScreen.shift(month, by: 1)
                 }
-                .buttonStyle(.pressable)
-                .disabled(month >= SalesKpiScreen.currentMonth)
-                .opacity(month >= SalesKpiScreen.currentMonth ? 0.35 : 1)
             }
 
             // Переключатель точек показываем только когда их несколько:
@@ -140,17 +137,15 @@ struct SalesKpiScreen: View {
                                 selectedStore = store
                             } label: {
                                 Text(store.name)
-                                    .font(Typography.caption.weight(.medium))
-                                    .padding(.horizontal, Spacing.md)
-                                    .padding(.vertical, Spacing.xs)
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 8)
                                     .background(
-                                        selectedStore?.id == store.id
-                                            ? Theme.brand.opacity(0.16)
-                                            : Theme.surfaceRaised,
+                                        selectedStore?.id == store.id ? Theme.text : Theme.surface,
                                         in: Capsule()
                                     )
                                     .foregroundStyle(
-                                        selectedStore?.id == store.id ? Theme.brand : Theme.textDim
+                                        selectedStore?.id == store.id ? Theme.background : Theme.textMuted
                                     )
                             }
                             .buttonStyle(.pressable)
@@ -163,96 +158,112 @@ struct SalesKpiScreen: View {
         .padding(.horizontal, Spacing.xs)
     }
 
+    private func monthButton(_ icon: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(enabled ? Theme.text : Theme.textDim.opacity(0.5))
+                .frame(width: 44, height: 44)
+                .background(Theme.surface, in: Circle())
+        }
+        .buttonStyle(.pressable)
+        .disabled(!enabled)
+    }
+
     // ── Итоги ────────────────────────────────────────────────────────────────
 
+    /// Сколько доплатить — главной цифрой; уже выплаченное и число продавцов —
+    /// под ней. Оранжевая карточка — есть кому доплатить.
     private func totalsCard(_ payout: SalesKpiPayout) -> some View {
-        Card(accent: payout.totals.toPay > 0 ? Theme.warning : nil) {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader(
-                    "К доплате",
-                    subtitle: payout.totals.toPayPeople > 0
-                        ? "\(payout.totals.toPayPeople) \(pluralPeople(payout.totals.toPayPeople)) ждут начисления"
-                        : "Никто не ждёт начисления"
-                )
-
-                Text(Money.format(payout.totals.toPay))
-                    .font(Typography.hero)
-                    .foregroundStyle(payout.totals.toPay > 0 ? Theme.warning : Theme.textDim)
-
-                RowDivider()
-
-                HStack(spacing: Spacing.xl) {
-                    VStack(alignment: .leading, spacing: Spacing.xxs) {
-                        Text("УЖЕ ВЫПЛАЧЕНО")
-                            .font(Typography.caption)
-                            .foregroundStyle(Theme.textMuted)
-                        Text(Money.format(payout.totals.alreadyPaid))
-                            .font(Typography.title)
-                            .foregroundStyle(Theme.positive)
-                    }
-                    VStack(alignment: .leading, spacing: Spacing.xxs) {
-                        Text("ПРОДАВЦОВ")
-                            .font(Typography.caption)
-                            .foregroundStyle(Theme.textMuted)
-                        Text("\(payout.totals.people)")
-                            .font(Typography.title)
-                            .foregroundStyle(Theme.text)
-                    }
-                }
-            }
-        }
+        HeroSummary(
+            title: "К доплате",
+            value: Money.format(payout.totals.toPay),
+            caption: payout.totals.toPayPeople > 0
+                ? "\(payout.totals.toPayPeople) \(pluralPeople(payout.totals.toPayPeople)) ждут начисления"
+                : "Никто не ждёт начисления",
+            footer: [
+                ("Уже выплачено", Money.format(payout.totals.alreadyPaid)),
+                ("Продавцов", "\(payout.totals.people)"),
+            ],
+            colors: payout.totals.toPay > 0
+                ? [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
+                : [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+        )
     }
 
     // ── Продавец ─────────────────────────────────────────────────────────────
 
-    private func sellerCard(_ row: SalesKpiPayout.Row, settings: SalesKpiPayout.Settings) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                Button {
-                    if expanded.contains(row.id) { expanded.remove(row.id) } else { expanded.insert(row.id) }
-                } label: {
-                    HStack(alignment: .top, spacing: Spacing.md) {
-                        VStack(alignment: .leading, spacing: Spacing.xxs) {
-                            Text(row.name)
-                                .font(Typography.headline)
-                                .foregroundStyle(Theme.text)
-
-                            HStack(spacing: Spacing.xs) {
-                                Text(row.statusLabel)
-                                    .font(Typography.caption.weight(.medium))
-                                    .foregroundStyle(color(for: row.status))
-                                Text("·")
-                                    .foregroundStyle(Theme.textMuted)
-                                Text("\(row.shifts) \(pluralShifts(row.shifts)), \(row.receipts) \(pluralReceipts(row.receipts))")
-                                    .font(Typography.caption)
-                                    .foregroundStyle(Theme.textMuted)
-                            }
-                        }
-
-                        Spacer(minLength: Spacing.sm)
-
-                        VStack(alignment: .trailing, spacing: Spacing.xxs) {
-                            Text(Money.format(row.amount))
-                                .font(Typography.title)
-                                .foregroundStyle(row.amount > 0 ? Theme.positive : Theme.textDim)
-                            if row.amount > 0 {
-                                Text(row.paid ? "выплачено" : "к выплате")
-                                    .font(Typography.caption)
-                                    .foregroundStyle(row.paid ? Theme.positive : Theme.warning)
-                            }
-                        }
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.pressable)
-
-                if expanded.contains(row.id) {
-                    RowDivider()
-                    details(row)
+    /// Продавцы одним белым блоком строками — раньше каждый был отдельной
+    /// карточкой, и на экран помещалось двое.
+    private func sellersSection(_ payout: SalesKpiPayout) -> some View {
+        OwnerSection("Продавцы") {
+            Text("нажмите, чтобы раскрыть")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.textDim)
+        } content: {
+            VStack(spacing: Spacing.md) {
+                ForEach(payout.rows) { row in
+                    sellerRow(row, settings: payout.settings)
                 }
             }
         }
         .animation(Motion.value, value: expanded)
+    }
+
+    private func sellerRow(_ row: SalesKpiPayout.Row, settings: SalesKpiPayout.Settings) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Button {
+                if expanded.contains(row.id) { expanded.remove(row.id) } else { expanded.insert(row.id) }
+            } label: {
+                HStack(spacing: Spacing.md) {
+                    PersonInitial(name: row.name)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+                            Text(row.name)
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(Theme.text)
+                                .lineLimit(1)
+                            Spacer(minLength: Spacing.sm)
+                            Text(Money.format(row.amount))
+                                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                .monospacedDigit()
+                                .foregroundStyle(row.amount > 0 ? Theme.positive : Theme.textDim)
+                        }
+
+                        HStack(spacing: Spacing.xs) {
+                            Text(row.statusLabel)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(color(for: row.status))
+                            Text("· \(row.shifts) \(pluralShifts(row.shifts)), \(row.receipts) \(pluralReceipts(row.receipts))")
+                                .font(.system(size: 13))
+                                .foregroundStyle(Theme.textDim)
+                                .lineLimit(1)
+                            Spacer(minLength: Spacing.sm)
+                            if row.amount > 0 {
+                                Text(row.paid ? "выплачено" : "к выплате")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(row.paid ? Theme.positive : Theme.warning)
+                            }
+                        }
+                    }
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.textDim)
+                        .rotationEffect(.degrees(expanded.contains(row.id) ? 90 : 0))
+                }
+                .padding(.vertical, Spacing.xs)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.pressable)
+
+            if expanded.contains(row.id) {
+                details(row)
+                    .padding(Spacing.md)
+                    .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+        }
     }
 
     @ViewBuilder
@@ -303,16 +314,12 @@ struct SalesKpiScreen: View {
     }
 
     private func footnote(_ payout: SalesKpiPayout) -> some View {
-        Text(
-            "Доплата начисляется от статуса «Сильный» — \(Money.format(payout.settings.strong)), "
+        OwnerFootnote(
+            text: "Доплата начисляется от статуса «Сильный» — \(Money.format(payout.settings.strong)), "
                 + "за «Топ» — \(Money.format(payout.settings.top)). "
                 + "Считается от \(payout.settings.minQualifyingShifts) смен за месяц. "
                 + "Начисление в зарплату делается на сайте."
         )
-        .font(Typography.caption)
-        .foregroundStyle(Theme.textMuted)
-        .fixedSize(horizontal: false, vertical: true)
-        .padding(.horizontal, Spacing.xs)
     }
 
     // ── Данные ───────────────────────────────────────────────────────────────
@@ -331,12 +338,16 @@ struct SalesKpiScreen: View {
         if isLoadingPlans && planList == nil {
             LoadingRows(count: 3)
         } else if let planList, !planList.plans.isEmpty {
-            Card {
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    SectionHeader("Ближайшие смены", subtitle: planList.monthlyText)
+            OwnerSection("Ближайшие смены") {
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    if let monthly = planList.monthlyText {
+                        Text(monthly)
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.textDim)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     ForEach(planList.plans) { plan in
                         planRow(plan)
-                        if plan.id != planList.plans.last?.id { Divider().overlay(Theme.border) }
                     }
                 }
             }
@@ -353,7 +364,7 @@ struct SalesKpiScreen: View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             HStack(alignment: .firstTextBaseline) {
                 Text("\(DateFormatting.dayMonth(plan.date)) · \(plan.shiftLabel)")
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Theme.text)
                 Spacer()
                 if plan.locked {
@@ -419,12 +430,14 @@ struct SalesKpiScreen: View {
     @ViewBuilder
     private var review: some View {
         if let report, !report.shifts.isEmpty {
-            Card {
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    SectionHeader("Разбор смен", subtitle: "\(report.shifts.count) \(pluralShifts(report.shifts.count))")
+            OwnerSection("Разбор смен") {
+                Text("\(report.shifts.count) \(pluralShifts(report.shifts.count))")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textDim)
+            } content: {
+                VStack(alignment: .leading, spacing: Spacing.md) {
                     ForEach(reviewOrder) { shift in
                         shiftRow(shift)
-                        if shift.id != reviewOrder.last?.id { Divider().overlay(Theme.border) }
                     }
                 }
             }
@@ -476,17 +489,18 @@ struct SalesKpiScreen: View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             HStack(alignment: .firstTextBaseline) {
                 Text("\(DateFormatting.dayMonth(shift.date)) · \(shift.shiftLabel)")
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Theme.text)
                 Spacer()
                 Text(verdictLabel(shift.verdict).text)
-                    .font(Typography.caption)
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(verdictLabel(shift.verdict).tint)
             }
 
             HStack(spacing: Spacing.md) {
                 Text(Money.format(shift.revenue))
-                    .font(Typography.callout.weight(.semibold))
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
                     .foregroundStyle(Theme.text)
                 if let deviation = shift.deviation {
                     // deviation — доля (0,12), а Percent ждёт проценты.
@@ -524,83 +538,88 @@ struct SalesKpiScreen: View {
     @ViewBuilder
     private var people: some View {
         if let report, !report.cashiers.isEmpty {
-            Card {
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    SectionHeader(
-                        "Итого за месяц",
-                        subtitle: "\(report.totals.shifts) \(pluralShifts(report.totals.shifts))"
-                    )
-                    DashboardGrid {
-                        MetricTile(
-                            label: "Средний чек",
-                            value: Money.format(report.totals.averageReceipt),
-                            icon: "cart",
-                            accent: Theme.brand
-                        )
-                        MetricTile(
-                            label: "Чеков",
-                            value: "\(report.totals.receipts)",
-                            icon: "doc.text",
-                            accent: Theme.info
-                        )
+            // Итог месяца — цветной карточкой: средний чек главной цифрой,
+            // чеки и смены — под ней.
+            HeroSummary(
+                title: "Средний чек за месяц",
+                value: Money.format(report.totals.averageReceipt),
+                footer: [
+                    ("Чеков", "\(report.totals.receipts)"),
+                    ("Смен", "\(report.totals.shifts)"),
+                ],
+                colors: [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+            )
+
+            OwnerSection("Продавцы") {
+                Text("\(report.cashiers.count)")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textDim)
+            } content: {
+                VStack(alignment: .leading, spacing: Spacing.lg) {
+                    ForEach(report.cashiers) { cashier in
+                        cashierRow(cashier)
                     }
                 }
             }
 
-            ForEach(report.cashiers) { cashier in
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.sm) {
-                        HStack(spacing: Spacing.md) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(cashier.name)
-                                    .font(Typography.callout.weight(.medium))
-                                    .foregroundStyle(Theme.text)
-                                Text(cashier.scoreText)
-                                    .font(Typography.caption)
-                                    .foregroundStyle(scoreColor(cashier.score))
-                            }
-                            Spacer(minLength: Spacing.sm)
-                            StatusChip(cashier.statusLabel, kind: chip(for: cashier.status))
-                        }
-
-                        StatRow("Средний чек", value: Money.format(cashier.averageReceipt), icon: "cart")
-                        StatRow(
-                            "Смены и чеки",
-                            value: "\(cashier.shifts) · \(cashier.receipts)",
-                            icon: "calendar"
-                        )
-
-                        // Сильные и слабые стороны — то, ради чего этот раздел
-                        // вообще открывают: с ними идут к человеку разговаривать.
-                        if !cashier.strengths.isEmpty {
-                            Text("Лучше нормы: " + cashier.strengths.map(SalesKpiMetric.label).joined(separator: ", "))
-                                .font(Typography.caption)
-                                .foregroundStyle(Theme.positive)
-                        }
-                        if !cashier.weaknesses.isEmpty {
-                            Text("Ниже нормы: " + cashier.weaknesses.map(SalesKpiMetric.label).joined(separator: ", "))
-                                .font(Typography.caption)
-                                .foregroundStyle(Theme.warning)
-                        }
-                        if cashier.trainingFlag, let reason = cashier.trainingReason {
-                            Text(reason)
-                                .font(Typography.caption)
-                                .foregroundStyle(Theme.textMuted)
-                        }
-                    }
-                }
-            }
-
-            Text("Статус ставится от \(report.minQualifyingShifts) смен: по паре смен человека не оценивают. Выручка зависит от потока, а не только от продавца, — поэтому она здесь справка.")
-                .font(Typography.caption)
-                .foregroundStyle(Theme.textDim)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            OwnerFootnote(text: "Статус ставится от \(report.minQualifyingShifts) смен: по паре смен человека не оценивают. Выручка зависит от потока, а не только от продавца, — поэтому она здесь справка.")
         } else {
             WideEmptyState(
                 icon: "person.2",
                 title: "Разбора пока нет",
                 message: "Он появится, когда за прилавком наберутся смены с чеками."
             )
+        }
+    }
+
+    private func cashierRow(_ cashier: SalesKpiReport.Cashier) -> some View {
+        HStack(alignment: .top, spacing: Spacing.md) {
+            PersonInitial(name: cashier.name)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+                    Text(cashier.name)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(Theme.text)
+                        .lineLimit(1)
+                    Spacer(minLength: Spacing.sm)
+                    // Статус подписью, а не плашкой — плашка съедала полстроки.
+                    Text(cashier.statusLabel)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(statusColor(cashier.status))
+                }
+
+                Text(cashier.scoreText)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(scoreColor(cashier.score))
+
+                Text("средний чек \(Money.format(cashier.averageReceipt)) · \(cashier.shifts) \(pluralShifts(cashier.shifts)) · \(cashier.receipts) \(pluralReceipts(cashier.receipts))")
+                    .font(.system(size: 13))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.textDim)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                // Сильные и слабые стороны — то, ради чего этот раздел
+                // вообще открывают: с ними идут к человеку разговаривать.
+                if !cashier.strengths.isEmpty {
+                    Text("Лучше нормы: " + cashier.strengths.map(SalesKpiMetric.label).joined(separator: ", "))
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.positive)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if !cashier.weaknesses.isEmpty {
+                    Text("Ниже нормы: " + cashier.weaknesses.map(SalesKpiMetric.label).joined(separator: ", "))
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.warning)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if cashier.trainingFlag, let reason = cashier.trainingReason {
+                    Text(reason)
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
         }
     }
 
@@ -611,12 +630,12 @@ struct SalesKpiScreen: View {
         return Theme.textMuted
     }
 
-    private func chip(for status: String) -> StatusChip.Kind {
+    private func statusColor(_ status: String) -> Color {
         switch status {
-        case "TOP", "STRONG": .good
-        case "WEAK": .warning
-        case "LOW_SAMPLE", "FEW_SHIFTS": .neutral
-        default: .info
+        case "TOP", "STRONG": Theme.positive
+        case "WEAK": Theme.warning
+        case "LOW_SAMPLE", "FEW_SHIFTS": Theme.textDim
+        default: Theme.info
         }
     }
 

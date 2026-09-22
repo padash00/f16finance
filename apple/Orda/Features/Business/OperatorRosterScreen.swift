@@ -81,6 +81,7 @@ struct OperatorRosterScreen: View {
                 }
             }
         }
+        .background(Theme.background)
         .navigationTitle("Команда")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -90,44 +91,47 @@ struct OperatorRosterScreen: View {
         .refreshable { await load() }
     }
 
+    /// Горящие документы — строкой с иконкой на белой подложке, как
+    /// предупреждение в банковском приложении, а не карточкой с рамкой.
     private var attentionCard: some View {
-        Card(accent: Theme.warning) {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                Label(
-                    "\(attention.count) \(pluralize(attention.count, "документ", "документа", "документов")) требует внимания",
-                    systemImage: "exclamationmark.triangle.fill"
-                )
-                .font(Typography.callout.weight(.semibold))
-                .foregroundStyle(Theme.warning)
-
+        HStack(alignment: .top, spacing: Spacing.md) {
+            TintedIcon(systemName: "exclamationmark.triangle.fill", tint: Theme.warning, size: 44)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(attention.count) \(pluralize(attention.count, "документ", "документа", "документов")) требует внимания")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Theme.text)
                 Text("Просрочен или кончается в течение месяца. Такие люди наверху списка.")
-                    .font(Typography.caption)
+                    .font(.system(size: 13))
                     .foregroundStyle(Theme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            Spacer(minLength: 0)
         }
+        .padding(Spacing.lg)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 
     private func personRow(_ person: OperatorRoster.Person) -> some View {
         HStack(alignment: .top, spacing: Spacing.md) {
-            avatar(person)
+            PersonInitial(name: person.name, isActive: person.isActive)
 
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: Spacing.xs) {
+                HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
                     Text(person.name)
-                        .font(Typography.callout.weight(.medium))
+                        .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(Theme.text)
+                        .lineLimit(1)
                     if !person.isActive {
                         Text("уволен")
-                            .font(Typography.caption)
-                            .foregroundStyle(Theme.textMuted)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Theme.textDim)
                     }
                 }
 
                 if let position = person.position, !position.isEmpty {
                     Text(position)
-                        .font(Typography.caption)
-                        .foregroundStyle(Theme.textMuted)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.textDim)
                 }
 
                 // В списке — одна цифра, по которой людей и сравнивают: средняя
@@ -135,15 +139,16 @@ struct OperatorRosterScreen: View {
                 // колонке списка она не помещается и переносит слова по слогам.
                 if let money = roster?.money[person.id], money.shifts > 0 {
                     Text("ср. смена \(Money.format(money.averagePerShift)) · \(money.shifts) \(pluralize(money.shifts, "смена", "смены", "смен"))")
-                        .font(Typography.caption)
+                        .font(.system(size: 13))
+                        .monospacedDigit()
                         .foregroundStyle(Theme.textDim)
                         .lineLimit(1)
                 }
 
-            if let expiry = expiryLabel(person) {
+                if let expiry = expiryLabel(person) {
                     Text(expiry)
-                        .font(Typography.caption.weight(.medium))
-                        .foregroundStyle(person.documentNeedsAttention ? Theme.warning : Theme.textMuted)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(person.documentNeedsAttention ? Theme.warning : Theme.textDim)
                 }
             }
 
@@ -152,125 +157,159 @@ struct OperatorRosterScreen: View {
             VStack(alignment: .trailing, spacing: 2) {
                 if let tenure = person.tenureLabel {
                     Text(tenure)
-                        .font(Typography.callout.weight(.semibold).monospacedDigit())
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
                         .foregroundStyle(Theme.text)
                     Text("стаж")
-                        .font(Typography.caption)
-                        .foregroundStyle(Theme.textMuted)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.textDim)
                 }
             }
         }
+        .padding(.vertical, Spacing.xs)
         .contentShape(Rectangle())
     }
 
     /// Карточка человека: то же, что в строке, но с местом под подробности.
     private func personCard(_ person: OperatorRoster.Person) -> some View {
         ScreenScroll {
-            Card {
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    HStack(spacing: Spacing.md) {
-                        avatar(person)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(person.name)
-                                .font(Typography.title)
-                                .foregroundStyle(Theme.text)
-                            if let position = person.position, !position.isEmpty {
-                                Text(position)
-                                    .font(Typography.callout)
-                                    .foregroundStyle(Theme.textMuted)
-                            }
-                        }
-                        Spacer()
-                        if !person.isActive { StatusChip("уволен", kind: .neutral) }
-                    }
-
-                    RowDivider()
-
-                    if let tenure = person.tenureLabel {
-                        infoRow("Стаж", tenure)
-                    }
-                    if let hire = person.hireDate {
-                        infoRow("Принят", hire.formatted(date: .abbreviated, time: .omitted))
-                    }
-                    if let phone = person.phone, !phone.isEmpty {
-                        // Телефон нажимается: человека с горящим документом
-                        // проще набрать сразу, чем переписывать номер.
-                        Button {
-                            call(phone)
-                        } label: {
-                            HStack {
-                                Text("Телефон")
-                                    .font(Typography.callout)
-                                    .foregroundStyle(Theme.textDim)
-                                Spacer()
-                                Text(phone)
-                                    .font(Typography.callout.weight(.medium))
-                                    .foregroundStyle(Theme.brand)
-                            }
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.pressable)
-                    }
-                }
-            }
-
-            // Деньги за месяц. Плитками не рисуем: в карточке колонка узкая, и
-            // сетка складывалась в столбик, а подписи переносились по слогам.
-            // Строки читаются в любой ширине.
-            if let money = roster?.money[person.id] {
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.sm) {
-                        SectionHeader(
-                            "Деньги за месяц",
-                            subtitle: "\(money.shifts) \(pluralize(money.shifts, "смена", "смены", "смен"))"
-                        )
-
-                        // Средняя смена первой: оборот зависит от того, сколько
-                        // смен человек отработал, и сравнивать по нему нечестно.
-                        StatRow("Средняя смена", value: Money.format(money.averagePerShift), emphasized: true)
-                        StatRow("Оборот", value: Money.format(money.turnover))
-                        if money.share > 0 {
-                            StatRow("Доля в обороте", value: Percent.format(money.share * 100))
-                        }
-                        if money.manualPlus > 0.01 {
-                            StatRow("Премии", value: Money.signed(money.manualPlus), valueColor: Theme.positive)
-                        }
-                        if money.manualMinus > 0.01 {
-                            StatRow("Штрафы", value: Money.signed(-money.manualMinus), valueColor: Theme.negative)
-                        }
-                        if money.autoDebts > 0.01 {
-                            StatRow("Долги", value: Money.signed(-money.autoDebts), valueColor: Theme.negative)
-                        }
-                        if money.advances > 0.01 {
-                            StatRow("Авансы", value: Money.format(money.advances))
-                        }
-                        if money.hasDeductions || money.manualPlus > 0.01 {
-                            RowDivider()
-                            StatRow(
-                                "Итого",
-                                value: Money.signed(money.netEffect),
-                                valueColor: money.netEffect < 0 ? Theme.negative : Theme.positive,
-                                emphasized: true
-                            )
-                        }
-                    }
-                }
-            }
-
-            if let expiry = expiryLabel(person) {
-                Card(accent: person.documentNeedsAttention ? Theme.warning : nil) {
-                    VStack(alignment: .leading, spacing: Spacing.xs) {
-                        SectionHeader("Документы")
-                        Text(expiry)
-                            .font(Typography.callout)
-                            .foregroundStyle(person.documentNeedsAttention ? Theme.warning : Theme.textDim)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text("Сроки заводятся на сайте, в карточке оператора.")
-                            .font(Typography.caption)
+            VStack(spacing: Spacing.lg) {
+                // Кто это — крупно, с кружком инициала, как профиль в банке.
+                VStack(spacing: Spacing.sm) {
+                    PersonInitial(name: person.name, isActive: person.isActive, size: 72)
+                    Text(person.name)
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .foregroundStyle(Theme.text)
+                        .multilineTextAlignment(.center)
+                    if let position = person.position, !position.isEmpty {
+                        Text(position)
+                            .font(.system(size: 15))
                             .foregroundStyle(Theme.textMuted)
                     }
+                    if !person.isActive {
+                        Text("уволен")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Theme.textDim)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, Spacing.sm)
+
+                // Деньги за месяц. Средняя смена — главной цифрой: оборот
+                // зависит от того, сколько смен человек отработал, и
+                // сравнивать по нему нечестно.
+                if let money = roster?.money[person.id] {
+                    HeroSummary(
+                        title: "Средняя смена за месяц",
+                        value: Money.format(money.averagePerShift),
+                        caption: "\(money.shifts) \(pluralize(money.shifts, "смена", "смены", "смен"))",
+                        footer: moneyFooter(money),
+                        colors: [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+                    )
+
+                    if money.manualPlus > 0.01 || money.hasDeductions || money.advances > 0.01 {
+                        OwnerSection("Премии и удержания") {
+                            VStack(spacing: Spacing.md) {
+                                if money.manualPlus > 0.01 {
+                                    moneyRow("Премии", icon: "gift.fill", tint: Theme.positive, value: Money.signed(money.manualPlus), valueColor: Theme.positive)
+                                }
+                                if money.manualMinus > 0.01 {
+                                    moneyRow("Штрафы", icon: "exclamationmark.triangle.fill", tint: Theme.negative, value: Money.signed(-money.manualMinus), valueColor: Theme.negative)
+                                }
+                                if money.autoDebts > 0.01 {
+                                    moneyRow("Долги", icon: "creditcard.fill", tint: Color(hex: 0xF59E0B), value: Money.signed(-money.autoDebts), valueColor: Theme.negative)
+                                }
+                                if money.advances > 0.01 {
+                                    moneyRow("Авансы", icon: "banknote.fill", tint: Color(hex: 0x3B82F6), value: Money.format(money.advances), valueColor: Theme.text)
+                                }
+                                if money.hasDeductions || money.manualPlus > 0.01 {
+                                    RowDivider()
+                                    StatRow(
+                                        "Итого",
+                                        value: Money.signed(money.netEffect),
+                                        valueColor: money.netEffect < 0 ? Theme.negative : Theme.positive,
+                                        emphasized: true
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                OwnerSection("О сотруднике") {
+                    VStack(spacing: Spacing.md) {
+                        if let tenure = person.tenureLabel {
+                            infoRow("Стаж", tenure)
+                        }
+                        if let hire = person.hireDate {
+                            infoRow("Принят", hire.formatted(date: .abbreviated, time: .omitted))
+                        }
+                        if let phone = person.phone, !phone.isEmpty {
+                            // Телефон нажимается: человека с горящим документом
+                            // проще набрать сразу, чем переписывать номер.
+                            Button {
+                                call(phone)
+                            } label: {
+                                HStack {
+                                    Text("Телефон")
+                                        .font(Typography.callout)
+                                        .foregroundStyle(Theme.textDim)
+                                    Spacer()
+                                    Text(phone)
+                                        .font(Typography.callout.weight(.medium))
+                                        .foregroundStyle(Theme.brand)
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.pressable)
+                        }
+                    }
+                }
+
+                if let expiry = expiryLabel(person) {
+                    OwnerSection("Документы") {
+                        HStack(alignment: .top, spacing: Spacing.md) {
+                            TintedIcon(
+                                systemName: person.documentNeedsAttention ? "exclamationmark.triangle.fill" : "doc.text.fill",
+                                tint: person.documentNeedsAttention ? Theme.warning : Color(hex: 0x3B82F6),
+                                size: 40
+                            )
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(expiry)
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundStyle(person.documentNeedsAttention ? Theme.warning : Theme.text)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Text("Сроки заводятся на сайте, в карточке оператора.")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(Theme.textDim)
+                            }
+                        }
+                    }
                 }
             }
+        }
+        .background(Theme.background)
+    }
+
+    private func moneyFooter(_ money: OperatorRoster.Money) -> [(String, String)] {
+        var footer: [(String, String)] = [("Оборот", Money.format(money.turnover))]
+        if money.share > 0 {
+            footer.append(("Доля в обороте", Percent.format(money.share * 100)))
+        }
+        return footer
+    }
+
+    private func moneyRow(_ title: String, icon: String, tint: Color, value: String, valueColor: Color) -> some View {
+        HStack(spacing: Spacing.md) {
+            TintedIcon(systemName: icon, tint: tint, size: 36)
+            Text(title)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(Theme.text)
+            Spacer()
+            Text(value)
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(valueColor)
         }
     }
 
@@ -314,22 +353,6 @@ struct OperatorRosterScreen: View {
         guard let url = URL(string: "tel:\(digits)") else { return }
         UIApplication.shared.open(url)
         #endif
-    }
-
-    private func avatar(_ person: OperatorRoster.Person) -> some View {
-        // Инициалы, а не подгрузка фотографии: список длинный, а фотографии
-        // операторов заполнены у единиц — ради них тянуть картинки на каждую
-        // строку незачем.
-        Text(initials(person.name))
-            .font(Typography.caption.weight(.bold))
-            .foregroundStyle(Theme.brand)
-            .frame(width: 34, height: 34)
-            .background(Theme.brand.opacity(0.12), in: Circle())
-    }
-
-    private func initials(_ name: String) -> String {
-        let parts = name.split(separator: " ").prefix(2)
-        return parts.compactMap { $0.first.map(String.init) }.joined().uppercased()
     }
 
     private func expiryLabel(_ person: OperatorRoster.Person) -> String? {
