@@ -432,11 +432,15 @@ public struct DonutChart: View {
     private let slices: [ShareSlice]
     private let centerTitle: String
     private let centerValue: String
+    private let showsLegend: Bool
 
-    public init(slices: [ShareSlice], centerTitle: String, centerValue: String) {
+    /// - Parameter showsLegend: без легенды — когда под кольцом и так стоят
+    ///   строки с теми же долями, и вторая подпись только повторяла бы их.
+    public init(slices: [ShareSlice], centerTitle: String, centerValue: String, showsLegend: Bool = true) {
         self.slices = slices
         self.centerTitle = centerTitle
         self.centerValue = centerValue
+        self.showsLegend = showsLegend
     }
 
     private var total: Double { slices.reduce(0) { $0 + $1.value } }
@@ -444,6 +448,10 @@ public struct DonutChart: View {
     public var body: some View {
         if total <= 0 {
             ChartEmptyPlot(height: 140)
+        } else if !showsLegend {
+            ring
+                .frame(width: 190, height: 190)
+                .frame(maxWidth: .infinity)
         } else {
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .center, spacing: Spacing.lg) {
@@ -468,10 +476,10 @@ public struct DonutChart: View {
         .chartBackground { _ in
             VStack(spacing: 0) {
                 Text(centerTitle)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: showsLegend ? 10 : 13, weight: .medium))
                     .foregroundStyle(Theme.textDim)
                 Text(centerValue)
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .font(.system(size: showsLegend ? 13 : 18, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
