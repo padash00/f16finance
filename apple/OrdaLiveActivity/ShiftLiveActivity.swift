@@ -138,7 +138,8 @@ struct ShiftLiveActivity: Widget {
 
     // ── Мелочи ───────────────────────────────────────────────────────────────
 
-    private var brand: Color { Color(red: 0.13, green: 0.77, blue: 0.53) }
+    /// Кобальт ORDA CONTROL — тот же, что у кнопок в приложении.
+    private var brand: Color { Color(red: 0x25 / 255, green: 0x63 / 255, blue: 0xEB / 255) }
 
     /// Главная цифра карточки: у магазина деньги, у клуба занятость зала.
     private func headline(_ state: ShiftActivityAttributes.ContentState) -> String {

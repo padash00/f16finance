@@ -80,6 +80,7 @@ struct OwnerHomeScreen: View {
     @Environment(\.api) private var api
     @Environment(AnalyticsStore.self) private var analytics
     @Environment(BusinessStore.self) private var business
+    @Environment(AuthStore.self) private var auth
 
     @State private var home: OwnerHomeStore?
     @State private var heroPage = 0
@@ -140,48 +141,92 @@ struct OwnerHomeScreen: View {
 
     // ── Шапка ────────────────────────────────────────────────────────────────
 
+    /// Шапка как в банковском приложении: слева аватар и приветствие,
+    /// справа — точки капсулой. Раньше выбор точек был крупным заголовком
+    /// с галочкой и выглядел как текст, а не как кнопка.
     private var header: some View {
         HStack(spacing: Spacing.md) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(greeting)
-                    .font(.system(size: 14))
+            Text(initials)
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .background(
+                    LinearGradient(colors: Theme.heroAccent, startPoint: .topLeading, endPoint: .bottomTrailing),
+                    in: Circle()
+                )
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(greetingPart)
+                    .font(.system(size: 13))
                     .foregroundStyle(Theme.textDim)
-                Button {
-                    showsCompanies = true
-                } label: {
-                    HStack(spacing: 6) {
-                        Text(analytics.companiesTitle)
-                            .font(.system(size: 24, weight: .bold, design: .rounded))
-                            .foregroundStyle(Theme.text)
-                            .lineLimit(1)
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(Theme.textDim)
-                    }
-                }
-                .buttonStyle(.plain)
+                Text(firstName ?? "ORDA CONTROL")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(1)
             }
-            Spacer()
+            .accessibilityElement(children: .combine)
+
+            Spacer(minLength: Spacing.sm)
+
             if (home?.isLoading ?? false) && home?.today != nil {
                 ProgressView().controlSize(.small)
             }
+
+            Button {
+                showsCompanies = true
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "building.2.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.brand)
+                    Text(analytics.companiesTitle)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Theme.text)
+                        .lineLimit(1)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(Theme.textDim)
+                }
+                .padding(.horizontal, 12)
+                .frame(height: 36)
+                .background(Theme.surface, in: Capsule())
+                .overlay(Capsule().strokeBorder(Theme.border, lineWidth: 1))
+            }
+            .buttonStyle(.pressable)
+            .accessibilityLabel("Точки: \(analytics.companiesTitle)")
         }
         .padding(.top, Spacing.md)
     }
 
-    private var greeting: String {
+    private var greetingPart: String {
         let hour = Calendar.current.component(.hour, from: Date())
-        let part = switch hour {
+        return switch hour {
         case 5..<12: "Доброе утро"
         case 12..<18: "Добрый день"
         case 18..<23: "Добрый вечер"
         default: "Доброй ночи"
         }
-        // Вместо имени бывает почта — её в приветствие не ставим.
-        let name = resolver.session.displayName?
+    }
+
+    /// Вместо имени бывает почта — её в приветствие не ставим.
+    private var fullName: String? {
+        resolver.session.displayName ?? auth.role?.displayName
+    }
+
+    private var firstName: String? {
+        fullName?
             .split(separator: " ").first.map(String.init)
             .flatMap { $0.contains("@") ? nil : $0 }
-        return name.map { "\(part), \($0)" } ?? part
+    }
+
+    private var initials: String {
+        let words = (fullName ?? "")
+            .split(separator: " ")
+            .filter { !$0.contains("@") }
+            .prefix(2)
+        let letters = words.compactMap(\.first).map(String.init).joined()
+        return letters.isEmpty ? "O" : letters.uppercased()
     }
 
     // ── Карточка-герой ───────────────────────────────────────────────────────
