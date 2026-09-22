@@ -108,7 +108,6 @@ public struct TrendChart: View {
                 Text(title)
                     .font(Typography.label)
                     .foregroundStyle(Theme.textDim)
-                    .textCase(.uppercase)
                 Spacer()
                 if let selected {
                     Text("\(selected.label) · \(formatter(selected.value))")
@@ -232,7 +231,6 @@ public struct CategoryBarChart: View {
                 Text(title)
                     .font(Typography.label)
                     .foregroundStyle(Theme.textDim)
-                    .textCase(.uppercase)
 
                 if points.isEmpty {
                     Text("Пока нет данных")

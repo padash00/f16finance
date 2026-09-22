@@ -257,7 +257,6 @@ struct OwnerOverviewScreen: View {
                         Text(metric.title + Self.groupSuffix(data.period.group))
                             .font(Typography.label)
                             .foregroundStyle(Theme.textDim)
-                            .textCase(.uppercase)
                         Text(Money.format(total))
                             .font(Typography.monospacedDigits(Typography.title))
                             .foregroundStyle(Theme.text)

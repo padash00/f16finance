@@ -171,13 +171,23 @@ struct OwnerHomeScreen: View {
 
     private var hero: some View {
         VStack(spacing: Spacing.sm) {
-            TabView(selection: $heroPage) {
-                todayCard.tag(0)
-                monthCard.tag(1)
+            // Листается прокруткой с постраничной остановкой, а не TabView:
+            // страничный TabView внутри прокрутки при перерисовке застревал
+            // между карточками.
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: Spacing.md) {
+                    todayCard
+                        .containerRelativeFrame(.horizontal)
+                        .id(0)
+                    monthCard
+                        .containerRelativeFrame(.horizontal)
+                        .id(1)
+                }
+                .scrollTargetLayout()
             }
-            #if os(iOS)
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            #endif
+            .scrollTargetBehavior(.viewAligned)
+            .scrollPosition(id: Binding(get: { heroPage }, set: { heroPage = $0 ?? 0 }))
+            .scrollClipDisabled()
             .frame(height: 196)
 
             HStack(spacing: 6) {

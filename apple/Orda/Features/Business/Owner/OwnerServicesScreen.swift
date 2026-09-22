@@ -85,14 +85,16 @@ struct OwnerServicesScreen: View {
                     OwnerSection(group.label) {
                         EmptyView()
                     } content: {
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Spacing.sm), count: 4), spacing: Spacing.lg) {
+                        // По три в ряд: крупнее иконки и названия в две строки без переносов.
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Spacing.md), count: 3), spacing: Spacing.xl) {
                             ForEach(items) { item in
                                 NavigationLink(value: SectionRoute(pageID: item.pageID)) {
                                     ServiceTile(
                                         icon: item.icon,
                                         title: item.title,
                                         tint: item.tint,
-                                        badge: item.pageID == "expenses-pending" ? business.pending.count : 0
+                                        badge: item.pageID == "expenses-pending" ? business.pending.count : 0,
+                                        size: 64
                                     )
                                 }
                                 .buttonStyle(.pressable)

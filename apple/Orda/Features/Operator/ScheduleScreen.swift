@@ -313,7 +313,6 @@ struct ScheduleScreen: View {
                     Text("Точки")
                         .font(Typography.label)
                         .foregroundStyle(Theme.textDim)
-                        .textCase(.uppercase)
                     ForEach(groups) { group in
                         StatRow(
                             group.companyName,

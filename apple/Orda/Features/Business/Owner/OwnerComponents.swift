@@ -105,10 +105,11 @@ struct ServiceTile: View {
     let title: String
     let tint: Color
     var badge: Int = 0
+    var size: CGFloat = 54
 
     var body: some View {
         VStack(spacing: Spacing.sm) {
-            TintedIcon(systemName: icon, tint: tint, size: 54, corner: 16)
+            TintedIcon(systemName: icon, tint: tint, size: size, corner: size * 0.3)
                 .overlay(alignment: .topTrailing) {
                     if badge > 0 {
                         Text("\(badge)")
@@ -121,12 +122,12 @@ struct ServiceTile: View {
                     }
                 }
             Text(title)
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: size > 60 ? 14 : 12, weight: .medium))
                 .foregroundStyle(Theme.text)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .minimumScaleFactor(0.85)
-                .frame(height: 30, alignment: .top)
+                .frame(height: size > 60 ? 36 : 30, alignment: .top)
         }
         .frame(maxWidth: .infinity)
         .contentShape(Rectangle())

@@ -188,7 +188,6 @@ struct TaxScreen: View {
                 Text("К уплате за период")
                     .font(Typography.label)
                     .foregroundStyle(Theme.textDim)
-                    .textCase(.uppercase)
 
                 Text(Money.format(summary.burden.total))
                     .font(Typography.hero)
@@ -1121,7 +1120,6 @@ private struct WeeklyCompanyDetail: View {
                 Text("Расходы по категориям")
                     .font(Typography.label)
                     .foregroundStyle(Theme.textDim)
-                    .textCase(.uppercase)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 ForEach(company.expenses.prefix(6)) { group in
@@ -1267,7 +1265,6 @@ struct ValuationScreen: View {
                     Text("Вероятная цена бизнеса")
                         .font(Typography.label)
                         .foregroundStyle(Theme.textDim)
-                        .textCase(.uppercase)
 
                     Text(Money.format(valuation.valuation.mid))
                         .font(Typography.hero)

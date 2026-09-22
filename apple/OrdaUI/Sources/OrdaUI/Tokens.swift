@@ -114,8 +114,9 @@ public enum Typography {
     public static let body = Font.body
     public static let callout = Font.callout
     public static let caption = Font.caption
-    /// Подпись-ярлык над значением.
-    public static let label = Font.caption.weight(.medium)
+    /// Подпись над цифрой. Раньше — мелкий капс, как в админках; теперь
+    /// обычный текст чуть крупнее: так подписывают суммы банковские приложения.
+    public static let label = Font.footnote.weight(.medium)
 
     /// Моноширинные цифры — чтобы суммы не «прыгали» при обновлении.
     public static func monospacedDigits(_ font: Font) -> Font {

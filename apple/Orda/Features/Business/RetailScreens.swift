@@ -34,7 +34,6 @@ private struct RetailField: View {
             Text(title)
                 .font(Typography.label)
                 .foregroundStyle(Theme.textDim)
-                .textCase(.uppercase)
 
             TextField(placeholder, text: $text)
                 .textFieldStyle(.plain)
@@ -629,7 +628,6 @@ private struct DiscountFormSheet: View {
                             Text("Тип")
                                 .font(Typography.label)
                                 .foregroundStyle(Theme.textDim)
-                                .textCase(.uppercase)
                             Picker("Тип", selection: $draft.kind) {
                                 ForEach(DiscountKind.allCases) { kind in
                                     Text(kind.title).tag(kind)
@@ -1105,7 +1103,6 @@ struct StationsScreen: View {
                     Text("Тарифы")
                         .font(Typography.label)
                         .foregroundStyle(Theme.textDim)
-                        .textCase(.uppercase)
                     ForEach(group.activeTariffs) { tariff in
                         StatRow(
                             tariffLabel(tariff),

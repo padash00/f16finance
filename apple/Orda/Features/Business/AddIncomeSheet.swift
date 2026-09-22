@@ -240,7 +240,6 @@ struct FieldLabel: View {
         Text(text)
             .font(Typography.label)
             .foregroundStyle(Theme.textDim)
-            .textCase(.uppercase)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

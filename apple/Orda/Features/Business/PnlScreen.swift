@@ -237,7 +237,6 @@ struct PnlScreen: View {
                     Text("Вне отчёта")
                         .font(Typography.label)
                         .foregroundStyle(Theme.textDim)
-                        .textCase(.uppercase)
                     if totals.capex > 0 {
                         PnlRow("Вложения (CAPEX)", amount: totals.capex, share: totals.share(totals.capex), icon: "hammer")
                     }
@@ -517,7 +516,6 @@ private struct MonthBreakdown: View {
                 Text("Вне отчёта")
                     .font(Typography.label)
                     .foregroundStyle(Theme.textDim)
-                    .textCase(.uppercase)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if month.capex > 0 {
                     PnlRow("Вложения (CAPEX)", amount: month.capex, share: month.share(month.capex), icon: "hammer")

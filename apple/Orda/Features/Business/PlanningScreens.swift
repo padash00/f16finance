@@ -368,7 +368,6 @@ struct SimulationScreen: View {
                 Text(projection.isUnderPotential ? "Недозарабатываем за месяц" : "Факт выше расчётного потенциала")
                     .font(Typography.label)
                     .foregroundStyle(Theme.textDim)
-                    .textCase(.uppercase)
 
                 Text(Money.format(abs(projection.gapPerMonth)))
                     .font(Typography.hero)

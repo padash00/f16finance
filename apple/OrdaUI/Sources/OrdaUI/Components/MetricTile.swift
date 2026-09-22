@@ -27,7 +27,49 @@ public struct MetricTile: View {
         self.accent = accent
     }
 
+    @Environment(\.surface) private var surface
+
     public var body: some View {
+        if surface.isCompact {
+            compact
+        } else {
+            tall
+        }
+    }
+
+    /// Телефон: строка «иконка · подпись над суммой · изменение», как счёт в
+    /// банковском приложении. Раньше каждая цифра занимала карточку во всю
+    /// высоту экрана, и четыре показателя приходилось листать.
+    private var compact: some View {
+        Card(padding: Spacing.md) {
+            HStack(spacing: Spacing.md) {
+                Image(systemName: icon ?? "circle.fill")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(accent)
+                    .frame(width: 44, height: 44)
+                    .background(accent.opacity(0.14), in: Circle())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(label)
+                        .font(Typography.label)
+                        .foregroundStyle(Theme.textDim)
+                        .lineLimit(1)
+                    Text(value)
+                        .font(Typography.monospacedDigits(.system(size: 22, weight: .bold, design: .rounded)))
+                        .foregroundStyle(Theme.text)
+                        .contentTransition(.numericText())
+                        .animation(Motion.value, value: value)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                }
+                Spacer(minLength: Spacing.sm)
+                if let change {
+                    ChangeBadge(change: change)
+                }
+            }
+        }
+    }
+
+    private var tall: some View {
         // Рамку не красим акцентом: `Card` рисует его с прозрачностью 0.35, и
         // «нейтральная» плитка на приглушённом цвете получала обводку ярче
         // брендовой — ряд показателей выглядел так, будто главное в нём как
@@ -43,7 +85,6 @@ public struct MetricTile: View {
                     Text(label)
                         .font(Typography.label)
                         .foregroundStyle(Theme.textDim)
-                        .textCase(.uppercase)
                 }
 
                 Text(value)

@@ -66,7 +66,6 @@ struct MoneyScreen: View {
                     Text("К выплате за неделю")
                         .font(Typography.label)
                         .foregroundStyle(Theme.textDim)
-                        .textCase(.uppercase)
                     Spacer()
                     StatusChip(week.statusLabel, kind: week.status == "paid" ? .good : .neutral)
                 }
@@ -100,7 +99,6 @@ struct MoneyScreen: View {
                 Text("Из чего сложилось")
                     .font(Typography.label)
                     .foregroundStyle(Theme.textDim)
-                    .textCase(.uppercase)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 StatRow("Начислено за смены", value: Money.format(week.grossAmount), icon: "calendar")
@@ -262,7 +260,6 @@ struct MoneyScreen: View {
                         Text("Долг за неделю")
                             .font(Typography.label)
                             .foregroundStyle(week.isEmpty ? Theme.textDim : Theme.negative)
-                            .textCase(.uppercase)
                         Spacer()
                         Text(Money.format(weekTotal))
                             .font(Typography.callout.weight(.semibold))
@@ -373,7 +370,6 @@ struct MoneyScreen: View {
                     Text("Штрафы и поощрения")
                         .font(Typography.label)
                         .foregroundStyle(Theme.textDim)
-                        .textCase(.uppercase)
 
                     ForEach(cabinet.incidents.prefix(8)) { incident in
                         VStack(alignment: .leading, spacing: Spacing.xs) {

@@ -81,7 +81,6 @@ struct IncomeScreen: View {
                 Text("Доход за период")
                     .font(Typography.label)
                     .foregroundStyle(Theme.textDim)
-                    .textCase(.uppercase)
 
                 Text(Money.format(store.incomeTotal))
                     .font(Typography.monospacedDigits(Typography.hero))
@@ -293,7 +292,6 @@ struct ExpensesScreen: View {
                 Text("Расход за период")
                     .font(Typography.label)
                     .foregroundStyle(Theme.textDim)
-                    .textCase(.uppercase)
 
                 Text(Money.format(store.expenseTotal))
                     .font(Typography.monospacedDigits(Typography.hero))
@@ -501,7 +499,7 @@ extension TimePoint {
 /// Ошибаются в сумме чаще, чем кажется: смена закрылась, цифру записали не ту,
 /// а исправить можно было только с сайта — то есть завтра. К утру расхождение
 /// уже разошлось по отчётам.
-private struct EditIncomeSheet: View {
+struct EditIncomeSheet: View {
     let row: IncomeRow
     let onSaved: () async -> Void
 
@@ -608,7 +606,7 @@ private struct EditIncomeSheet: View {
 /// Точка и категория обязательны — так проверяет сервер. Они уже заполнены
 /// тем, что было записано, и менять их обычно не нужно; поле оставлено для
 /// случая, когда расход записали не на ту точку.
-private struct EditExpenseSheet: View {
+struct EditExpenseSheet: View {
     let row: ExpenseRow
     let onSaved: () async -> Void
 

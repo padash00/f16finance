@@ -1260,7 +1260,6 @@ struct BusinessIntelligenceScreen: View {
                         Text("Ключевые позиции")
                             .font(Typography.label)
                             .foregroundStyle(Theme.textDim)
-                            .textCase(.uppercase)
                         ForEach(section.vital.prefix(8)) { item in
                             StatRow(item.name, value: Money.format(item.revenue))
                         }
@@ -1681,7 +1680,6 @@ struct AiCfoScreen: View {
             Text(label)
                 .font(Typography.label)
                 .foregroundStyle(tint)
-                .textCase(.uppercase)
             Text(text)
                 .font(Typography.callout)
                 .foregroundStyle(Theme.textMuted)
@@ -1978,7 +1976,6 @@ struct AiCfoScreen: View {
                 Text(title)
                     .font(Typography.label)
                     .foregroundStyle(Theme.textDim)
-                    .textCase(.uppercase)
                 ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                     HStack(alignment: .top, spacing: Spacing.sm) {
                         Image(systemName: "circle")

@@ -88,13 +88,20 @@ struct OwnerTabs<Platform: View>: View {
                 .tag(Tab.profile)
         }
         .tint(accent)
-        .onAppear {
-            // Вкладка при запуске: `-ordaTab analytics` — для снимков экрана.
+        .task {
+            // Вкладка и раздел при запуске: `-ordaTab analytics`,
+            // `-ordaPage expenses` — для снимков экрана. Ждём первый кадр:
+            // путь, выставленный до появления стека, SwiftUI теряет.
+            try? await Task.sleep(for: .milliseconds(400))
             switch UserDefaults.standard.string(forKey: "ordaTab") {
             case "analytics": tab = .analytics
             case "services": tab = .services
             case "profile": tab = .profile
             default: break
+            }
+            if let page = LaunchOptions.requestedPage, homePath.isEmpty {
+                tab = .home
+                homePath = [SectionRoute(pageID: page)]
             }
         }
     }

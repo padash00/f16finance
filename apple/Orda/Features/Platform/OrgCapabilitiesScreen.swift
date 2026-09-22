@@ -42,7 +42,6 @@ struct OrgCapabilitiesScreen: View {
                             Text(entry.group.label)
                                 .font(Typography.label)
                                 .foregroundStyle(Theme.textDim)
-                                .textCase(.uppercase)
                             Spacer()
                             Text("\(entry.capabilities.count)")
                                 .font(Typography.caption)

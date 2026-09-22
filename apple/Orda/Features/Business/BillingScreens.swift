@@ -411,7 +411,6 @@ private struct IncidentDetail: View {
                                 Text(incident.kindLabel)
                                     .font(Typography.caption)
                                     .foregroundStyle(Theme.textDim)
-                                    .textCase(.uppercase)
                                 Text(incident.title)
                                     .font(Typography.title)
                                     .foregroundStyle(Theme.text)

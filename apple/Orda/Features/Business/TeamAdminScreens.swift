@@ -189,7 +189,6 @@ private struct SalaryRuleCard: View {
                         Text("Ставка по датам")
                             .font(Typography.label)
                             .foregroundStyle(Theme.textDim)
-                            .textCase(.uppercase)
                         // Прошлые смены считаются по своей версии — без этого
                         // списка непонятно, почему старая неделя не сошлась с
                         // текущей ставкой.

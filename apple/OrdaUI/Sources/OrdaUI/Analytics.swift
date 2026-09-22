@@ -105,7 +105,6 @@ public struct KPICard: View {
                     Text(title)
                         .font(Typography.label)
                         .foregroundStyle(Theme.textDim)
-                        .textCase(.uppercase)
                         .lineLimit(1)
                     Spacer(minLength: 0)
                 }
@@ -455,7 +454,6 @@ public struct DonutChart: View {
                 Text(centerTitle)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(Theme.textDim)
-                    .textCase(.uppercase)
                 Text(centerValue)
                     .font(.system(size: 13, weight: .bold, design: .rounded))
                     .monospacedDigit()
@@ -822,7 +820,6 @@ public struct DataTable<Row: Identifiable>: View {
             HStack(spacing: Spacing.xxs) {
                 Text(title)
                     .font(Typography.label)
-                    .textCase(.uppercase)
                     .lineLimit(1)
                 if sortColumn == id {
                     Image(systemName: ascending ? "chevron.up" : "chevron.down")

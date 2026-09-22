@@ -345,10 +345,10 @@ struct StockScreen: View {
     @ViewBuilder
     private var list: some View {
         VStack(spacing: 0) {
-            Picker("Разрез", selection: $mode) {
-                ForEach(Mode.allCases) { Text($0.label).tag($0) }
+            VStack(spacing: Spacing.md) {
+                PillSegment(options: Mode.allCases.map { ($0, $0.label) }, selection: $mode)
+                stockSummary
             }
-            .pickerStyle(.segmented)
             .padding(.horizontal, Spacing.lg)
             .padding(.vertical, Spacing.md)
 
@@ -356,6 +356,38 @@ struct StockScreen: View {
             case .byItem: itemList
             case .byLocation: locationList
             }
+        }
+    }
+
+    /// Сколько позиций и сколько заканчивается — нажатие на второе оставляет
+    /// в списке только их.
+    private var stockSummary: some View {
+        let totals = store.store?.totalsByItem ?? []
+        let low = totals.filter { item in
+            guard let threshold = item.threshold, threshold > 0 else { return false }
+            return item.quantity <= threshold
+        }.count
+        return HStack(spacing: Spacing.sm) {
+            Label("\(totals.count) позиций", systemImage: "shippingbox.fill")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Theme.text)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Theme.surface, in: Capsule())
+            if low > 0 {
+                Button {
+                    withAnimation(Motion.tap) { onlyLow.toggle() }
+                } label: {
+                    Label("Заканчивается: \(low)", systemImage: "exclamationmark.triangle.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(onlyLow ? .white : Theme.negative)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(onlyLow ? AnyShapeStyle(Theme.negative) : AnyShapeStyle(Theme.negative.opacity(0.12)), in: Capsule())
+                }
+                .buttonStyle(.pressable)
+            }
+            Spacer(minLength: 0)
         }
     }
 
@@ -373,7 +405,10 @@ struct StockScreen: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(items) { item in
+                        ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                            if index > 0 {
+                                Rectangle().fill(Theme.borderSoft).frame(height: 1).padding(.leading, 56)
+                            }
                             StockRowView(
                                 name: item.name,
                                 quantity: item.quantity,
@@ -381,12 +416,13 @@ struct StockScreen: View {
                                 threshold: item.threshold,
                                 caption: item.locationCount > 1 ? "в \(item.locationCount) точках" : nil
                             )
-                            .padding(.horizontal, Spacing.lg)
                             .padding(.vertical, Spacing.sm)
-                            RowDivider().padding(.horizontal, Spacing.lg)
                         }
                     }
-                    .padding(.vertical, Spacing.sm)
+                    .padding(.horizontal, Spacing.md)
+                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .padding(.horizontal, Spacing.lg)
+                    .padding(.bottom, Spacing.xxl)
                 }
             }
         }
@@ -418,7 +454,6 @@ struct StockScreen: View {
                                         Text(location.name)
                                             .font(Typography.label)
                                             .foregroundStyle(Theme.textDim)
-                                            .textCase(.uppercase)
                                         Spacer()
                                         Text("\(grouped[location.id]?.count ?? 0)")
                                             .font(Typography.caption)
@@ -874,35 +909,38 @@ struct StockRowView: View {
 
     var body: some View {
         HStack(spacing: Spacing.md) {
-            VStack(alignment: .leading, spacing: 1) {
+            // Буква товара в кружке — строка читается как позиция выписки,
+            // а заканчивающийся товар виден по красному кружку издалека.
+            Text(String(name.trimmingCharacters(in: .whitespaces).prefix(1)).uppercased())
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .foregroundStyle(isLow ? Theme.negative : Theme.brand)
+                .frame(width: 40, height: 40)
+                .background((isLow ? Theme.negative : Theme.brand).opacity(0.13), in: Circle())
+
+            VStack(alignment: .leading, spacing: 2) {
                 Text(name)
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
-                if let caption {
+                if isLow, let threshold {
+                    Text("заканчивается · порог \(Quantity.format(threshold)) \(unit)")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Theme.negative)
+                } else if let caption {
                     Text(caption)
-                        .font(Typography.caption)
+                        .font(.system(size: 13))
                         .foregroundStyle(Theme.textDim)
-                } else if isLow, let threshold {
-                    Text("порог \(Quantity.format(threshold)) \(unit)")
-                        .font(Typography.caption)
-                        .foregroundStyle(Theme.warning)
                 }
             }
 
             Spacer(minLength: Spacing.sm)
 
-            Text("\(Quantity.format(quantity)) \(unit)")
-                .font(Typography.callout.weight(.medium))
+            Text("\(Quantity.format(quantity)) \(unit.lowercased())")
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
                 .monospacedDigit()
-                .foregroundStyle(isLow ? Theme.warning : Theme.text)
-
-            if isLow {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.warning)
-            }
+                .foregroundStyle(isLow ? Theme.negative : Theme.text)
         }
+        .padding(.vertical, Spacing.xs)
     }
 }
 

@@ -82,15 +82,16 @@ public struct NavigationRow: View {
 
     public var body: some View {
         HStack(spacing: Spacing.md) {
+            // Иконка в цветном кружке — как у строк банковских приложений.
             Image(systemName: icon)
-                .font(.system(size: 15, weight: .medium))
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(iconColor)
-                .frame(width: 34, height: 34)
-                .background(iconColor.opacity(0.12), in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                .frame(width: 40, height: 40)
+                .background(iconColor.opacity(0.14), in: Circle())
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(Typography.body)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Theme.text)
                 if let subtitle {
                     Text(subtitle)
@@ -164,7 +165,11 @@ public struct StatusChip: View {
                 .font(.system(size: 10, weight: .bold))
             Text(text)
                 .font(Typography.caption.weight(.semibold))
+                .lineLimit(1)
         }
+        // Статус не переносится по слогам: «Не выпла-чено» в две строки
+        // читалось хуже, чем чуть уже соседняя колонка.
+        .fixedSize()
         .foregroundStyle(kind.color)
         .padding(.horizontal, Spacing.sm)
         .padding(.vertical, Spacing.xs)

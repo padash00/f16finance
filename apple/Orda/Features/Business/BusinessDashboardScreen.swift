@@ -104,7 +104,6 @@ struct BusinessDashboardScreen: View {
                     Text("Выручка сегодня")
                         .font(Typography.label)
                         .foregroundStyle(Theme.textDim)
-                        .textCase(.uppercase)
                     Spacer()
                     if let change = dashboard.changePercent {
                         ChangeBadge(change: change)

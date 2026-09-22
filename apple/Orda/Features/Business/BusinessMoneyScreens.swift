@@ -83,7 +83,6 @@ struct ApprovalsScreen: View {
                     Text("На сумму")
                         .font(Typography.label)
                         .foregroundStyle(Theme.textDim)
-                        .textCase(.uppercase)
                     Text(Money.format(store.pending.reduce(0) { $0 + $1.total }))
                         .font(Typography.monospacedDigits(Typography.metric))
                         .foregroundStyle(Theme.text)
@@ -283,7 +282,6 @@ struct LedgerScreen: View {
                 Text("Прибыль за период")
                     .font(Typography.label)
                     .foregroundStyle(Theme.textDim)
-                    .textCase(.uppercase)
 
                 Text(Money.format(store.profit))
                     .font(Typography.monospacedDigits(Typography.hero))

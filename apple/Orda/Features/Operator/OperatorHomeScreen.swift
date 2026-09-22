@@ -220,7 +220,6 @@ struct OperatorHomeScreen: View {
                 Text("Чем платили")
                     .font(Typography.label)
                     .foregroundStyle(Theme.textDim)
-                    .textCase(.uppercase)
 
                 SplitBar(segments: [
                     .init(label: "Наличные", value: store.totals.expectedCash, color: ChartPalette.series1),
@@ -303,7 +302,6 @@ struct OperatorHomeScreen: View {
                 Text("Требует внимания")
                     .font(Typography.label)
                     .foregroundStyle(Theme.warning)
-                    .textCase(.uppercase)
                     .padding(.bottom, Spacing.xs)
 
                 if !store.blockingChecklists.isEmpty {
@@ -379,7 +377,6 @@ struct OperatorHomeScreen: View {
                             Text("Заработано за неделю")
                                 .font(Typography.label)
                                 .foregroundStyle(Theme.textDim)
-                                .textCase(.uppercase)
                             Spacer()
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 12, weight: .semibold))
@@ -418,7 +415,6 @@ struct OperatorHomeScreen: View {
                 Text("Ближайшая смена")
                     .font(Typography.label)
                     .foregroundStyle(Theme.textDim)
-                    .textCase(.uppercase)
                 Text(next.label ?? next.date)
                     .font(Typography.title)
                     .foregroundStyle(Theme.text)

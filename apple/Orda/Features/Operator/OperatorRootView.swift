@@ -292,7 +292,6 @@ struct OperatorRootView: View {
                         Text(group.title)
                             .font(Typography.label)
                             .foregroundStyle(Theme.textDim)
-                            .textCase(.uppercase)
                     }
                 }
             }

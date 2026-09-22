@@ -621,7 +621,6 @@ struct BusinessSectionsScreen: View {
                                 Text(group.label)
                                     .font(Typography.label)
                                     .foregroundStyle(Theme.textDim)
-                                    .textCase(.uppercase)
                                 Spacer()
                                 Text("\(pages.count)")
                                     .font(Typography.caption)
@@ -732,7 +731,6 @@ struct BusinessProfileScreen: View {
                         Text("Доступ")
                             .font(Typography.label)
                             .foregroundStyle(Theme.textDim)
-                            .textCase(.uppercase)
                             .frame(maxWidth: .infinity, alignment: .leading)
 
                         StatRow("Разделов открыто", value: "\(resolver.nativeGroups().count)")

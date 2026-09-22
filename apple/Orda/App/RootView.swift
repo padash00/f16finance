@@ -80,13 +80,21 @@ struct RootView: View {
             case .loadingRole:
                 LaunchView(message: "Проверяем доступ…")
 
-            case .locked:
-                BiometricLockView()
-
-            case .signedIn:
+            // Замок кладётся поверх кабинета, а не вместо него. Раньше он
+            // подменял ветку, и после Face ID кабинет собирался заново: человек
+            // сворачивал приложение в «Расходах» за неделю, а возвращался на
+            // главную. Теперь под замком всё остаётся как было — вкладка,
+            // открытый раздел, прокрутка, введённый текст.
+            case .locked, .signedIn:
                 workspace
                     .transition(.opacity)
                     .overlay(alignment: .top) { roleErrorBanner }
+                    .overlay {
+                        if auth.phase == .locked {
+                            BiometricLockView()
+                                .transition(.opacity)
+                        }
+                    }
                     .task {
                         // Разрешение спрашиваем здесь, а не на экране входа:
                         // до входа человек не понимает, о чём его будут

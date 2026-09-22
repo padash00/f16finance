@@ -42,7 +42,6 @@ struct PlatformOverviewScreen: View {
                 Text("Регулярная выручка")
                     .font(Typography.label)
                     .foregroundStyle(Theme.textDim)
-                    .textCase(.uppercase)
 
                 Text(Money.format(store.overview.liveMrr))
                     .font(Typography.monospacedDigits(Typography.hero))

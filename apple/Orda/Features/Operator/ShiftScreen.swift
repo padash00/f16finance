@@ -70,7 +70,6 @@ struct ShiftScreen: View {
                     Label("На смене другой", systemImage: "person.fill.checkmark")
                         .font(Typography.label)
                         .foregroundStyle(Theme.info)
-                        .textCase(.uppercase)
 
                     Text(store.shift?.operatorName ?? "Сменщик")
                         .font(Typography.metric)
@@ -125,7 +124,6 @@ struct ShiftScreen: View {
                     Label("Смена открыта", systemImage: "circle.fill")
                         .font(Typography.label)
                         .foregroundStyle(Theme.positive)
-                        .textCase(.uppercase)
                     Spacer()
                     if let opened = shift?.openedAt {
                         Text(elapsed(since: opened))
@@ -192,7 +190,6 @@ struct ShiftScreen: View {
                     Label("Нужно завершить до закрытия", systemImage: "checklist.unchecked")
                         .font(Typography.label)
                         .foregroundStyle(Theme.warning)
-                        .textCase(.uppercase)
 
                     ForEach(store.blockingChecklists) { template in
                         Text("• \(template.title)")
@@ -391,7 +388,6 @@ struct CloseShiftSheet: View {
                             Text("Ожидается по системе")
                                 .font(Typography.label)
                                 .foregroundStyle(Theme.textDim)
-                                .textCase(.uppercase)
                             row("Наличные", Money.format(store.totals.expectedCash))
                             row("Kaspi", Money.format(store.totals.expectedKaspi))
                         }

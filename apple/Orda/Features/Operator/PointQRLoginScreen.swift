@@ -65,7 +65,6 @@ struct PointQRLoginScreen: View {
                     Text("Как это работает")
                         .font(Typography.label)
                         .foregroundStyle(Theme.textDim)
-                        .textCase(.uppercase)
                     step(1, "На терминале откройте вход и нажмите «Войти по QR».")
                     step(2, "Наведите камеру на код — подтверждение уйдёт само.")
                     step(3, "Программа на точке войдёт под вами. Пароль вводить не нужно.")
