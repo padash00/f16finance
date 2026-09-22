@@ -68,9 +68,35 @@ export function comparisonRange(from: string, to: string, compare: OwnerCompare)
   if (compare === 'year') {
     return { prevFrom: shiftYear(from, -1), prevTo: shiftYear(to, -1) }
   }
+  // Целые календарные месяцы (месяц, квартал, год) сравниваются с такими же
+  // месяцами перед ними: сентябрь — с августом с 1-го числа, а не с окном
+  // «30 дней назад», которое начинается 2 августа.
+  const months = wholeMonths(from, to)
+  if (months) {
+    const prevFrom = shiftMonths(from, -months)
+    return { prevFrom, prevTo: addDays(shiftMonths(prevFrom, months), -1) }
+  }
   const length = daysBetween(from, to) + 1
   const prevTo = addDays(from, -1)
   return { prevFrom: addDays(prevTo, -(length - 1)), prevTo }
+}
+
+/** Сколько целых месяцев в периоде; null — период не из целых месяцев. */
+function wholeMonths(from: string, to: string): number | null {
+  if (!from.endsWith('-01')) return null
+  const next = addDays(to, 1)
+  if (!next.endsWith('-01')) return null
+  const [fy, fm] = from.split('-').map(Number)
+  const [ny, nm] = next.split('-').map(Number)
+  const count = (ny * 12 + nm) - (fy * 12 + fm)
+  return count > 0 ? count : null
+}
+
+/** Сдвиг первого числа месяца на n месяцев. */
+function shiftMonths(firstOfMonth: string, n: number): string {
+  const [y, m] = firstOfMonth.split('-').map(Number)
+  const total = y * 12 + (m - 1) + n
+  return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, '0')}-01`
 }
 
 function shiftYear(iso: string, years: number): string {

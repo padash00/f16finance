@@ -37,6 +37,11 @@ const expense = (date: string, amount: number, category = 'Аренда') => ({
 test('база сравнения: прошлый период той же длины и тот же период годом раньше', () => {
   assert.deepEqual(comparisonRange('2026-09-08', '2026-09-14', 'prev'), { prevFrom: '2026-09-01', prevTo: '2026-09-07' })
   assert.deepEqual(comparisonRange('2026-09-01', '2026-09-30', 'year'), { prevFrom: '2025-09-01', prevTo: '2025-09-30' })
+  // Целый месяц — с прошлым календарным месяцем, квартал — с прошлым кварталом
+  assert.deepEqual(comparisonRange('2026-09-01', '2026-09-30', 'prev'), { prevFrom: '2026-08-01', prevTo: '2026-08-31' })
+  assert.deepEqual(comparisonRange('2026-03-01', '2026-03-31', 'prev'), { prevFrom: '2026-02-01', prevTo: '2026-02-28' })
+  assert.deepEqual(comparisonRange('2026-07-01', '2026-09-30', 'prev'), { prevFrom: '2026-04-01', prevTo: '2026-06-30' })
+  assert.deepEqual(comparisonRange('2026-01-01', '2026-12-31', 'prev'), { prevFrom: '2025-01-01', prevTo: '2025-12-31' })
   // 29 февраля → 28-е
   assert.deepEqual(comparisonRange('2028-02-29', '2028-02-29', 'year'), { prevFrom: '2027-02-28', prevTo: '2027-02-28' })
 })
