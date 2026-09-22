@@ -1155,34 +1155,6 @@ struct ValuationScreen: View {
         VStack(spacing: Spacing.lg) {
             price(valuation)
 
-            DashboardGrid {
-                MetricTile(
-                    label: "Выручка за 12 мес",
-                    value: Money.format(valuation.revenue12mo),
-                    icon: "arrow.down.circle.fill",
-                    accent: Theme.brand
-                )
-                MetricTile(
-                    label: "EBITDA за 12 мес",
-                    value: Money.format(valuation.ebitda12mo),
-                    change: valuation.trendPct,
-                    icon: "chart.line.uptrend.xyaxis",
-                    accent: valuation.ebitda12mo >= 0 ? Theme.positive : Theme.negative
-                )
-                MetricTile(
-                    label: "Маржа EBITDA",
-                    value: Percent.format(valuation.ebitdaMargin),
-                    icon: "percent",
-                    accent: Theme.info
-                )
-                MetricTile(
-                    label: "Чистая прибыль",
-                    value: Money.format(valuation.netProfit12mo),
-                    icon: "banknote.fill",
-                    accent: valuation.netProfit12mo >= 0 ? Theme.positive : Theme.negative
-                )
-            }
-
             trend(valuation)
 
             SplitDashboard {
@@ -1198,28 +1170,34 @@ struct ValuationScreen: View {
     @ViewBuilder
     private func price(_ valuation: BusinessValuation) -> some View {
         if valuation.profitable {
-            Card(accent: Theme.brand) {
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    Text("Вероятная цена бизнеса")
-                        .font(Typography.label)
-                        .foregroundStyle(Theme.textDim)
-
-                    Text(Money.format(valuation.valuation.mid))
-                        .font(Typography.hero)
-                        .foregroundStyle(Theme.text)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.5)
-
-                    Text("Вилка \(Money.format(valuation.valuation.low)) — \(Money.format(valuation.valuation.high))")
-                        .font(Typography.callout)
-                        .foregroundStyle(Theme.textMuted)
-
+            // Цена — главной карточкой, а выручка, EBITDA и прибыль — её
+            // расшифровкой под ней, а не четырьмя плитками стопкой.
+            VStack(alignment: .leading, spacing: 0) {
+                HeroSummary(
+                    title: "Вероятная цена бизнеса",
+                    value: Money.format(valuation.valuation.mid),
+                    caption: "вилка \(Money.format(valuation.valuation.low)) — \(Money.format(valuation.valuation.high))",
+                    footer: [
+                        ("Выручка 12 мес", Money.format(valuation.revenue12mo)),
+                        ("EBITDA · \(Percent.format(valuation.ebitdaMargin))", Money.format(valuation.ebitda12mo)),
+                        ("Чистая прибыль", Money.format(valuation.netProfit12mo)),
+                    ],
+                    colors: [Color(hex: 0x0F766E), Color(hex: 0x0E7490)]
+                )
+                HStack(spacing: Spacing.sm) {
                     if let period = valuation.periodLabel {
                         Text("По EBITDA за \(period)")
-                            .font(Typography.caption)
-                            .foregroundStyle(Theme.textDim)
+                    }
+                    Spacer(minLength: 0)
+                    if let trend = valuation.trendPct {
+                        ChangeText(change: trend)
+                        Text("EBITDA к прошлому году")
                     }
                 }
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.textDim)
+                .padding(.horizontal, Spacing.xs)
+                .padding(.top, Spacing.sm)
             }
         } else {
             Card(accent: Theme.warning) {
