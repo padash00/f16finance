@@ -600,30 +600,35 @@ struct NewsScreen: View {
         } else {
             ScreenScroll {
                 if let message = store.actionError {
-                    Card(accent: Theme.negative) {
-                        Label(message, systemImage: "exclamationmark.triangle")
-                            .font(Typography.callout)
+                    HStack(spacing: Spacing.md) {
+                        TintedIcon(systemName: "exclamationmark.triangle.fill", tint: Theme.negative, size: 36)
+                        Text(message)
+                            .font(.system(size: 15))
                             .foregroundStyle(Theme.negative)
+                        Spacer(minLength: 0)
                     }
+                    .feedPanel()
                 }
 
+                // Непрочитанное — строкой с иконкой в кружке, как уведомление
+                // в банковском приложении, а не карточкой с цветной рамкой.
                 if feed.unreadCount > 0 {
-                    Card(accent: Theme.brand) {
-                        HStack(spacing: Spacing.md) {
-                            Image(systemName: "sparkles")
-                                .font(.system(size: 16))
-                                .foregroundStyle(Theme.brand)
-                            Text("\(feed.unreadCount) \(pluralize(feed.unreadCount, "непрочитанный пост", "непрочитанных поста", "непрочитанных постов"))")
-                                .font(Typography.callout)
-                                .foregroundStyle(Theme.text)
-                            Spacer()
-                        }
+                    HStack(spacing: Spacing.md) {
+                        TintedIcon(systemName: "sparkles", tint: Theme.brand, size: 36)
+                        Text("\(feed.unreadCount) \(pluralize(feed.unreadCount, "непрочитанный пост", "непрочитанных поста", "непрочитанных постов"))")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(Theme.text)
+                        Spacer()
                     }
+                    .feedPanel()
                 }
 
                 if !feed.pinned.isEmpty {
                     VStack(alignment: .leading, spacing: Spacing.md) {
-                        SectionHeader("Закреплено")
+                        Label("Закреплено", systemImage: "pin.fill")
+                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .foregroundStyle(Theme.text)
+                            .padding(.horizontal, Spacing.xs)
                         ForEach(feed.pinned) { post in
                             NewsPostCard(post: post, canDelete: feed.canPublish, store: store)
                         }
@@ -662,53 +667,67 @@ private struct NewsPostCard: View {
         }
     }
 
+    /// Пост — белой карточкой без рамки: автор кружком, пометки «новое» и
+    /// «закреплено» цветными подписями, а не плашками, — текст главнее.
     private var card: some View {
-        Card(accent: post.isPinned ? Theme.brand : nil) {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                HStack(spacing: Spacing.md) {
-                    FeedAvatar(initials: post.initials, side: 38)
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            HStack(spacing: Spacing.md) {
+                FeedAvatar(initials: post.initials, side: 40)
 
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(post.authorName)
-                            .font(Typography.callout.weight(.medium))
-                            .foregroundStyle(Theme.text)
-                        if let created = post.createdAt {
-                            Text(created.formatted(.dateTime.day().month(.abbreviated).hour().minute()))
-                                .font(Typography.caption)
-                                .foregroundStyle(Theme.textDim)
-                        }
-                    }
-
-                    Spacer(minLength: Spacing.sm)
-
-                    if post.isPinned { StatusChip("закреплено", kind: .info) }
-                    if !post.viewed { StatusChip("новое", kind: .good) }
-                }
-
-                if let title = post.title, !title.isEmpty {
-                    Text(title)
-                        .font(Typography.title)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(post.authorName)
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(Theme.text)
+                    if let created = post.createdAt {
+                        Text(created.formatted(.dateTime.day().month(.abbreviated).hour().minute()))
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.textDim)
+                    }
                 }
 
-                if let image = post.imageURL, !image.isEmpty {
-                    Thumbnail(url: image, side: 200, cornerRadius: Radius.md)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
+                Spacer(minLength: Spacing.sm)
 
-                if !post.blocks.isEmpty {
-                    FeedBlocksView(blocks: post.blocks)
-                }
-
-                if let link = post.linkURL, let url = URL(string: link) {
-                    Link(destination: url) {
-                        Label(post.linkTitle, systemImage: "link")
-                            .font(Typography.callout.weight(.medium))
-                            .foregroundStyle(Theme.brand)
+                VStack(alignment: .trailing, spacing: 2) {
+                    if post.isPinned {
+                        Label("закреплено", systemImage: "pin.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Theme.info)
+                    }
+                    if !post.viewed {
+                        Text("новое")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Theme.positive)
                     }
                 }
             }
+
+            if let title = post.title, !title.isEmpty {
+                Text(title)
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .foregroundStyle(Theme.text)
+            }
+
+            if let image = post.imageURL, !image.isEmpty {
+                Thumbnail(url: image, side: 200, cornerRadius: 16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if !post.blocks.isEmpty {
+                FeedBlocksView(blocks: post.blocks)
+            }
+
+            if let link = post.linkURL, let url = URL(string: link) {
+                Link(destination: url) {
+                    Label(post.linkTitle, systemImage: "link")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Theme.brand)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(Theme.brand.opacity(0.12), in: Capsule())
+                }
+            }
         }
+        .feedPanel()
         .task { await store.markViewed(post) }
     }
 }
@@ -1413,47 +1432,50 @@ struct TeamChatScreen: View {
     private func pinnedCard(_ pinned: [TeamChatMessage]) -> some View {
         // Закрепление — не тревога: тот же бренд-акцент, что у закреплённого
         // поста в ленте новостей. Янтарный остаётся за предупреждениями.
-        Card(accent: Theme.brand) {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                SectionHeader("Закреплено")
-                ForEach(pinned) { message in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(message.senderName)
-                            .font(Typography.caption.weight(.semibold))
-                            .foregroundStyle(Theme.textDim)
-                        Text(message.displayText)
-                            .font(Typography.callout)
-                            .foregroundStyle(Theme.text)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack(spacing: Spacing.sm) {
+                TintedIcon(systemName: "pin.fill", tint: Theme.brand, size: 30)
+                Text("Закреплено")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Theme.text)
+            }
+            ForEach(pinned) { message in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(message.senderName)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.textDim)
+                    Text(message.displayText)
+                        .font(.system(size: 15))
+                        .foregroundStyle(Theme.text)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+        .feedPanel()
     }
 
+    /// Объявление в чате — белой карточкой с рупором в кружке: выделено,
+    /// но не кричит рамкой.
     private func announcement(_ message: TeamChatMessage) -> some View {
-        Card(accent: Theme.brand) {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                HStack(spacing: Spacing.sm) {
-                    Image(systemName: "megaphone.fill")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Theme.brand)
-                    Text(message.senderName)
-                        .font(Typography.caption.weight(.semibold))
-                        .foregroundStyle(Theme.text)
-                    Spacer()
-                    if let created = message.createdAt {
-                        Text(created.formatted(.dateTime.hour().minute()))
-                            .font(Typography.caption)
-                            .monospacedDigit()
-                            .foregroundStyle(Theme.textDim)
-                    }
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack(spacing: Spacing.sm) {
+                TintedIcon(systemName: "megaphone.fill", tint: Theme.brand, size: 30)
+                Text(message.senderName)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Theme.text)
+                Spacer()
+                if let created = message.createdAt {
+                    Text(created.formatted(.dateTime.hour().minute()))
+                        .font(.system(size: 12))
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.textDim)
                 }
-                Text(message.displayText)
-                    .font(Typography.callout)
-                    .foregroundStyle(Theme.textMuted)
             }
+            Text(message.displayText)
+                .font(.system(size: 15))
+                .foregroundStyle(Theme.textMuted)
         }
+        .feedPanel()
         .id(message.id)
     }
 }
@@ -2199,51 +2221,51 @@ struct CalendarScreen: View {
 
     private func content(_ store: TeamCalendarStore) -> some View {
         ScreenScroll {
-            Card {
-                HStack(spacing: Spacing.md) {
-                    Button { Task { await store.step(-1) } } label: {
-                        Image(systemName: "chevron.left").font(.system(size: 14, weight: .semibold))
-                    }
-                    .buttonStyle(.pressable)
-                    .foregroundStyle(Theme.brand)
-
-                    Spacer()
-
-                    Text(store.month.title)
-                        .font(Typography.headline)
-                        .foregroundStyle(Theme.text)
-
-                    Spacer()
-
-                    Button { Task { await store.step(1) } } label: {
-                        Image(systemName: "chevron.right").font(.system(size: 14, weight: .semibold))
-                    }
-                    .buttonStyle(.pressable)
-                    .foregroundStyle(Theme.brand)
-                }
+            // Месяц и стрелки — одной белой полосой с круглыми кнопками,
+            // как переключатель периода в банковской выписке.
+            HStack(spacing: Spacing.md) {
+                monthButton("chevron.left") { Task { await store.step(-1) } }
+                Spacer()
+                Text(store.month.title)
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .foregroundStyle(Theme.text)
+                Spacer()
+                monthButton("chevron.right") { Task { await store.step(1) } }
             }
+            .padding(Spacing.sm)
+            .background(Theme.surface, in: Capsule())
 
-            Card {
-                VStack(spacing: Spacing.md) {
-                    CalendarMonthGrid(store: store)
+            VStack(spacing: Spacing.md) {
+                CalendarMonthGrid(store: store)
 
-                    RowDivider()
+                Rectangle().fill(Theme.borderSoft).frame(height: 1)
 
-                    // Фильтры под сеткой: они уточняют уже увиденное, а не
-                    // предваряют его. Наверху они бы отодвинули сам календарь.
-                    HStack(spacing: Spacing.sm) {
-                        ForEach(TeamCalendarEventKind.allCases.filter { $0 != .other }, id: \.self) { kind in
-                            FilterChip(title: kind.label, isOn: !store.hiddenKinds.contains(kind)) {
-                                store.toggle(kind)
-                            }
+                // Фильтры под сеткой: они уточняют уже увиденное, а не
+                // предваряют его. Наверху они бы отодвинули сам календарь.
+                HStack(spacing: Spacing.sm) {
+                    ForEach(TeamCalendarEventKind.allCases.filter { $0 != .other }, id: \.self) { kind in
+                        FilterChip(title: kind.label, isOn: !store.hiddenKinds.contains(kind)) {
+                            store.toggle(kind)
                         }
-                        Spacer()
                     }
+                    Spacer()
                 }
             }
+            .feedPanel()
 
             selectedDayCard(store)
         }
+    }
+
+    private func monthButton(_ icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(Theme.text)
+                .frame(width: 36, height: 36)
+                .background(Theme.surfaceRaised, in: Circle())
+        }
+        .buttonStyle(.pressable)
     }
 
     @ViewBuilder
@@ -2251,18 +2273,21 @@ struct CalendarScreen: View {
         let dayKey = store.selectedDay ?? FeedDay.todayKey
         let events = store.events(on: dayKey)
 
-        Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader(
-                    dayTitle(dayKey),
-                    subtitle: events.isEmpty ? nil : "\(events.count) \(pluralize(events.count, "событие", "события", "событий"))"
-                )
-
-                if events.isEmpty {
-                    InlineEmpty(icon: "calendar", text: "На этот день ничего не назначено", tint: Theme.textDim)
-                } else {
+        OwnerSection(dayTitle(dayKey)) {
+            if !events.isEmpty {
+                Text("\(events.count) \(pluralize(events.count, "событие", "события", "событий"))")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.textDim)
+            }
+        } content: {
+            if events.isEmpty {
+                InlineEmpty(icon: "calendar", text: "На этот день ничего не назначено", tint: Theme.textDim)
+            } else {
+                VStack(spacing: 0) {
                     ForEach(Array(events.enumerated()), id: \.element.id) { index, event in
-                        if index > 0 { RowDivider() }
+                        if index > 0 {
+                            Rectangle().fill(Theme.borderSoft).frame(height: 1).padding(.leading, 52)
+                        }
                         CalendarEventRow(event: event)
                     }
                 }
@@ -2366,34 +2391,33 @@ private struct CalendarDayCell: View {
     }
 }
 
+/// Событие дня: иконка вида в цветном кружке, название и подписи.
 private struct CalendarEventRow: View {
     let event: TeamCalendarEvent
 
     var body: some View {
         HStack(alignment: .top, spacing: Spacing.md) {
-            Image(systemName: event.kind.icon)
-                .font(.system(size: 13))
-                .foregroundStyle(feedTint(for: event.kind))
-                .frame(width: 22)
+            TintedIcon(systemName: event.kind.icon, tint: feedTint(for: event.kind), size: 40)
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(event.cleanTitle)
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Theme.text)
                 if let subtitle = event.subtitle, !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(Typography.caption)
+                        .font(.system(size: 13))
                         .foregroundStyle(Theme.textMuted)
                 }
                 if let author = event.author, !author.isEmpty {
                     Text(author)
-                        .font(Typography.caption)
+                        .font(.system(size: 13))
                         .foregroundStyle(Theme.textDim)
                 }
             }
 
             Spacer(minLength: Spacing.sm)
         }
+        .padding(.vertical, Spacing.sm)
     }
 }
 
@@ -2544,24 +2568,29 @@ private struct ModerationFlagRow: View {
                 .font(.system(size: 15, weight: .bold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(severityColor)
-                .frame(width: 34, height: 34)
+                .frame(width: 40, height: 40)
                 .background(severityColor.opacity(0.14), in: Circle())
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(flag.authorName)
-                    .font(Typography.callout.weight(.medium))
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
                 Text(FeedText.preview(flag.messageText, limit: 60))
-                    .font(Typography.caption)
+                    .font(.system(size: 13))
                     .foregroundStyle(Theme.textDim)
                     .lineLimit(1)
             }
 
             Spacer(minLength: Spacing.sm)
 
+            // Категория подписью: плашка отнимала место у текста сообщения.
             if let category = flag.categoryLabels.first {
-                StatusChip(category, kind: flag.isCritical ? .danger : .warning)
+                Text(category)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(flag.isCritical ? Theme.negative : Theme.warning)
+                    .lineLimit(1)
+                    .fixedSize()
             }
         }
     }
@@ -2585,82 +2614,81 @@ private struct ModerationFlagDetail: View {
 
     var body: some View {
         ScreenScroll {
-            Card(accent: flag.isCritical ? Theme.negative : nil) {
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    HStack(alignment: .top, spacing: Spacing.md) {
-                        FeedAvatar(initials: flag.initials, side: 42, tint: Theme.negative)
+            // Шапка флага — белой карточкой: автор, источник, тяжесть и
+            // категории цветными подписями вместо плашек.
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                HStack(alignment: .top, spacing: Spacing.md) {
+                    FeedAvatar(initials: flag.initials, side: 48, tint: Theme.negative)
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(flag.authorName)
-                                .font(Typography.title)
-                                .foregroundStyle(Theme.text)
-                            Text(flag.sourceLabel)
-                                .font(Typography.caption)
-                                .foregroundStyle(Theme.textDim)
-                        }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(flag.authorName)
+                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .foregroundStyle(Theme.text)
+                        Text(flag.sourceLabel)
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.textDim)
+                    }
 
+                    Spacer()
+
+                    Text("тяжесть \(flag.severity)")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(severityColor)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(severityColor.opacity(0.14), in: Capsule())
+                }
+
+                if !flag.categoryLabels.isEmpty {
+                    Text(flag.categoryLabels.joined(separator: " · "))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.warning)
+                }
+
+                if let created = flag.createdAt {
+                    HStack(spacing: Spacing.md) {
+                        TintedIcon(systemName: "clock.fill", tint: Color(hex: 0x3B82F6), size: 36)
+                        Text("Отправлено")
+                            .font(.system(size: 15))
+                            .foregroundStyle(Theme.textMuted)
                         Spacer()
-
-                        StatusChip(
-                            "тяжесть \(flag.severity)",
-                            kind: flag.isCritical ? .danger : (flag.isSerious ? .warning : .neutral)
-                        )
-                    }
-
-                    if !flag.categoryLabels.isEmpty {
-                        HStack(spacing: Spacing.sm) {
-                            ForEach(flag.categoryLabels, id: \.self) { label in
-                                StatusChip(label, kind: .warning)
-                            }
-                            Spacer()
-                        }
-                    }
-
-                    RowDivider()
-
-                    if let created = flag.createdAt {
-                        StatRow(
-                            "Отправлено",
-                            value: created.formatted(.dateTime.day().month(.abbreviated).hour().minute()),
-                            icon: "clock"
-                        )
+                        Text(created.formatted(.dateTime.day().month(.abbreviated).hour().minute()))
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Theme.text)
                     }
                 }
             }
+            .feedPanel()
 
-            Card {
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    SectionHeader("Сообщение")
-                    Text(FeedText.display(flag.messageText))
-                        .font(Typography.body)
-                        .foregroundStyle(Theme.text)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
+            OwnerSection("Сообщение") {
+                Text(FeedText.display(flag.messageText))
+                    .font(.system(size: 16))
+                    .foregroundStyle(Theme.text)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             if let summary = flag.aiSummary, !summary.isEmpty {
-                Card(accent: Theme.warning) {
-                    VStack(alignment: .leading, spacing: Spacing.sm) {
-                        Label("Анализ ИИ", systemImage: "sparkles")
-                            .font(Typography.caption.weight(.semibold))
-                            .foregroundStyle(Theme.warning)
-                        Text(summary)
-                            .font(Typography.callout)
-                            .foregroundStyle(Theme.textMuted)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    HStack(spacing: Spacing.sm) {
+                        TintedIcon(systemName: "sparkles", tint: Theme.warning, size: 32)
+                        Text("Анализ ИИ")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Theme.text)
                     }
+                    Text(summary)
+                        .font(.system(size: 15))
+                        .foregroundStyle(Theme.textMuted)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .feedPanel()
             }
 
             if let note = flag.reviewerNote, !note.isEmpty {
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.xs) {
-                        SectionHeader("Заметка проверяющего")
-                        Text(note)
-                            .font(Typography.callout)
-                            .foregroundStyle(Theme.textMuted)
-                    }
+                OwnerSection("Заметка проверяющего") {
+                    Text(note)
+                        .font(.system(size: 15))
+                        .foregroundStyle(Theme.textMuted)
                 }
             }
 
@@ -2691,13 +2719,12 @@ private struct ModerationFlagDetail: View {
                     }
                     .disabled(store.actingID == flag.id)
                 } else {
-                    Card {
-                        InlineEmpty(
-                            icon: "lock.fill",
-                            text: "Решение по флагу принимает сотрудник с правом модерации",
-                            tint: Theme.textDim
-                        )
-                    }
+                    InlineEmpty(
+                        icon: "lock.fill",
+                        text: "Решение по флагу принимает сотрудник с правом модерации",
+                        tint: Theme.textDim
+                    )
+                    .feedPanel()
                 }
             }
         }
@@ -2706,5 +2733,23 @@ private struct ModerationFlagDetail: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+    }
+
+    private var severityColor: Color {
+        if flag.isCritical { return Theme.negative }
+        if flag.isSerious { return Theme.warning }
+        return Theme.textMuted
+    }
+}
+
+// ── Оформление ───────────────────────────────────────────────────────────────
+
+private extension View {
+    /// Белая скруглённая подложка без рамки — общий вид блоков ленты,
+    /// как карточки в банковском приложении.
+    func feedPanel() -> some View {
+        padding(Spacing.lg)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 }

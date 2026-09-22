@@ -158,18 +158,33 @@ struct TeamTasksScreen: View {
 }
 
 /// Строка задачи: состояние, заголовок, срок.
+///
+/// Состояние — иконкой в цветном кружке, как у операций в банковской
+/// выписке; «срочно» — подписью, а не плашкой, чтобы не резать заголовок.
 struct TeamTaskRowView: View {
     let task: TeamTask
 
+    private var tint: Color {
+        if task.isDone { return Theme.positive }
+        if task.isOverdue { return Theme.negative }
+        if task.isUrgent { return Color(hex: 0xF97316) }
+        return Color(hex: 0x8B5CF6)
+    }
+
+    private var icon: String {
+        if task.isDone { return "checkmark" }
+        if task.isOverdue { return "exclamationmark.triangle.fill" }
+        if task.isUrgent { return "flame.fill" }
+        return "circle"
+    }
+
     var body: some View {
         HStack(spacing: Spacing.md) {
-            Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 16))
-                .foregroundStyle(task.isDone ? Theme.positive : (task.isOverdue ? Theme.negative : Theme.textDim))
+            TintedIcon(systemName: icon, tint: tint, size: 38)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(task.title)
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(task.isDone ? Theme.textDim : Theme.text)
                     .strikethrough(task.isDone, color: Theme.textDim)
                     .lineLimit(2)
@@ -180,28 +195,29 @@ struct TeamTaskRowView: View {
                             due.formatted(.dateTime.day().month(.abbreviated)),
                             systemImage: task.isOverdue ? "exclamationmark.triangle.fill" : "calendar"
                         )
-                        .font(Typography.caption)
                         .foregroundStyle(task.isOverdue ? Theme.negative : Theme.textDim)
                     }
                     if !task.checklist.isEmpty {
                         Label("\(task.doneCount)/\(task.checklist.count)", systemImage: "checklist")
-                            .font(Typography.caption)
                             .monospacedDigit()
                             .foregroundStyle(Theme.textDim)
                     }
                     if task.commentsCount > 0 {
                         Label("\(task.commentsCount)", systemImage: "bubble.left")
-                            .font(Typography.caption)
                             .monospacedDigit()
                             .foregroundStyle(Theme.textDim)
                     }
                 }
+                .font(.system(size: 13))
             }
 
             Spacer(minLength: Spacing.sm)
 
             if task.isUrgent && !task.isDone {
-                StatusChip("срочно", kind: .danger)
+                Text("срочно")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.negative)
+                    .fixedSize()
             }
         }
     }
@@ -234,62 +250,78 @@ private struct TeamTaskDetail: View {
                         .buttonStyle(PrimaryButtonStyle())
                 }
 
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        HStack(alignment: .top) {
-                            VStack(alignment: .leading, spacing: Spacing.xs) {
-                                if let number = task.number {
-                                    Text("№\(number)")
-                                        .font(Typography.caption)
-                                        .monospacedDigit()
-                                        .foregroundStyle(Theme.textDim)
-                                }
-                                Text(task.title)
-                                    .font(Typography.title)
-                                    .foregroundStyle(Theme.text)
+                // Шапка задачи — белый блок: заголовок крупно, статус цветной
+                // подписью, приоритет и срок строками с иконками.
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        HStack {
+                            if let number = task.number {
+                                Text("№\(number)")
+                                    .font(.system(size: 13))
+                                    .monospacedDigit()
+                                    .foregroundStyle(Theme.textDim)
                             }
                             Spacer()
-                            StatusChip(task.statusLabel, kind: task.isDone ? .good : (task.isOverdue ? .danger : .neutral))
+                            Text(task.statusLabel)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(task.isDone ? Theme.positive : (task.isOverdue ? Theme.negative : Theme.textDim))
                         }
+                        Text(task.title)
+                            .font(.system(size: 22, weight: .bold, design: .rounded))
+                            .foregroundStyle(Theme.text)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
 
-                        if let details = task.details, !details.isEmpty {
-                            RowDivider()
-                            Text(details)
-                                .font(Typography.callout)
-                                .foregroundStyle(Theme.textMuted)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
+                    if let details = task.details, !details.isEmpty {
+                        Text(details)
+                            .font(.system(size: 15))
+                            .foregroundStyle(Theme.textMuted)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
 
-                        RowDivider()
-                        StatRow("Приоритет", value: task.priorityLabel, valueColor: task.isUrgent ? Theme.negative : Theme.text, icon: "flag")
+                    VStack(spacing: 0) {
+                        OpsInfoRow(
+                            icon: "flag.fill",
+                            tint: task.isUrgent ? Theme.negative : Color(hex: 0x8B5CF6),
+                            title: "Приоритет",
+                            value: task.priorityLabel,
+                            valueColor: task.isUrgent ? Theme.negative : Theme.text
+                        )
                         if let due = task.dueDate {
-                            StatRow(
-                                "Срок",
+                            OpsDivider()
+                            OpsInfoRow(
+                                icon: "calendar",
+                                tint: task.isOverdue ? Theme.negative : Color(hex: 0x3B82F6),
+                                title: "Срок",
                                 value: due.formatted(.dateTime.day().month(.wide)),
-                                valueColor: task.isOverdue ? Theme.negative : Theme.text,
-                                icon: "calendar"
+                                valueColor: task.isOverdue ? Theme.negative : Theme.text
                             )
                         }
                     }
                 }
+                .padding(Spacing.lg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
 
                 if !task.checklist.isEmpty {
-                    Card {
-                        VStack(alignment: .leading, spacing: Spacing.md) {
-                            SectionHeader("Чек-лист", subtitle: "\(task.doneCount) из \(task.checklist.count)")
-
+                    OwnerSection("Чек-лист") {
+                        OpsCount(text: "\(task.doneCount) из \(task.checklist.count)")
+                    } content: {
+                        VStack(spacing: 0) {
                             ForEach(Array(task.checklist.enumerated()), id: \.element.id) { index, item in
-                                if index > 0 { RowDivider() }
+                                if index > 0 { OpsDivider(inset: 40) }
                                 HStack(spacing: Spacing.md) {
-                                    Image(systemName: item.isDone ? "checkmark.square.fill" : "square")
-                                        .font(.system(size: 14))
+                                    Image(systemName: item.isDone ? "checkmark.circle.fill" : "circle")
+                                        .font(.system(size: 22))
                                         .foregroundStyle(item.isDone ? Theme.positive : Theme.textDim)
+                                        .frame(width: 28)
                                     Text(item.text)
-                                        .font(Typography.callout)
+                                        .font(.system(size: 15))
                                         .foregroundStyle(item.isDone ? Theme.textDim : Theme.text)
                                         .strikethrough(item.isDone, color: Theme.textDim)
                                     Spacer()
                                 }
+                                .padding(.vertical, Spacing.sm)
                             }
                         }
                     }
@@ -348,48 +380,51 @@ private struct TeamTaskDetail: View {
     /// Комментарий остаётся при задаче: через месяц видно, почему сроки
     /// сдвинулись.
     private var commentsCard: some View {
-        Card {
+        OwnerSection("Обсуждение") {
+            OpsCount(text: comments.isEmpty ? "пока пусто" : "\(comments.count) \(pluralize(comments.count, "запись", "записи", "записей"))")
+        } content: {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader(
-                    "Обсуждение",
-                    subtitle: comments.isEmpty ? "пока пусто" : "\(comments.count) \(pluralize(comments.count, "запись", "записи", "записей"))"
-                )
-
                 ForEach(Array(comments.enumerated()), id: \.element.id) { index, comment in
-                    if index > 0 { RowDivider() }
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack {
-                            Text(comment.authorLabel)
-                                .font(Typography.caption.weight(.semibold))
-                                .foregroundStyle(Theme.textDim)
-                            Spacer()
-                            if let date = comment.createdAt {
-                                Text(date.formatted(.dateTime.day().month(.abbreviated).hour().minute()))
-                                    .font(Typography.caption)
-                                    .foregroundStyle(Theme.textDim)
+                    if index > 0 { OpsDivider() }
+                    HStack(alignment: .top, spacing: Spacing.md) {
+                        PersonInitial(name: comment.authorLabel, size: 36)
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack {
+                                Text(comment.authorLabel)
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(Theme.text)
+                                Spacer()
+                                if let date = comment.createdAt {
+                                    Text(date.formatted(.dateTime.day().month(.abbreviated).hour().minute()))
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(Theme.textDim)
+                                }
                             }
+                            Text(comment.content)
+                                .font(.system(size: 15))
+                                .foregroundStyle(Theme.text)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
-                        Text(comment.content)
-                            .font(Typography.callout)
-                            .foregroundStyle(Theme.text)
-                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
 
                 HStack(spacing: Spacing.sm) {
                     TextField("Написать по задаче", text: $commentDraft, axis: .vertical)
                         .textFieldStyle(.plain)
-                        .font(Typography.callout)
+                        .font(.system(size: 15))
                         .lineLimit(1...4)
-                        .padding(Spacing.md)
-                        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                        .padding(.horizontal, Spacing.md)
+                        .padding(.vertical, 10)
+                        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
 
                     Button {
                         Task { await sendComment() }
                     } label: {
-                        Image(systemName: isSendingComment ? "hourglass" : "arrow.up.circle.fill")
-                            .font(.system(size: 24))
-                            .foregroundStyle(commentDraft.isEmpty ? Theme.textDim : Theme.brand)
+                        Image(systemName: isSendingComment ? "hourglass" : "arrow.up")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 36, height: 36)
+                            .background(commentDraft.isEmpty ? Theme.textDim : Theme.brand, in: Circle())
                     }
                     .buttonStyle(.pressable)
                     .disabled(commentDraft.trimmingCharacters(in: .whitespaces).isEmpty || isSendingComment)
@@ -397,7 +432,7 @@ private struct TeamTaskDetail: View {
 
                 if let commentError {
                     Text(commentError)
-                        .font(Typography.caption)
+                        .font(.system(size: 12))
                         .foregroundStyle(Theme.negative)
                 }
             }
@@ -824,41 +859,18 @@ struct CustomersScreen: View {
     }
 }
 
+/// Строка клиента: кружок с буквой, контакт подписью, сумма справа —
+/// как получатель в списке переводов.
 struct CustomerRowView: View {
     let customer: Customer
 
     var body: some View {
-        HStack(spacing: Spacing.md) {
-            Text(customer.initials)
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .foregroundStyle(Theme.brand)
-                .frame(width: 36, height: 36)
-                .background(Theme.brand.opacity(0.14), in: Circle())
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(customer.name)
-                    .font(Typography.callout)
-                    .foregroundStyle(Theme.text)
-                    .lineLimit(1)
-                Text(customer.phone ?? customer.cardNumber ?? "без контакта")
-                    .font(Typography.caption)
-                    .foregroundStyle(Theme.textDim)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: Spacing.sm)
-
-            VStack(alignment: .trailing, spacing: 1) {
-                Text(Money.format(customer.totalSpent))
-                    .font(Typography.callout.weight(.medium))
-                    .monospacedDigit()
-                    .foregroundStyle(Theme.text)
-                Text("\(customer.visitsCount) \(pluralize(customer.visitsCount, "визит", "визита", "визитов"))")
-                    .font(Typography.caption)
-                    .monospacedDigit()
-                    .foregroundStyle(Theme.textDim)
-            }
-        }
+        AmountRow(
+            leading: { PersonInitial(name: customer.name, size: 40) },
+            title: customer.name,
+            subtitle: "\(customer.phone ?? customer.cardNumber ?? "без контакта") · \(customer.visitsCount) \(pluralize(customer.visitsCount, "визит", "визита", "визитов"))",
+            amount: Money.format(customer.totalSpent)
+        )
     }
 }
 
@@ -882,71 +894,63 @@ private struct CustomerDetail: View {
     private var content: some View {
         ScreenScroll {
             VStack(spacing: Spacing.lg) {
-                Card {
-                    HStack(spacing: Spacing.lg) {
-                        Text(customer.initials)
-                            .font(.system(size: 22, weight: .semibold, design: .rounded))
-                            .foregroundStyle(Theme.brand)
-                            .frame(width: 64, height: 64)
-                            .background(Theme.brand.opacity(0.14), in: Circle())
+                // Шапка — как профиль в банке: крупная буква, имя, точка.
+                HStack(spacing: Spacing.lg) {
+                    PersonInitial(name: customer.name, size: 64)
 
-                        VStack(alignment: .leading, spacing: Spacing.xs) {
-                            Text(customer.name)
-                                .font(Typography.title)
-                                .foregroundStyle(Theme.text)
-                            if let company = customer.companyName {
-                                Text(company)
-                                    .font(Typography.callout)
-                                    .foregroundStyle(Theme.textMuted)
-                            }
-                            if customer.loyaltyPoints > 0 {
-                                StatusChip("\(Quantity.format(customer.loyaltyPoints)) баллов", kind: .info)
-                            }
-                        }
-                        Spacer()
-
-                        if canAdjust {
-                            Button {
-                                adjusting = true
-                            } label: {
-                                Label("Баллы", systemImage: "plusminus.circle")
-                            }
-                            .buttonStyle(SecondaryButtonStyle())
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        Text(customer.name)
+                            .font(.system(size: 22, weight: .bold, design: .rounded))
+                            .foregroundStyle(Theme.text)
+                        if let company = customer.companyName {
+                            Text(company)
+                                .font(.system(size: 14))
+                                .foregroundStyle(Theme.textDim)
                         }
                     }
-                }
+                    Spacer()
 
-                DashboardGrid {
-                    MetricTile(
-                        label: "Потрачено",
-                        value: Money.format(customer.totalSpent),
-                        icon: "banknote.fill",
-                        accent: Theme.brand
-                    )
-                    MetricTile(
-                        label: "Визитов",
-                        value: "\(customer.visitsCount)",
-                        icon: "figure.walk",
-                        accent: Theme.info
-                    )
-                    MetricTile(
-                        label: "Средний чек",
-                        value: Money.format(customer.averageCheck),
-                        icon: "receipt.fill",
-                        accent: Theme.textMuted
-                    )
+                    if canAdjust {
+                        Button {
+                            adjusting = true
+                        } label: {
+                            Label("Баллы", systemImage: "plusminus.circle")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(Theme.brand)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 9)
+                                .background(Theme.brand.opacity(0.12), in: Capsule())
+                        }
+                        .buttonStyle(.pressable)
+                    }
                 }
+                .padding(Spacing.lg)
+                .background(Theme.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
 
-                Card {
-                    VStack(spacing: Spacing.md) {
-                        SectionHeader("Контакты")
+                // Сколько клиент принёс — главная цифра; визиты, чек и баллы —
+                // расшифровка под ней, а не три равные плитки.
+                HeroSummary(
+                    title: "Потрачено",
+                    value: Money.format(customer.totalSpent),
+                    footer: [
+                        ("Визитов", "\(customer.visitsCount)"),
+                        ("Средний чек", Money.format(customer.averageCheck)),
+                        ("Баллы", Quantity.format(customer.loyaltyPoints)),
+                    ],
+                    colors: [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+                )
+
+                OwnerSection("Контакты") {
+                    VStack(spacing: 0) {
                         if let phone = customer.phone, !phone.isEmpty {
-                            StatRow("Телефон", value: phone, icon: "phone")
+                            OpsInfoRow(icon: "phone.fill", tint: Color(hex: 0x10B981), title: "Телефон", value: phone)
+                            OpsDivider()
                         }
                         if let card = customer.cardNumber, !card.isEmpty {
-                            StatRow("Карта", value: card, icon: "creditcard")
+                            OpsInfoRow(icon: "creditcard.fill", tint: Color(hex: 0x3B82F6), title: "Карта", value: card)
+                            OpsDivider()
                         }
-                        StatRow("Баллы", value: Quantity.format(customer.loyaltyPoints), icon: "star")
+                        OpsInfoRow(icon: "star.fill", tint: Color(hex: 0xF59E0B), title: "Баллы", value: Quantity.format(customer.loyaltyPoints))
                     }
                 }
             }
@@ -956,5 +960,52 @@ private struct CustomerDetail: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+    }
+}
+
+// ── Общие детали экранов ─────────────────────────────────────────────────────
+
+/// Разделитель с отступом под иконку — строки читаются как один список.
+private struct OpsDivider: View {
+    var inset: CGFloat = 52
+    var body: some View {
+        Rectangle().fill(Theme.borderSoft).frame(height: 1).padding(.leading, inset)
+    }
+}
+
+/// Приглушённая подпись справа от заголовка секции.
+private struct OpsCount: View {
+    let text: String
+    var body: some View {
+        Text(text)
+            .font(.system(size: 13, weight: .semibold))
+            .monospacedDigit()
+            .foregroundStyle(Theme.textDim)
+            .lineLimit(1)
+    }
+}
+
+/// Строка «иконка — название — значение», замена StatRow в белых блоках.
+private struct OpsInfoRow: View {
+    let icon: String
+    let tint: Color
+    let title: String
+    let value: String
+    var valueColor: Color = Theme.text
+
+    var body: some View {
+        HStack(spacing: Spacing.md) {
+            TintedIcon(systemName: icon, tint: tint, size: 40)
+            Text(title)
+                .font(.system(size: 16))
+                .foregroundStyle(Theme.textMuted)
+            Spacer(minLength: Spacing.sm)
+            Text(value)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(valueColor)
+                .lineLimit(1)
+                .textSelection(.enabled)
+        }
+        .padding(.vertical, Spacing.sm)
     }
 }

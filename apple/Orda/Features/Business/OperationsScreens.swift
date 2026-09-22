@@ -47,24 +47,16 @@ struct RevisionsScreen: View {
                     // ним что-то делают. Готовые ревизии только читают.
                     if !store.revisionActs.filter(\.isOpen).isEmpty || canCancel {
                         Button { showingActs = true } label: {
-                            HStack(spacing: Spacing.md) {
-                                Image(systemName: "clock.badge.checkmark")
-                                    .foregroundStyle(Theme.info)
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text("Акты пересчёта")
-                                        .font(Typography.callout.weight(.medium))
-                                        .foregroundStyle(Theme.text)
-                                    Text(actsSubtitle)
-                                        .font(Typography.caption)
-                                        .foregroundStyle(Theme.textMuted)
-                                }
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(Typography.caption)
-                                    .foregroundStyle(Theme.textMuted)
-                            }
-                            .padding(Spacing.md)
-                            .background(Theme.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                            AmountRow(
+                                leading: { TintedIcon(systemName: "clock.badge.checkmark", tint: Theme.info, size: 42) },
+                                title: "Акты пересчёта",
+                                subtitle: actsSubtitle,
+                                amount: "",
+                                showsChevron: true
+                            )
+                            .padding(.horizontal, Spacing.md)
+                            .padding(.vertical, Spacing.sm)
+                            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                         }
                         .buttonStyle(.pressable)
                     }
@@ -106,44 +98,49 @@ struct RevisionsScreen: View {
     }
 }
 
+/// Строка ревизии: сошлось — зелёная галочка, нет — оранжевый знак и
+/// сумма недостачи справа, как списание в выписке.
 private struct RevisionRow: View {
     let stocktake: Stocktake
 
     var body: some View {
+        let clean = stocktake.mismatches.isEmpty
         HStack(spacing: Spacing.md) {
-            Image(systemName: stocktake.mismatches.isEmpty ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
-                .font(.system(size: 15))
-                .foregroundStyle(stocktake.mismatches.isEmpty ? Theme.positive : Theme.warning)
-                .frame(width: 24)
+            TintedIcon(
+                systemName: clean ? "checkmark.seal.fill" : "exclamationmark.triangle.fill",
+                tint: clean ? Theme.positive : Theme.warning,
+                size: 40
+            )
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(stocktake.locationName ?? "Точка")
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
                 Text(subtitle)
-                    .font(Typography.caption)
+                    .font(.system(size: 13))
                     .foregroundStyle(Theme.textDim)
                     .lineLimit(1)
             }
 
             Spacer(minLength: Spacing.sm)
 
-            VStack(alignment: .trailing, spacing: 1) {
+            VStack(alignment: .trailing, spacing: 2) {
                 if stocktake.shortageAmount > 0 {
-                    Text(Money.format(stocktake.shortageAmount))
-                        .font(Typography.callout.weight(.medium))
+                    Text("−" + Money.format(stocktake.shortageAmount))
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(Theme.negative)
                     Text("недостача")
-                        .font(Typography.caption)
+                        .font(.system(size: 12))
                         .foregroundStyle(Theme.textDim)
                 } else {
                     Text("сошлось")
-                        .font(Typography.caption)
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Theme.positive)
                 }
             }
+            .fixedSize()
         }
     }
 
@@ -163,52 +160,66 @@ private struct RevisionDetail: View {
     var body: some View {
         ScreenScroll {
             VStack(spacing: Spacing.lg) {
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        Text(stocktake.locationName ?? "Точка")
-                            .font(Typography.title)
-                            .foregroundStyle(Theme.text)
+                // Главное в ревизии — деньги: недостача крупно на красной
+                // карточке, а если всё сошлось — зелёная.
+                HeroSummary(
+                    title: stocktake.locationName ?? "Точка",
+                    value: stocktake.shortageAmount > 0 ? "−" + Money.format(stocktake.shortageAmount) : "Сошлось",
+                    caption: stocktake.shortageAmount > 0 ? "недостача" : nil,
+                    footer: [
+                        ("Позиций", "\(stocktake.items.count)"),
+                        ("Расхождений", "\(stocktake.mismatches.count)"),
+                    ],
+                    colors: stocktake.shortageAmount > 0
+                        ? [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
+                        : (stocktake.mismatches.isEmpty
+                            ? [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+                            : [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)])
+                )
 
+                OwnerSection("Подробности") {
+                    VStack(alignment: .leading, spacing: 0) {
                         if let company = stocktake.companyName {
-                            StatRow("Точка", value: company, icon: "building.2")
+                            OpInfoRow(icon: "building.2.fill", tint: Color(hex: 0x14B8A6), title: "Точка", value: company)
+                            OpDivider()
                         }
                         if let date = stocktake.countedAt {
-                            StatRow("Пересчитано", value: date.formatted(.dateTime.day().month(.wide).hour().minute()), icon: "calendar")
+                            OpInfoRow(icon: "calendar", tint: Color(hex: 0x3B82F6), title: "Пересчитано", value: date.formatted(.dateTime.day().month(.wide).hour().minute()))
+                            OpDivider()
                         }
                         if let author = stocktake.authorName {
-                            StatRow("Кто считал", value: author, icon: "person")
+                            OpInfoRow(icon: "person.fill", tint: Color(hex: 0x8B5CF6), title: "Кто считал", value: author)
+                            OpDivider()
                         }
-                        RowDivider()
-                        StatRow("Позиций", value: "\(stocktake.items.count)", icon: "list.bullet")
-                        StatRow(
-                            "Расхождений",
+                        OpInfoRow(
+                            icon: "exclamationmark.triangle.fill",
+                            tint: stocktake.mismatches.isEmpty ? Theme.positive : Theme.warning,
+                            title: "Расхождений",
                             value: "\(stocktake.mismatches.count)",
-                            valueColor: stocktake.mismatches.isEmpty ? Theme.positive : Theme.warning,
-                            icon: "exclamationmark.triangle"
+                            valueColor: stocktake.mismatches.isEmpty ? Theme.positive : Theme.warning
                         )
-                        if stocktake.shortageAmount > 0 {
-                            StatRow("Недостача", value: Money.format(stocktake.shortageAmount), valueColor: Theme.negative, emphasized: true)
-                        }
 
                         if let comment = stocktake.comment, !comment.isEmpty {
-                            RowDivider()
                             Text(comment)
-                                .font(Typography.callout)
+                                .font(.system(size: 14))
                                 .foregroundStyle(Theme.textMuted)
+                                .padding(Spacing.md)
                                 .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                .padding(.top, Spacing.sm)
                         }
                     }
                 }
 
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        SectionHeader("Расхождения", subtitle: "от крупных к мелким")
-
-                        if stocktake.mismatches.isEmpty {
-                            InlineEmpty(icon: "checkmark.seal", text: "Всё сошлось до позиции", tint: Theme.positive)
-                        } else {
+                OwnerSection("Расхождения") {
+                    OpCount(text: "от крупных к мелким")
+                } content: {
+                    if stocktake.mismatches.isEmpty {
+                        InlineEmpty(icon: "checkmark.seal", text: "Всё сошлось до позиции", tint: Theme.positive)
+                    } else {
+                        VStack(spacing: 0) {
                             ForEach(Array(stocktake.mismatches.enumerated()), id: \.element.id) { index, line in
-                                if index > 0 { RowDivider() }
+                                if index > 0 { OpDivider() }
                                 RevisionLineRow(line: line)
                             }
                         }
@@ -224,42 +235,46 @@ private struct RevisionDetail: View {
     }
 }
 
+/// Позиция с расхождением: стрелка в кружке (вниз — недостача, вверх —
+/// излишек), сколько ждали и сколько нашли.
 private struct RevisionLineRow: View {
     let line: Stocktake.Line
 
     var body: some View {
+        let tint = line.isShortage ? Theme.negative : Theme.positive
         HStack(spacing: Spacing.md) {
-            VStack(alignment: .leading, spacing: 1) {
+            TintedIcon(systemName: line.isShortage ? "arrow.down" : "arrow.up", tint: tint, size: 40)
+
+            VStack(alignment: .leading, spacing: 3) {
                 Text(line.name)
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
                 // Ожидалось → найдено: без обоих чисел расхождение непонятно.
                 Text("ждали \(Quantity.format(line.expected)) · нашли \(Quantity.format(line.actual)) \(line.unit)")
-                    .font(Typography.caption)
+                    .font(.system(size: 13))
                     .monospacedDigit()
                     .foregroundStyle(Theme.textDim)
+                    .lineLimit(1)
             }
 
             Spacer(minLength: Spacing.sm)
 
-            VStack(alignment: .trailing, spacing: 1) {
-                Text(Quantity.format(abs(line.delta)))
-                    .font(Typography.callout.weight(.medium))
+            VStack(alignment: .trailing, spacing: 2) {
+                Text((line.isShortage ? "−" : "+") + Quantity.format(abs(line.delta)))
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .monospacedDigit()
-                    .foregroundStyle(line.isShortage ? Theme.negative : Theme.positive)
+                    .foregroundStyle(tint)
                 if line.amount != 0 {
                     Text(Money.format(abs(line.amount)))
-                        .font(Typography.caption)
+                        .font(.system(size: 12))
                         .monospacedDigit()
                         .foregroundStyle(Theme.textDim)
                 }
             }
-
-            Image(systemName: line.isShortage ? "arrow.down" : "arrow.up")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(line.isShortage ? Theme.negative : Theme.positive)
+            .fixedSize()
         }
+        .padding(.vertical, Spacing.sm)
     }
 }
 
@@ -280,10 +295,16 @@ struct SuppliersScreen: View {
     var body: some View {
         VStack(spacing: 0) {
             if let list = store.suppliers, list.totalDebt > 0 {
-                HStack(spacing: Spacing.md) {
-                    SummaryPill(title: "Долг поставщикам", value: Money.format(list.totalDebt), tint: Theme.warning)
-                    SummaryPill(title: "Поставщиков", value: "\(list.suppliers.count)", tint: Theme.textMuted)
-                }
+                // Долг — главная цифра раздела: с ней и открывают поставщиков.
+                HeroSummary(
+                    title: "Долг поставщикам",
+                    value: Money.format(list.totalDebt),
+                    footer: [
+                        ("Поставщиков", "\(list.suppliers.count)"),
+                        ("С долгом", "\(list.suppliers.filter(\.hasDebt).count)"),
+                    ],
+                    colors: [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
+                )
                 .padding(.horizontal, Spacing.lg)
                 .padding(.vertical, Spacing.md)
             }
@@ -352,24 +373,22 @@ struct SuppliersScreen: View {
     }
 }
 
+/// Строка поставщика: кружок с буквой, сколько закупили, долг — оранжевой
+/// подписью вместо плашки.
 private struct SupplierRow: View {
     let supplier: Supplier
 
     var body: some View {
         HStack(spacing: Spacing.md) {
-            Text(supplier.initials)
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .foregroundStyle(Theme.brand)
-                .frame(width: 36, height: 36)
-                .background(Theme.brand.opacity(0.14), in: Circle())
+            PersonInitial(name: supplier.name, size: 40)
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(supplier.name)
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
                 Text("\(supplier.receiptsCount) \(pluralize(supplier.receiptsCount, "приёмка", "приёмки", "приёмок"))")
-                    .font(Typography.caption)
+                    .font(.system(size: 13))
                     .monospacedDigit()
                     .foregroundStyle(Theme.textDim)
             }
@@ -378,13 +397,17 @@ private struct SupplierRow: View {
 
             VStack(alignment: .trailing, spacing: 2) {
                 Text(Money.format(supplier.receiptsTotal))
-                    .font(Typography.callout.weight(.medium))
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(Theme.text)
                 if supplier.hasDebt {
-                    StatusChip("долг \(Money.format(supplier.openDebtsAmount))", kind: .warning)
+                    Text("долг \(Money.format(supplier.openDebtsAmount))")
+                        .font(.system(size: 12, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.warning)
                 }
             }
+            .fixedSize()
         }
     }
 }
@@ -395,66 +418,37 @@ private struct SupplierDetail: View {
     var body: some View {
         ScreenScroll {
             VStack(spacing: Spacing.lg) {
-                Card {
-                    HStack(spacing: Spacing.lg) {
-                        Text(supplier.initials)
-                            .font(.system(size: 22, weight: .semibold, design: .rounded))
-                            .foregroundStyle(Theme.brand)
-                            .frame(width: 64, height: 64)
-                            .background(Theme.brand.opacity(0.14), in: Circle())
+                OpProfileHeader(
+                    name: supplier.name,
+                    subtitle: supplier.organizationName.flatMap { $0.isEmpty ? nil : $0 },
+                    status: supplier.hasDebt
+                        ? "\(supplier.openDebtsCount) \(pluralize(supplier.openDebtsCount, "накладная", "накладные", "накладных")) не оплачено"
+                        : nil,
+                    statusColor: Theme.warning
+                )
 
-                        VStack(alignment: .leading, spacing: Spacing.xs) {
-                            Text(supplier.name)
-                                .font(Typography.title)
-                                .foregroundStyle(Theme.text)
-                            if let org = supplier.organizationName, !org.isEmpty {
-                                Text(org)
-                                    .font(Typography.callout)
-                                    .foregroundStyle(Theme.textMuted)
-                            }
-                            if supplier.hasDebt {
-                                StatusChip("\(supplier.openDebtsCount) \(pluralize(supplier.openDebtsCount, "накладная", "накладные", "накладных")) не оплачено", kind: .warning)
-                            }
-                        }
-                        Spacer()
-                    }
-                }
+                // Закупки главной цифрой, приёмки и долг — под ней.
+                HeroSummary(
+                    title: "Закуплено всего",
+                    value: Money.format(supplier.receiptsTotal),
+                    footer: [
+                        ("Приёмок", "\(supplier.receiptsCount)"),
+                        ("Долг", Money.format(supplier.openDebtsAmount)),
+                    ],
+                    colors: supplier.hasDebt
+                        ? [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
+                        : [Color(hex: 0x0F766E), Color(hex: 0x0E7490)]
+                )
 
-                DashboardGrid {
-                    MetricTile(
-                        label: "Закуплено всего",
-                        value: Money.format(supplier.receiptsTotal),
-                        icon: "shippingbox.fill",
-                        accent: Theme.brand
-                    )
-                    MetricTile(
-                        label: "Приёмок",
-                        value: "\(supplier.receiptsCount)",
-                        icon: "arrow.down.circle.fill",
-                        accent: Theme.info
-                    )
-                    MetricTile(
-                        label: "Долг",
-                        value: Money.format(supplier.openDebtsAmount),
-                        icon: "creditcard.fill",
-                        accent: supplier.hasDebt ? Theme.warning : Theme.positive
-                    )
-                }
-
-                Card {
-                    VStack(spacing: Spacing.md) {
-                        SectionHeader("Реквизиты")
-                        if let bin = supplier.binIIN, !bin.isEmpty {
-                            StatRow("БИН / ИИН", value: bin, icon: "number")
+                OwnerSection("Реквизиты") {
+                    VStack(spacing: 0) {
+                        let rows = supplierRows
+                        ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
+                            if index > 0 { OpDivider() }
+                            OpInfoRow(icon: row.icon, tint: row.tint, title: row.title, value: row.value)
                         }
-                        if let contact = supplier.contactName, !contact.isEmpty {
-                            StatRow("Контакт", value: contact, icon: "person")
-                        }
-                        if let phone = supplier.phone, !phone.isEmpty {
-                            StatRow("Телефон", value: phone, icon: "phone")
-                        }
-                        if let last = supplier.lastReceiptDate {
-                            StatRow("Последняя приёмка", value: last.formatted(.dateTime.day().month(.wide).year()), icon: "calendar")
+                        if rows.isEmpty {
+                            InlineEmpty(icon: "doc.text", text: "Реквизиты не заполнены", tint: Theme.textDim)
                         }
                     }
                 }
@@ -465,6 +459,23 @@ private struct SupplierDetail: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+    }
+
+    private var supplierRows: [(icon: String, tint: Color, title: String, value: String)] {
+        var rows: [(icon: String, tint: Color, title: String, value: String)] = []
+        if let bin = supplier.binIIN, !bin.isEmpty {
+            rows.append(("number", Color(hex: 0x64748B), "БИН / ИИН", bin))
+        }
+        if let contact = supplier.contactName, !contact.isEmpty {
+            rows.append(("person.fill", Color(hex: 0x8B5CF6), "Контакт", contact))
+        }
+        if let phone = supplier.phone, !phone.isEmpty {
+            rows.append(("phone.fill", Color(hex: 0x10B981), "Телефон", phone))
+        }
+        if let last = supplier.lastReceiptDate {
+            rows.append(("calendar", Color(hex: 0x3B82F6), "Последняя приёмка", last.formatted(.dateTime.day().month(.wide).year())))
+        }
+        return rows
     }
 }
 
@@ -543,43 +554,41 @@ struct StaffScreen: View {
     }
 }
 
+/// Строка сотрудника: кружок с буквой, роль, оклад справа и сколько из
+/// него уже выплачено — зелёным, когда закрыт полностью.
 private struct StaffRow: View {
     let member: StaffMember
     let paid: Double
 
     var body: some View {
         HStack(spacing: Spacing.md) {
-            Text(member.initials)
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .foregroundStyle(Theme.brand)
-                .frame(width: 36, height: 36)
-                .background(Theme.brand.opacity(0.14), in: Circle())
-                .opacity(member.isActive ? 1 : 0.55)
+            PersonInitial(name: member.fullName, isActive: member.isActive, size: 40)
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(member.fullName)
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(member.isActive ? Theme.text : Theme.textDim)
                     .lineLimit(1)
                 Text(member.roleLabel)
-                    .font(Typography.caption)
+                    .font(.system(size: 13))
                     .foregroundStyle(Theme.textDim)
             }
 
             Spacer(minLength: Spacing.sm)
 
-            VStack(alignment: .trailing, spacing: 1) {
+            VStack(alignment: .trailing, spacing: 2) {
                 Text(Money.format(member.monthlySalary))
-                    .font(Typography.callout.weight(.medium))
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(Theme.text)
                 if member.monthlySalary > 0 {
                     Text("выплачено \(Money.format(paid))")
-                        .font(Typography.caption)
+                        .font(.system(size: 12))
                         .monospacedDigit()
                         .foregroundStyle(paid >= member.monthlySalary ? Theme.positive : Theme.textDim)
                 }
             }
+            .fixedSize()
         }
     }
 }
@@ -612,83 +621,59 @@ private struct StaffDetail: View {
 
         return ScreenScroll {
             VStack(spacing: Spacing.lg) {
-                Card {
-                    HStack(spacing: Spacing.lg) {
-                        Text(member.initials)
-                            .font(.system(size: 22, weight: .semibold, design: .rounded))
-                            .foregroundStyle(Theme.brand)
-                            .frame(width: 64, height: 64)
-                            .background(Theme.brand.opacity(0.14), in: Circle())
-
-                        VStack(alignment: .leading, spacing: Spacing.xs) {
-                            Text(member.fullName)
-                                .font(Typography.title)
-                                .foregroundStyle(Theme.text)
-                            Text(member.roleLabel)
-                                .font(Typography.callout)
-                                .foregroundStyle(Theme.textMuted)
-                            StatusChip(member.isActive ? "работает" : "не работает", kind: member.isActive ? .good : .neutral)
-                        }
-                        Spacer()
-                    }
-                }
+                OpProfileHeader(
+                    name: member.fullName,
+                    subtitle: member.roleLabel,
+                    status: member.isActive ? "работает" : "не работает",
+                    statusColor: member.isActive ? Theme.positive : Theme.textDim,
+                    isActive: member.isActive
+                )
 
                 accessCard
 
-                Card {
-                    VStack(spacing: Spacing.md) {
-                        SectionHeader("Оклад за месяц")
-                        StatRow("Начислено", value: Money.format(member.monthlySalary), icon: "wallet.bifold")
-                        StatRow("Выплачено", value: Money.format(paid), valueColor: Theme.positive, icon: "checkmark.circle")
-                        RowDivider()
-                        StatRow(
-                            "Осталось",
-                            value: Money.format(max(member.monthlySalary - paid, 0)),
-                            valueColor: paid >= member.monthlySalary ? Theme.positive : Theme.warning,
-                            emphasized: true
-                        )
-                    }
-                }
+                // Сколько осталось выплатить — главная цифра месяца; оклад и
+                // уже выплаченное — расшифровка под ней.
+                HeroSummary(
+                    title: "Осталось выплатить",
+                    value: Money.format(max(member.monthlySalary - paid, 0)),
+                    caption: "оклад за месяц",
+                    footer: [
+                        ("Начислено", Money.format(member.monthlySalary)),
+                        ("Выплачено", Money.format(paid)),
+                    ],
+                    colors: paid >= member.monthlySalary
+                        ? [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+                        : [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+                )
 
                 if let phone = member.phone, !phone.isEmpty {
-                    Card {
-                        VStack(spacing: Spacing.md) {
-                            SectionHeader("Контакты")
-                            StatRow("Телефон", value: phone, icon: "phone")
+                    OwnerSection("Контакты") {
+                        VStack(spacing: 0) {
+                            OpInfoRow(icon: "phone.fill", tint: Color(hex: 0x10B981), title: "Телефон", value: phone)
                             if let email = member.email, !email.isEmpty {
-                                StatRow("Почта", value: email, icon: "envelope")
+                                OpDivider()
+                                OpInfoRow(icon: "envelope.fill", tint: Color(hex: 0x3B82F6), title: "Почта", value: email)
                             }
                         }
                     }
                 }
 
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        SectionHeader("Выплаты", subtitle: payments.isEmpty ? nil : "\(payments.count)")
-
-                        if payments.isEmpty {
-                            InlineEmpty(icon: "banknote", text: "Выплат ещё не было", tint: Theme.textDim)
-                        } else {
+                OwnerSection("Выплаты") {
+                    if !payments.isEmpty { OpCount(text: "\(payments.count)") }
+                } content: {
+                    if payments.isEmpty {
+                        InlineEmpty(icon: "banknote", text: "Выплат ещё не было", tint: Theme.textDim)
+                    } else {
+                        VStack(spacing: 0) {
                             ForEach(Array(payments.prefix(20).enumerated()), id: \.element.id) { index, payment in
-                                if index > 0 { RowDivider() }
-                                HStack(spacing: Spacing.md) {
-                                    VStack(alignment: .leading, spacing: 1) {
-                                        Text(payment.payDate?.formatted(.dateTime.day().month(.wide).year()) ?? "—")
-                                            .font(Typography.callout)
-                                            .foregroundStyle(Theme.text)
-                                        if let comment = payment.comment, !comment.isEmpty {
-                                            Text(comment)
-                                                .font(Typography.caption)
-                                                .foregroundStyle(Theme.textDim)
-                                                .lineLimit(1)
-                                        }
-                                    }
-                                    Spacer(minLength: Spacing.sm)
-                                    Text(Money.format(payment.amount))
-                                        .font(Typography.callout.weight(.medium))
-                                        .monospacedDigit()
-                                        .foregroundStyle(Theme.text)
-                                }
+                                if index > 0 { OpDivider() }
+                                AmountRow(
+                                    leading: { TintedIcon(systemName: "banknote.fill", tint: Color(hex: 0x10B981), size: 40) },
+                                    title: payment.payDate?.formatted(.dateTime.day().month(.wide).year()) ?? "—",
+                                    subtitle: payment.comment.flatMap { $0.isEmpty ? nil : $0 },
+                                    amount: Money.format(payment.amount)
+                                )
+                                .padding(.vertical, Spacing.xs)
                             }
                         }
                     }
@@ -714,10 +699,8 @@ private struct StaffDetail: View {
     @ViewBuilder
     private var accessCard: some View {
         if canSendAccess {
-            Card {
+            OwnerSection("Доступ") {
                 VStack(alignment: .leading, spacing: Spacing.sm) {
-                    SectionHeader("Доступ")
-
                     if let email = member.email, !email.isEmpty {
                         Text(email)
                             .font(Typography.callout)
@@ -819,11 +802,9 @@ struct RevisionActsSheet: View {
         NavigationStack {
             ScreenScroll {
                 if store.revisionActs.isEmpty {
-                    Card {
-                        Text("Актов пересчёта нет.")
-                            .font(Typography.callout)
-                            .foregroundStyle(Theme.textMuted)
-                    }
+                    InlineEmpty(icon: "clock.badge.checkmark", text: "Актов пересчёта нет.", tint: Theme.textDim)
+                        .padding(Spacing.lg)
+                        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                 }
 
                 if let error {
@@ -835,23 +816,33 @@ struct RevisionActsSheet: View {
                 }
 
                 ForEach(store.revisionActs) { act in
-                    Card(accent: act.isOpen ? Theme.info : nil) {
+                    // Акт — белой карточкой: иконка статуса в кружке, статус
+                    // цветной подписью, действия — кнопками ниже.
+                    let tint = act.isOpen ? Theme.info : (act.isCancelled ? Theme.textDim : Theme.positive)
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
                         VStack(alignment: .leading, spacing: Spacing.sm) {
-                            HStack(alignment: .firstTextBaseline) {
-                                Text(act.locationName)
-                                    .font(Typography.body.weight(.medium))
-                                    .foregroundStyle(Theme.text)
-                                Spacer()
-                                StatusChip(
-                                    act.statusLabel,
-                                    kind: act.isOpen ? .info : (act.isCancelled ? .neutral : .good)
+                            HStack(spacing: Spacing.md) {
+                                TintedIcon(
+                                    systemName: act.isOpen ? "clock.fill" : (act.isCancelled ? "xmark" : "checkmark.seal.fill"),
+                                    tint: tint,
+                                    size: 42
                                 )
-                            }
-
-                            if let opened = act.openedAt {
-                                Text("открыт \(opened.formatted(.dateTime.day().month(.abbreviated).hour().minute()))")
-                                    .font(Typography.caption)
-                                    .foregroundStyle(Theme.textDim)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(act.locationName)
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundStyle(Theme.text)
+                                        .lineLimit(1)
+                                    if let opened = act.openedAt {
+                                        Text("открыт \(opened.formatted(.dateTime.day().month(.abbreviated).hour().minute()))")
+                                            .font(.system(size: 13))
+                                            .foregroundStyle(Theme.textDim)
+                                    }
+                                }
+                                Spacer(minLength: Spacing.sm)
+                                Text(act.statusLabel)
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(tint)
+                                    .fixedSize()
                             }
 
                             if act.isOpen, let progress = act.progress {
@@ -906,6 +897,9 @@ struct RevisionActsSheet: View {
                             }
                         }
                     }
+                    .padding(Spacing.lg)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                 }
             }
             .background(Theme.background)
@@ -957,5 +951,88 @@ struct RevisionActsSheet: View {
         error = nil
         defer { isBusy = false }
         error = await action()
+    }
+}
+
+// ── Общие детали экранов ─────────────────────────────────────────────────────
+
+/// Разделитель с отступом под иконку — строки читаются как один список.
+private struct OpDivider: View {
+    var body: some View {
+        Rectangle().fill(Theme.borderSoft).frame(height: 1).padding(.leading, 52)
+    }
+}
+
+/// Приглушённая подпись справа от заголовка секции.
+private struct OpCount: View {
+    let text: String
+    var body: some View {
+        Text(text)
+            .font(.system(size: 13, weight: .semibold))
+            .monospacedDigit()
+            .foregroundStyle(Theme.textDim)
+            .lineLimit(1)
+    }
+}
+
+/// Строка «иконка — название — значение» вместо StatRow в белых блоках.
+private struct OpInfoRow: View {
+    let icon: String
+    let tint: Color
+    let title: String
+    let value: String
+    var valueColor: Color = Theme.text
+
+    var body: some View {
+        HStack(spacing: Spacing.md) {
+            TintedIcon(systemName: icon, tint: tint, size: 40)
+            Text(title)
+                .font(.system(size: 16))
+                .foregroundStyle(Theme.textMuted)
+                .lineLimit(1)
+            Spacer(minLength: Spacing.sm)
+            Text(value)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(valueColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .textSelection(.enabled)
+        }
+        .padding(.vertical, Spacing.sm)
+    }
+}
+
+/// Шапка карточки человека или компании — как профиль в банке: крупная
+/// буква, имя, подпись и статус цветным текстом.
+private struct OpProfileHeader: View {
+    let name: String
+    var subtitle: String?
+    var status: String?
+    var statusColor: Color = Theme.textDim
+    var isActive = true
+
+    var body: some View {
+        HStack(spacing: Spacing.lg) {
+            PersonInitial(name: name, isActive: isActive, size: 64)
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                Text(name)
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .foregroundStyle(Theme.text)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 14))
+                        .foregroundStyle(Theme.textDim)
+                }
+                if let status {
+                    Text(status)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(statusColor)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(Spacing.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 }

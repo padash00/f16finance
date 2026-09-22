@@ -76,23 +76,29 @@ struct ApprovalsScreen: View {
         }
     }
 
+    /// Сумма очереди главной цифрой — владелец сначала видит, сколько денег
+    /// ждёт его решения, и только потом разбирает строки.
     private var summaryCard: some View {
-        Card(accent: Theme.warning) {
-            HStack {
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    Text("На сумму")
-                        .font(Typography.label)
-                        .foregroundStyle(Theme.textDim)
-                    Text(Money.format(store.pending.reduce(0) { $0 + $1.total }))
-                        .font(Typography.monospacedDigits(Typography.metric))
-                        .foregroundStyle(Theme.text)
-                }
-                Spacer()
-                Text("\(store.pending.count)")
-                    .font(Typography.monospacedDigits(Typography.metric))
-                    .foregroundStyle(Theme.warning)
-            }
-        }
+        let total = store.pending.reduce(0) { $0 + $1.total }
+        let cash = store.pending.reduce(0) { $0 + $1.cashAmount }
+        let kaspi = store.pending.reduce(0) { $0 + $1.kaspiAmount }
+        return HeroSummary(
+            title: "Ждут решения",
+            value: Money.format(total),
+            caption: "\(store.pending.count) \(Self.expensesWord(store.pending.count)) на согласовании",
+            footer: [
+                ("Наличные", Money.format(cash)),
+                ("Kaspi", Money.format(kaspi)),
+            ],
+            colors: [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
+        )
+    }
+
+    static func expensesWord(_ n: Int) -> String {
+        let m10 = n % 10, m100 = n % 100
+        if m10 == 1 && m100 != 11 { return "расход" }
+        if (2...4).contains(m10) && !(12...14).contains(m100) { return "расхода" }
+        return "расходов"
     }
 
     private func declineSheet(_ expense: PendingExpense) -> some View {
@@ -158,6 +164,9 @@ struct ApprovalsScreen: View {
 }
 
 /// Карточка расхода с решением прямо в ней.
+///
+/// Как платёж на подтверждение в банке: иконка статьи, крупная сумма, кто и
+/// где подал — и две большие кнопки внизу, чтобы не промахнуться пальцем.
 struct PendingExpenseCard: View {
     let expense: PendingExpense
     let companyName: String?
@@ -166,71 +175,106 @@ struct PendingExpenseCard: View {
     let onApprove: () -> Void
     let onDecline: () -> Void
 
+    private var category: String { expense.category?.isEmpty == false ? expense.category! : "Без категории" }
+
     var body: some View {
-        Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: Spacing.xs) {
-                        Text(expense.category ?? "Без категории")
-                            .font(Typography.body.weight(.medium))
-                            .foregroundStyle(Theme.text)
-
-                        if let payee = expense.payee, !payee.isEmpty {
-                            Text(payee)
-                                .font(Typography.caption)
-                                .foregroundStyle(Theme.textMuted)
-                        }
-                    }
-                    Spacer()
-                    Text(Money.format(expense.total))
-                        .font(Typography.monospacedDigits(Typography.title))
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            HStack(alignment: .center, spacing: Spacing.md) {
+                TintedIcon(
+                    systemName: OwnerAnalyticsScreen.expenseIcon(category),
+                    tint: LedgerStatementScreen.categoryTint(category),
+                    size: 46
+                )
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(category)
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(Theme.text)
-                }
-
-                if let reason = expense.reason ?? expense.comment, !reason.isEmpty {
-                    Text(reason)
-                        .font(Typography.callout)
-                        .foregroundStyle(Theme.textMuted)
-                        .lineLimit(3)
-                }
-
-                HStack(spacing: Spacing.sm) {
-                    if let date = expense.date {
-                        Text(shortDate(date))
-                            .font(Typography.caption)
-                            .foregroundStyle(Theme.textDim)
-                    }
-                    if let companyName {
-                        Text("· \(companyName)")
-                            .font(Typography.caption)
-                            .foregroundStyle(Theme.textDim)
-                    }
-                    Spacer()
-                    if expense.cashAmount > 0 && expense.kaspiAmount > 0 {
-                        StatusChip("смешанная оплата", kind: .neutral)
-                    }
-                }
-
-                // Кнопки показываем только при наличии прав. Сервер всё равно
-                // проверит, но предлагать действие, которое отклонят, — обман.
-                if canApprove || canDecline {
-                    HStack(spacing: Spacing.md) {
-                        if canDecline {
-                            Button("Отклонить", action: onDecline)
-                                .buttonStyle(DestructiveButtonStyle())
-                        }
-                        if canApprove {
-                            Button("Одобрить", action: onApprove)
-                                .buttonStyle(PrimaryButtonStyle())
-                        }
-                    }
-                } else {
-                    Text("У вас нет права решать по расходам — только просмотр.")
-                        .font(Typography.caption)
+                        .lineLimit(1)
+                    Text(whereLine)
+                        .font(.system(size: 13))
                         .foregroundStyle(Theme.textDim)
+                        .lineLimit(1)
                 }
+                Spacer(minLength: 0)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("−" + Money.format(expense.total))
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                // Способ оплаты подписью: при смешанной оплате оператор
+                // должен понимать, сколько брать из кассы, а сколько с Kaspi.
+                Text(paymentLine)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Theme.textDim)
+            }
+
+            if let payee = expense.payee, !payee.isEmpty {
+                Label(payee, systemImage: "person.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Theme.textMuted)
+                    .lineLimit(1)
+            }
+
+            if let reason = expense.reason ?? expense.comment, !reason.isEmpty {
+                Text(reason)
+                    .font(.system(size: 14))
+                    .foregroundStyle(Theme.textMuted)
+                    .lineLimit(3)
+                    .padding(Spacing.md)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+
+            // Кнопки показываем только при наличии прав. Сервер всё равно
+            // проверит, но предлагать действие, которое отклонят, — обман.
+            if canApprove || canDecline {
+                HStack(spacing: Spacing.sm) {
+                    if canDecline {
+                        decisionButton("Отклонить", icon: "xmark", tint: Theme.negative, filled: false, action: onDecline)
+                    }
+                    if canApprove {
+                        decisionButton("Одобрить", icon: "checkmark", tint: Theme.positive, filled: true, action: onApprove)
+                    }
+                }
+            } else {
+                Text("У вас нет права решать по расходам — только просмотр.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textDim)
             }
         }
+        .padding(Spacing.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+
+    private var whereLine: String {
+        [companyName, expense.date.map(shortDate)].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    private var paymentLine: String {
+        if expense.cashAmount > 0 && expense.kaspiAmount > 0 {
+            return "Смешанная оплата: наличные \(Money.format(expense.cashAmount)) · Kaspi \(Money.format(expense.kaspiAmount))"
+        }
+        return expense.kaspiAmount > 0 ? "Kaspi" : "Наличные"
+    }
+
+    /// Кнопка решения: «одобрить» залита, «отклонить» — контуром, чтобы
+    /// основное действие читалось сразу.
+    private func decisionButton(_ title: String, icon: String, tint: Color, filled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(filled ? .white : tint)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 13)
+                .background(filled ? tint : tint.opacity(0.12), in: Capsule())
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.pressable)
     }
 
     private func shortDate(_ iso: String) -> String {
@@ -271,25 +315,21 @@ struct LedgerScreen: View {
         .refreshable { await store.loadLedger() }
     }
 
+    /// Прибыль главной цифрой на цветной карточке, доход и расход — её
+    /// расшифровка. Цвет сам говорит, в плюсе период или в минусе.
     private var profitCard: some View {
-        Card(accent: store.profit >= 0 ? Theme.brand : Theme.negative) {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                Text("Прибыль за период")
-                    .font(Typography.label)
-                    .foregroundStyle(Theme.textDim)
-
-                Text(Money.format(store.profit))
-                    .font(Typography.monospacedDigits(Typography.hero))
-                    .foregroundStyle(store.profit >= 0 ? Theme.text : Theme.negative)
-                    .contentTransition(.numericText())
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.5)
-
-                RowDivider()
-                StatRow("Доходы", value: Money.format(store.incomeTotal), valueColor: Theme.positive, icon: "arrow.down.circle")
-                StatRow("Расходы", value: Money.format(store.expenseTotal), valueColor: Theme.negative, icon: "arrow.up.circle")
-            }
-        }
+        HeroSummary(
+            title: "Прибыль за период",
+            value: Money.format(store.profit),
+            caption: store.range.title,
+            footer: [
+                ("Доходы", Money.format(store.incomeTotal)),
+                ("Расходы", Money.format(store.expenseTotal)),
+            ],
+            colors: store.profit >= 0
+                ? [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+                : [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
+        )
     }
 
     private var incomeChart: some View {
@@ -310,36 +350,35 @@ struct LedgerScreen: View {
         )
     }
 
+    /// Статьи строками с иконкой и полосой доли — как траты по категориям
+    /// в банковской выписке: вес статьи видно без чтения цифр.
     @ViewBuilder
     private var categoriesCard: some View {
         let categories = store.expensesByCategory
         if !categories.isEmpty {
-            Card {
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    SectionHeader("Расходы по категориям")
-
-                    // Доля от общей суммы полосой — так видно вес категории,
-                    // а не только абсолютное число.
-                    let maximum = categories.first?.amount ?? 0
-                    ForEach(categories.prefix(8), id: \.name) { category in
-                        VStack(alignment: .leading, spacing: Spacing.xs) {
-                            HStack {
-                                Text(category.name)
-                                    .font(Typography.callout)
-                                    .foregroundStyle(Theme.text)
-                                    .lineLimit(1)
-                                Spacer()
-                                Text(Money.format(category.amount))
-                                    .font(Typography.callout.weight(.semibold))
-                                    .monospacedDigit()
-                                    .foregroundStyle(Theme.text)
-                            }
-
-                            ProportionBar(
-                                ratio: maximum > 0 ? category.amount / maximum : 0,
-                                color: ChartPalette.series1
-                            )
+            let total = max(categories.reduce(0) { $0 + $1.amount }, 1)
+            OwnerSection("Расходы по статьям") {
+                Text(Money.format(store.expenseTotal))
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.textDim)
+            } content: {
+                VStack(spacing: Spacing.sm) {
+                    ForEach(Array(categories.prefix(8).enumerated()), id: \.element.name) { index, category in
+                        if index > 0 {
+                            Rectangle().fill(Theme.borderSoft).frame(height: 1).padding(.leading, 56)
                         }
+                        let tint = LedgerStatementScreen.categoryTint(category.name)
+                        AmountRow(
+                            leading: {
+                                TintedIcon(systemName: OwnerAnalyticsScreen.expenseIcon(category.name), tint: tint, size: 42)
+                            },
+                            title: category.name,
+                            subtitle: Percent.format(category.amount / total * 100),
+                            amount: Money.format(category.amount),
+                            share: category.amount / total,
+                            tint: tint
+                        )
                     }
                 }
             }

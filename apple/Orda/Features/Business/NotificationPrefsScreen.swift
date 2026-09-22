@@ -31,23 +31,29 @@ struct NotificationPrefsScreen: View {
             } else if isLoading && prefs == nil {
                 LoadingRows(count: 4)
             } else if let prefs {
-                Card {
-                    Text("Выключенное сюда не приходит. Всё остальное — как раньше.")
-                        .font(Typography.caption)
-                        .foregroundStyle(Theme.textDim)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                VStack(alignment: .leading, spacing: Spacing.lg) {
+                    OwnerFootnote(text: "Выключенное сюда не приходит. Всё остальное — как раньше.")
 
-                ForEach(order, id: \.self) { group in
-                    let events = prefs.events.filter { NotificationEventLabels.group($0) == group }
-                    if !events.isEmpty {
-                        Card {
+                    // Разделы — белыми группами, как настройки в банковском
+                    // приложении: иконка раздела слева, переключатель справа.
+                    ForEach(order, id: \.self) { group in
+                        let events = prefs.events.filter { NotificationEventLabels.group($0) == group }
+                        if !events.isEmpty {
                             VStack(alignment: .leading, spacing: Spacing.sm) {
-                                SectionHeader(group)
-                                ForEach(events, id: \.self) { event in
-                                    row(event, prefs: prefs)
-                                    if event != events.last { RowDivider() }
+                                Text(group)
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(Theme.textDim)
+                                    .padding(.horizontal, Spacing.xs)
+                                VStack(spacing: 0) {
+                                    ForEach(Array(events.enumerated()), id: \.element) { index, event in
+                                        if index > 0 {
+                                            Rectangle().fill(Theme.borderSoft).frame(height: 1).padding(.leading, 56)
+                                        }
+                                        row(event, group: group, prefs: prefs)
+                                    }
                                 }
+                                .padding(.horizontal, Spacing.md)
+                                .background(Theme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                             }
                         }
                     }
@@ -64,17 +70,34 @@ struct NotificationPrefsScreen: View {
         .refreshable { await load() }
     }
 
-    private func row(_ event: String, prefs: NotificationPrefs) -> some View {
-        Toggle(isOn: Binding(
+    private func row(_ event: String, group: String, prefs: NotificationPrefs) -> some View {
+        let style = Self.groupStyle(group)
+        return Toggle(isOn: Binding(
             get: { prefs.isEnabled(event) },
             set: { value in Task { await toggle(event, to: value) } }
         )) {
-            Text(NotificationEventLabels.title(event))
-                .font(Typography.callout)
-                .foregroundStyle(Theme.text)
+            HStack(spacing: Spacing.md) {
+                TintedIcon(systemName: style.icon, tint: style.tint, size: 36)
+                Text(NotificationEventLabels.title(event))
+                    .font(.system(size: 16))
+                    .foregroundStyle(Theme.text)
+            }
         }
-        .tint(Theme.brand)
+        .tint(Theme.positive)
+        .padding(.vertical, Spacing.sm)
         .disabled(saving.contains(event))
+    }
+
+    /// Иконка и цвет раздела: один цвет на раздел, чтобы глаз находил
+    /// группу до того, как прочтёт подпись.
+    private static func groupStyle(_ group: String) -> (icon: String, tint: Color) {
+        switch group {
+        case "Общение": ("bubble.left.and.bubble.right.fill", Color(hex: 0x3B82F6))
+        case "Смены": ("calendar", Color(hex: 0x8B5CF6))
+        case "Задачи": ("checklist", Color(hex: 0xF97316))
+        case "Деньги": ("banknote.fill", Color(hex: 0x10B981))
+        default: ("bell.fill", Color(hex: 0x64748B))
+        }
     }
 
     private func load() async {

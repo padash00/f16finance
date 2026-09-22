@@ -96,44 +96,45 @@ struct PointDevicesScreen: View {
             let offline = list.offline
 
             VStack(spacing: Spacing.lg) {
-                DashboardGrid {
-                    MetricTile(
-                        label: "Всего программ",
-                        value: "\(list.projects.count)",
-                        icon: "square.stack.3d.up",
-                        accent: Theme.brand
-                    )
-                    MetricTile(
-                        label: "На связи",
-                        value: "\(list.projects.filter(\.isOnline).count)",
-                        icon: "wifi",
-                        accent: Theme.positive
-                    )
-                    MetricTile(
-                        label: "Молчат сутки",
-                        value: "\(offline.count)",
-                        icon: "wifi.slash",
-                        accent: offline.isEmpty ? Theme.textDim : Theme.negative
-                    )
-                }
+                // Одна цифра вместо трёх плиток: главное — сколько на связи,
+                // а цвет карточки сразу говорит, есть ли молчащие точки.
+                let online = list.projects.filter(\.isOnline).count
+                HeroSummary(
+                    title: offline.isEmpty ? "Все программы на связи" : "Есть молчащие программы",
+                    value: "\(online) из \(list.projects.count)",
+                    caption: "на связи сейчас",
+                    footer: [
+                        ("Всего программ", "\(list.projects.count)"),
+                        ("Молчат сутки", "\(offline.count)"),
+                    ],
+                    colors: offline.isEmpty
+                        ? [Color(hex: 0x0F766E), Color(hex: 0x0E7490)]
+                        : [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
+                )
 
                 if !offline.isEmpty {
-                    Card(accent: Theme.negative) {
-                        VStack(alignment: .leading, spacing: Spacing.md) {
-                            SectionHeader("Не выходят на связь", subtitle: "точка может не продавать")
+                    OwnerSection("Не выходят на связь") {
+                        Text("точка может не продавать")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Theme.negative)
+                    } content: {
+                        VStack(spacing: 0) {
                             ForEach(Array(offline.enumerated()), id: \.element.id) { index, project in
-                                if index > 0 { RowDivider() }
+                                if index > 0 { DevicesDivider() }
                                 ProjectRow(project: project)
                             }
                         }
                     }
                 }
 
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        SectionHeader("Все программы")
+                OwnerSection("Все программы") {
+                    Text("\(list.projects.count)")
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Theme.textDim)
+                } content: {
+                    VStack(spacing: 0) {
                         ForEach(Array(list.projects.enumerated()), id: \.element.id) { index, project in
-                            if index > 0 { RowDivider() }
+                            if index > 0 { DevicesDivider() }
                             if canToggle {
                                 // Планшет забыли на точке, компьютер увезли в
                                 // ремонт — доступ закрывают в ту же минуту.
@@ -155,13 +156,22 @@ struct PointDevicesScreen: View {
     }
 }
 
+/// Разделитель с отступом под иконку — как в списках банковского приложения.
+private struct DevicesDivider: View {
+    var body: some View {
+        Rectangle().fill(Theme.borderSoft).frame(height: 1).padding(.leading, 56)
+    }
+}
+
+/// Строка программы: иконка в кружке цвета статуса, статус подписью —
+/// широкая плашка съедала место под название точки.
 private struct ProjectRow: View {
     let project: PointProject
 
-    private var statusKind: StatusChip.Kind {
-        if !project.isActive { return .neutral }
-        if project.neverSeen { return .warning }
-        return project.isOnline ? .good : .danger
+    private var statusColor: Color {
+        if !project.isActive { return Theme.textDim }
+        if project.neverSeen { return Theme.warning }
+        return project.isOnline ? Theme.positive : Theme.negative
     }
 
     private var statusText: String {
@@ -172,18 +182,15 @@ private struct ProjectRow: View {
 
     var body: some View {
         HStack(spacing: Spacing.md) {
-            Image(systemName: project.icon)
-                .font(.system(size: 15))
-                .foregroundStyle(project.isActive ? Theme.brand : Theme.textDim)
-                .frame(width: 24)
+            TintedIcon(systemName: project.icon, tint: project.isActive ? statusColor : Theme.textDim, size: 42)
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(project.name)
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(project.isActive ? Theme.text : Theme.textDim)
                     .lineLimit(1)
                 Text(subtitle)
-                    .font(Typography.caption)
+                    .font(.system(size: 13))
                     .foregroundStyle(Theme.textDim)
                     .lineLimit(1)
             }
@@ -191,15 +198,19 @@ private struct ProjectRow: View {
             Spacer(minLength: Spacing.sm)
 
             VStack(alignment: .trailing, spacing: 3) {
-                StatusChip(statusText, kind: statusKind)
+                Text(statusText)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(statusColor)
                 if let seen = project.lastSeenAt {
                     Text(seen.formatted(.dateTime.day().month(.abbreviated).hour().minute()))
-                        .font(Typography.caption)
+                        .font(.system(size: 12))
                         .monospacedDigit()
                         .foregroundStyle(Theme.textDim)
                 }
             }
+            .fixedSize()
         }
+        .padding(.vertical, Spacing.sm)
     }
 
     /// Режим и точки, за которыми закреплена программа.

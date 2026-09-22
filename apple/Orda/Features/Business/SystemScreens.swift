@@ -96,7 +96,6 @@ struct LogsScreen: View {
         VStack(spacing: 0) {
             if let store {
                 filterBar(store)
-                Divider().overlay(Theme.border)
                 feed(store)
             } else {
                 LoadingRows(count: 8)
@@ -121,12 +120,14 @@ struct LogsScreen: View {
         .refreshable { await store?.load() }
     }
 
+    /// Разрезы — пилюлями, как фильтры выписки; итог одной строкой под ними,
+    /// а не плашками: цифр тут две, отдельная карточка им не нужна.
     private func filterBar(_ store: LogsStore) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.md) {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
             ScrollView(.horizontal) {
                 HStack(spacing: Spacing.sm) {
                     ForEach(LogDomain.allCases) { domain in
-                        FilterChip(title: domain.label, isOn: store.domain == domain) {
+                        SysChip(title: domain.label, isOn: store.domain == domain) {
                             Task { await store.select(domain) }
                         }
                     }
@@ -136,16 +137,17 @@ struct LogsScreen: View {
             .scrollIndicators(.hidden)
 
             HStack(spacing: Spacing.md) {
-                SummaryPill(title: "Событий найдено", value: "\(store.total)", tint: Theme.brand)
-                SummaryPill(
-                    title: "Из них сбоев",
-                    value: "\(store.errorCount)",
-                    tint: store.errorCount > 0 ? Theme.negative : Theme.textDim
-                )
+                Label("\(store.total) найдено", systemImage: "list.bullet")
+                    .foregroundStyle(Theme.textDim)
+                Label("\(store.errorCount) сбоев", systemImage: "exclamationmark.octagon")
+                    .foregroundStyle(store.errorCount > 0 ? Theme.negative : Theme.textDim)
                 if !store.search.isEmpty {
-                    SummaryPill(title: "Поиск", value: store.search, tint: Theme.info)
+                    Label(store.search, systemImage: "magnifyingglass")
+                        .foregroundStyle(Theme.info)
+                        .lineLimit(1)
                 }
             }
+            .font(.system(size: 13, weight: .medium))
             .padding(.horizontal, Spacing.lg)
         }
         .padding(.vertical, Spacing.md)
@@ -167,8 +169,11 @@ struct LogsScreen: View {
             )
         } else {
             ScrollView {
+                // Лента — белым блоком на сером фоне с отступами под иконку,
+                // как история операций в банке.
                 LazyVStack(spacing: 0) {
-                    ForEach(store.items) { entry in
+                    ForEach(Array(store.items.enumerated()), id: \.element.id) { index, entry in
+                        if index > 0 { SysDivider() }
                         LogEntryRow(
                             entry: entry,
                             isExpanded: expanded.contains(entry.id)
@@ -179,7 +184,6 @@ struct LogsScreen: View {
                                 expanded.insert(entry.id)
                             }
                         }
-                        Divider().overlay(Theme.borderSoft)
                     }
 
                     if store.hasMore {
@@ -196,9 +200,13 @@ struct LogsScreen: View {
                         }
                         .buttonStyle(SecondaryButtonStyle())
                         .disabled(store.isLoadingMore)
-                        .padding(Spacing.lg)
+                        .padding(.vertical, Spacing.md)
                     }
                 }
+                .padding(.horizontal, Spacing.md)
+                .background(Theme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .padding(.horizontal, Spacing.lg)
+                .padding(.bottom, Spacing.xxl)
                 .frame(maxWidth: 960)
                 .frame(maxWidth: .infinity)
             }
@@ -225,14 +233,11 @@ private struct LogEntryRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack(alignment: .top, spacing: Spacing.md) {
-                Image(systemName: entry.icon)
-                    .font(.system(size: 14))
-                    .foregroundStyle(tint)
-                    .frame(width: 22)
+                TintedIcon(systemName: entry.icon, tint: tint, size: 36)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(entry.title)
-                        .font(Typography.callout)
+                        .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(Theme.text)
                         .fixedSize(horizontal: false, vertical: true)
                         .multilineTextAlignment(.leading)
@@ -259,8 +264,11 @@ private struct LogEntryRow: View {
                             .monospacedDigit()
                             .foregroundStyle(Theme.textDim)
                     }
+                    // Сбой подписью, а не плашкой: плашка сжимала заголовок.
                     if entry.isError {
-                        StatusChip("сбой", kind: .danger)
+                        Text("сбой")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Theme.negative)
                     }
                 }
             }
@@ -275,7 +283,7 @@ private struct LogEntryRow: View {
                     .foregroundStyle(Theme.brand)
                 }
                 .buttonStyle(.pressable)
-                .padding(.leading, 34)
+                .padding(.leading, 48)
             }
 
             if isExpanded {
@@ -289,11 +297,10 @@ private struct LogEntryRow: View {
                     }
                 }
                 .padding(Spacing.md)
-                .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
-                .padding(.leading, 34)
+                .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .padding(.leading, 48)
             }
         }
-        .padding(.horizontal, Spacing.lg)
         .padding(.vertical, Spacing.md)
         .contentShape(Rectangle())
         .onTapGesture { if !entry.detailRows.isEmpty { toggle() } }
@@ -373,50 +380,39 @@ struct SettingsScreen: View {
     @ViewBuilder
     private func content(_ data: SystemSettings) -> some View {
         VStack(spacing: Spacing.lg) {
-            DashboardGrid {
-                MetricTile(
-                    label: "Точки",
-                    value: data.companyLimit.map { "\(data.companies.count) / \($0)" } ?? "\(data.companies.count)",
-                    icon: "building.2",
-                    accent: data.isCompanyLimitReached ? Theme.warning : Theme.brand
-                )
-                MetricTile(
-                    label: "Команда",
-                    value: "\(data.staff.count)",
-                    icon: "person.3",
-                    accent: Theme.info
-                )
-                MetricTile(
-                    label: "Категории расходов",
-                    value: "\(data.categories.count)",
-                    icon: "square.grid.2x2",
-                    accent: Theme.accent
-                )
-                MetricTile(
-                    label: "Бюджет в месяц",
-                    value: Money.format(data.monthlyBudgetTotal),
-                    icon: "chart.pie",
-                    accent: Theme.textMuted
-                )
-            }
+            // Четыре плитки свелись к одной карточке: главное — сколько точек
+            // из лимита, остальное — расшифровка. Упёрлись в лимит — карточка
+            // становится оранжевой.
+            HeroSummary(
+                title: "Точки",
+                value: data.companyLimit.map { "\(data.companies.count) из \($0)" } ?? "\(data.companies.count)",
+                caption: data.freeCompanySlots.map { "свободно слотов: \($0)" },
+                footer: [
+                    ("Команда", "\(data.staff.count)"),
+                    ("Категории", "\(data.categories.count)"),
+                    ("Бюджет в месяц", Money.format(data.monthlyBudgetTotal)),
+                ],
+                colors: data.isCompanyLimitReached
+                    ? [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
+                    : [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+            )
 
             if data.isCompanyLimitReached {
-                Card(accent: Theme.warning) {
-                    HStack(spacing: Spacing.md) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 18))
-                            .foregroundStyle(Theme.warning)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Лимит точек исчерпан")
-                                .font(Typography.headline)
-                                .foregroundStyle(Theme.text)
-                            Text("Новую точку можно завести только после расширения тарифа.")
-                                .font(Typography.caption)
-                                .foregroundStyle(Theme.textMuted)
-                        }
-                        Spacer()
+                HStack(spacing: Spacing.md) {
+                    TintedIcon(systemName: "exclamationmark.triangle.fill", tint: Theme.warning, size: 42)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Лимит точек исчерпан")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Theme.text)
+                        Text("Новую точку можно завести только после расширения тарифа.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.textDim)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
+                    Spacer(minLength: 0)
                 }
+                .padding(Spacing.lg)
+                .background(Theme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             }
 
             SplitDashboard {
@@ -429,35 +425,37 @@ struct SettingsScreen: View {
     }
 
     private func companies(_ data: SystemSettings) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader(
-                    "Точки",
-                    subtitle: data.freeCompanySlots.map { "свободно слотов: \($0)" }
-                )
-
-                if data.companies.isEmpty {
-                    InlineEmpty(icon: "building.2", text: "Точек пока нет", tint: Theme.textDim)
-                } else {
+        OwnerSection("Точки") {
+            SysCount(text: data.freeCompanySlots.map { "свободно: \($0)" } ?? "\(data.companies.count)")
+        } content: {
+            if data.companies.isEmpty {
+                InlineEmpty(icon: "building.2", text: "Точек пока нет", tint: Theme.textDim)
+            } else {
+                VStack(spacing: 0) {
                     ForEach(Array(data.companies.enumerated()), id: \.element.id) { index, company in
-                        if index > 0 { RowDivider() }
+                        if index > 0 { SysDivider() }
                         HStack(spacing: Spacing.md) {
-                            VStack(alignment: .leading, spacing: 1) {
+                            LetterBadge(text: company.name, tint: OwnerTint.point(index))
+                            VStack(alignment: .leading, spacing: 2) {
                                 Text(company.name)
-                                    .font(Typography.callout)
+                                    .font(.system(size: 16, weight: .medium))
                                     .foregroundStyle(Theme.text)
+                                    .lineLimit(1)
                                 if let code = company.code, !code.isEmpty {
                                     Text(code)
-                                        .font(Typography.caption)
+                                        .font(.system(size: 13))
                                         .monospaced()
                                         .foregroundStyle(Theme.textDim)
                                 }
                             }
                             Spacer(minLength: Spacing.sm)
                             if !company.showInStructure {
-                                StatusChip("вне структуры", kind: .neutral)
+                                Text("вне структуры")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(Theme.textDim)
                             }
                         }
+                        .padding(.vertical, Spacing.sm)
                     }
                 }
             }
@@ -465,41 +463,32 @@ struct SettingsScreen: View {
     }
 
     private func categories(_ data: SystemSettings) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader(
-                    "Категории расходов",
-                    subtitle: data.monthlyBudgetTotal > 0 ? "бюджет \(Money.format(data.monthlyBudgetTotal)) в месяц" : nil
-                )
-
-                if data.categories.isEmpty {
-                    InlineEmpty(icon: "square.grid.2x2", text: "Категорий пока нет", tint: Theme.textDim)
-                } else {
+        OwnerSection("Категории расходов") {
+            if data.monthlyBudgetTotal > 0 {
+                SysCount(text: "бюджет \(Money.format(data.monthlyBudgetTotal))")
+            }
+        } content: {
+            if data.categories.isEmpty {
+                InlineEmpty(icon: "square.grid.2x2", text: "Категорий пока нет", tint: Theme.textDim)
+            } else {
+                VStack(spacing: 0) {
                     ForEach(Array(data.categories.enumerated()), id: \.element.id) { index, category in
-                        if index > 0 { RowDivider() }
-                        HStack(spacing: Spacing.md) {
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(category.name)
-                                    .font(Typography.callout)
-                                    .foregroundStyle(Theme.text)
-                                if let group = category.accountingGroup, !group.isEmpty {
-                                    Text(group)
-                                        .font(Typography.caption)
-                                        .foregroundStyle(Theme.textDim)
-                                }
-                            }
-                            Spacer(minLength: Spacing.sm)
-                            if let budget = category.monthlyBudget, budget > 0 {
-                                Text(Money.format(budget))
-                                    .font(Typography.callout.weight(.medium))
-                                    .monospacedDigit()
-                                    .foregroundStyle(Theme.textMuted)
-                            } else {
-                                Text("без бюджета")
-                                    .font(Typography.caption)
-                                    .foregroundStyle(Theme.textDim)
-                            }
-                        }
+                        if index > 0 { SysDivider() }
+                        let budget = category.monthlyBudget ?? 0
+                        let group = category.accountingGroup.flatMap { $0.isEmpty ? nil : $0 }
+                        AmountRow(
+                            leading: {
+                                TintedIcon(
+                                    systemName: OwnerAnalyticsScreen.expenseIcon(category.name),
+                                    tint: LedgerStatementScreen.categoryTint(category.name),
+                                    size: 40
+                                )
+                            },
+                            title: category.name,
+                            subtitle: group ?? (budget > 0 ? "бюджет в месяц" : "без бюджета"),
+                            amount: budget > 0 ? Money.format(budget) : "—"
+                        )
+                        .padding(.vertical, Spacing.xs)
                     }
                 }
             }
@@ -514,31 +503,37 @@ struct SettingsScreen: View {
             return lhs.fullName < rhs.fullName
         }
 
-        return Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Команда", subtitle: "активных: \(data.staff.filter(\.isActive).count)")
-
-                if sorted.isEmpty {
-                    InlineEmpty(icon: "person.3", text: "Сотрудников пока нет", tint: Theme.textDim)
-                } else {
+        return OwnerSection("Команда") {
+            SysCount(text: "активных: \(data.staff.filter(\.isActive).count)")
+        } content: {
+            if sorted.isEmpty {
+                InlineEmpty(icon: "person.3", text: "Сотрудников пока нет", tint: Theme.textDim)
+            } else {
+                VStack(spacing: 0) {
                     ForEach(Array(sorted.enumerated()), id: \.element.id) { index, member in
-                        if index > 0 { RowDivider() }
+                        if index > 0 { SysDivider() }
                         HStack(spacing: Spacing.md) {
-                            VStack(alignment: .leading, spacing: 1) {
+                            PersonInitial(name: member.fullName, isActive: member.isActive)
+                            VStack(alignment: .leading, spacing: 2) {
                                 Text(member.fullName)
-                                    .font(Typography.callout)
+                                    .font(.system(size: 16, weight: .medium))
                                     .foregroundStyle(member.isActive ? Theme.text : Theme.textDim)
                                     .lineLimit(1)
                                 if let email = member.email, !email.isEmpty {
                                     Text(email)
-                                        .font(Typography.caption)
+                                        .font(.system(size: 13))
                                         .foregroundStyle(Theme.textDim)
                                         .lineLimit(1)
                                 }
                             }
                             Spacer(minLength: Spacing.sm)
-                            StatusChip(member.roleLabel, kind: member.isAdministrative ? .info : .neutral)
+                            // Роль подписью: плашка съедала место под имя.
+                            Text(member.roleLabel)
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(member.isAdministrative ? Theme.info : Theme.textDim)
+                                .fixedSize()
                         }
+                        .padding(.vertical, Spacing.sm)
                     }
                 }
             }
@@ -643,82 +638,71 @@ struct TelegramScreen: View {
         }
     }
 
+    /// Состояние канала: имя бота на цветной карточке (синяя — работает,
+    /// оранжевая — нет), ниже каждая настройка строкой с иконкой и статусом.
     private func connection(_ status: TelegramStatus) -> some View {
-        let accent: Color? = status.isOperational ? nil : Theme.warning
+        let webhookOK = status.webhook?.isConfigured ?? false
+        return VStack(spacing: Spacing.lg) {
+            HeroSummary(
+                title: status.isOperational ? "Канал работает" : "Канал настроен не полностью",
+                value: status.bot?.displayName ?? "Бот не подключён",
+                caption: status.isOperational ? "на связи" : "требует настройки",
+                footer: [
+                    ("Токен", status.hasToken ? "задан" : "не задан"),
+                    ("Вебхук", webhookOK ? "есть" : "нет"),
+                ],
+                colors: status.isOperational
+                    ? [Color(hex: 0x0EA5E9), Color(hex: 0x2563EB)]
+                    : [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
+            )
 
-        return Card(accent: accent) {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: Spacing.xs) {
-                        Text(status.bot?.displayName ?? "Бот не подключён")
-                            .font(Typography.title)
-                            .foregroundStyle(Theme.text)
-                        Text(status.isOperational ? "канал работает" : "канал настроен не полностью")
-                            .font(Typography.caption)
-                            .foregroundStyle(Theme.textDim)
-                    }
-                    Spacer()
-                    StatusChip(
-                        status.isOperational ? "на связи" : "требует настройки",
-                        kind: status.isOperational ? .good : .warning
-                    )
-                }
+            OwnerSection("Настройка канала") {
+                VStack(spacing: 0) {
+                    SysStatusRow(icon: "key.fill", title: "Токен бота",
+                                 value: status.hasToken ? "задан" : "не задан",
+                                 color: status.hasToken ? Theme.positive : Theme.negative)
+                    SysDivider()
+                    SysStatusRow(icon: "bubble.left.and.bubble.right.fill", title: "Общий чат",
+                                 value: status.hasChatId ? "задан" : "не задан",
+                                 color: status.hasChatId ? Theme.positive : Theme.warning)
+                    SysDivider()
+                    SysStatusRow(icon: "arrow.triangle.branch", title: "Вебхук",
+                                 value: webhookOK ? "зарегистрирован" : "не зарегистрирован",
+                                 color: webhookOK ? Theme.positive : Theme.negative)
+                    SysDivider()
+                    SysStatusRow(icon: "lock.fill", title: "Секрет вебхука",
+                                 value: status.hasWebhookSecret ? "задан" : "не задан",
+                                 color: status.hasWebhookSecret ? Theme.positive : Theme.warning)
 
-                RowDivider()
-
-                StatRow(
-                    "Токен бота",
-                    value: status.hasToken ? "задан" : "не задан",
-                    valueColor: status.hasToken ? Theme.positive : Theme.negative,
-                    icon: "key"
-                )
-                StatRow(
-                    "Общий чат",
-                    value: status.hasChatId ? "задан" : "не задан",
-                    valueColor: status.hasChatId ? Theme.positive : Theme.warning,
-                    icon: "bubble.left.and.bubble.right"
-                )
-                StatRow(
-                    "Вебхук",
-                    value: (status.webhook?.isConfigured ?? false) ? "зарегистрирован" : "не зарегистрирован",
-                    valueColor: (status.webhook?.isConfigured ?? false) ? Theme.positive : Theme.negative,
-                    icon: "arrow.triangle.branch"
-                )
-                StatRow(
-                    "Секрет вебхука",
-                    value: status.hasWebhookSecret ? "задан" : "не задан",
-                    valueColor: status.hasWebhookSecret ? Theme.positive : Theme.warning,
-                    icon: "lock"
-                )
-
-                if let webhook = status.webhook {
-                    if webhook.isBacklogged {
-                        RowDivider()
-                        StatRow(
-                            "Необработанных сообщений",
-                            value: "\(webhook.pendingUpdateCount)",
-                            valueColor: Theme.warning,
-                            icon: "tray.full",
-                            emphasized: true
-                        )
-                    }
-                    if let message = webhook.lastErrorMessage, !message.isEmpty {
-                        RowDivider()
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Последняя ошибка")
-                                .font(Typography.caption)
-                                .foregroundStyle(Theme.textDim)
-                            Text(message)
-                                .font(Typography.callout)
-                                .foregroundStyle(Theme.negative)
-                                .fixedSize(horizontal: false, vertical: true)
-                            if let date = webhook.lastErrorAt {
-                                Text(date.formatted(.dateTime.day().month(.abbreviated).hour().minute()))
-                                    .font(Typography.caption)
-                                    .foregroundStyle(Theme.textDim)
-                            }
+                    if let webhook = status.webhook {
+                        if webhook.isBacklogged {
+                            SysDivider()
+                            SysStatusRow(icon: "tray.full.fill", title: "Необработанных сообщений",
+                                         value: "\(webhook.pendingUpdateCount)",
+                                         color: Theme.warning)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        if let message = webhook.lastErrorMessage, !message.isEmpty {
+                            SysDivider()
+                            HStack(alignment: .top, spacing: Spacing.md) {
+                                TintedIcon(systemName: "exclamationmark.octagon.fill", tint: Theme.negative, size: 40)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Последняя ошибка")
+                                        .font(.system(size: 13))
+                                        .foregroundStyle(Theme.textDim)
+                                    Text(message)
+                                        .font(.system(size: 15))
+                                        .foregroundStyle(Theme.negative)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    if let date = webhook.lastErrorAt {
+                                        Text(date.formatted(.dateTime.day().month(.abbreviated).hour().minute()))
+                                            .font(.system(size: 12))
+                                            .foregroundStyle(Theme.textDim)
+                                    }
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            .padding(.vertical, Spacing.sm)
+                        }
                     }
                 }
             }
@@ -727,75 +711,78 @@ struct TelegramScreen: View {
 
     @ViewBuilder
     private func recipients(_ store: TelegramStore) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Получатели бота")
-
-                if let allowed = store.allowed, !allowed.tableExists {
-                    InlineEmpty(
-                        icon: "wrench.and.screwdriver",
-                        text: "Список получателей ещё не развёрнут в базе",
-                        tint: Theme.warning
-                    )
-                } else if let users = store.allowed?.users, !users.isEmpty {
+        OwnerSection("Получатели бота") {
+            if let users = store.allowed?.users, !users.isEmpty {
+                SysCount(text: "\(users.count)")
+            }
+        } content: {
+            if let allowed = store.allowed, !allowed.tableExists {
+                InlineEmpty(
+                    icon: "wrench.and.screwdriver",
+                    text: "Список получателей ещё не развёрнут в базе",
+                    tint: Theme.warning
+                )
+            } else if let users = store.allowed?.users, !users.isEmpty {
+                VStack(spacing: 0) {
                     ForEach(Array(users.enumerated()), id: \.element.id) { index, user in
-                        if index > 0 { RowDivider() }
+                        if index > 0 { SysDivider() }
                         HStack(spacing: Spacing.md) {
-                            VStack(alignment: .leading, spacing: 1) {
+                            PersonInitial(name: user.displayName)
+                            VStack(alignment: .leading, spacing: 2) {
                                 Text(user.displayName)
-                                    .font(Typography.callout)
+                                    .font(.system(size: 16, weight: .medium))
                                     .foregroundStyle(Theme.text)
+                                    .lineLimit(1)
                                 Text(user.telegramUserID)
-                                    .font(Typography.caption)
+                                    .font(.system(size: 13))
                                     .monospaced()
                                     .foregroundStyle(Theme.textDim)
                             }
                             Spacer(minLength: Spacing.sm)
-                            StatusChip(
-                                user.canFinance ? "финансы" : "без финансов",
-                                kind: user.canFinance ? .info : .neutral
-                            )
+                            Text(user.canFinance ? "финансы" : "без финансов")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(user.canFinance ? Theme.info : Theme.textDim)
+                                .fixedSize()
                         }
+                        .padding(.vertical, Spacing.sm)
                     }
-                } else {
-                    InlineEmpty(icon: "person.badge.plus", text: "Получателей нет", tint: Theme.textDim)
                 }
+            } else {
+                InlineEmpty(icon: "person.badge.plus", text: "Получателей нет", tint: Theme.textDim)
             }
         }
     }
 
     private func unlinked(_ store: TelegramStore) -> some View {
         let unlinked = store.unlinkedStaff
-        let accent: Color? = unlinked.isEmpty ? nil : Theme.warning
 
-        return Card(accent: accent) {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader(
-                    "Без Telegram",
-                    subtitle: "подключено \(store.staff.filter(\.isLinked).count) из \(store.staff.count)"
+        return OwnerSection("Без Telegram") {
+            SysCount(text: "подключено \(store.staff.filter(\.isLinked).count) из \(store.staff.count)")
+        } content: {
+            if unlinked.isEmpty {
+                InlineEmpty(
+                    icon: "checkmark.circle",
+                    text: "Все работающие сотрудники подключены",
+                    tint: Theme.positive
                 )
-
-                if unlinked.isEmpty {
-                    InlineEmpty(
-                        icon: "checkmark.circle",
-                        text: "Все работающие сотрудники подключены",
-                        tint: Theme.positive
-                    )
-                } else {
+            } else {
+                VStack(spacing: 0) {
                     ForEach(Array(unlinked.enumerated()), id: \.element.id) { index, member in
-                        if index > 0 { RowDivider() }
+                        if index > 0 { SysDivider() }
                         HStack(spacing: Spacing.md) {
+                            PersonInitial(name: member.fullName)
                             Text(member.fullName)
-                                .font(Typography.callout)
+                                .font(.system(size: 16, weight: .medium))
                                 .foregroundStyle(Theme.text)
                                 .lineLimit(1)
                             Spacer(minLength: Spacing.sm)
                             if let role = member.role, !role.isEmpty {
                                 Text(role)
-                                    .font(Typography.caption)
+                                    .font(.system(size: 13))
                                     .foregroundStyle(Theme.textDim)
                             }
                         }
+                        .padding(.vertical, Spacing.sm)
                     }
                 }
             }
@@ -879,36 +866,32 @@ struct DiagnosticsScreen: View {
         let checks = data.checks
 
         VStack(spacing: Spacing.lg) {
-            DashboardGrid {
-                MetricTile(
-                    label: "Проверок пройдено",
-                    value: "\(data.okCount)",
-                    icon: "checkmark.seal",
-                    accent: Theme.positive
-                )
-                MetricTile(
-                    label: "Предупреждений",
-                    value: "\(data.warningCount)",
-                    icon: "exclamationmark.triangle",
-                    accent: data.warningCount > 0 ? Theme.warning : Theme.textDim
-                )
-                MetricTile(
-                    label: "Сбоев",
-                    value: "\(data.failureCount)",
-                    icon: "xmark.octagon",
-                    accent: data.failureCount > 0 ? Theme.negative : Theme.textDim
-                )
-            }
+            // Главная цифра — сколько проверок прошло; цвет карточки сразу
+            // говорит, есть ли сбои, не заставляя сравнивать три плитки.
+            HeroSummary(
+                title: data.failureCount > 0 ? "Есть сбои" : (data.warningCount > 0 ? "Есть предупреждения" : "Всё в порядке"),
+                value: "\(data.okCount) из \(checks.count)",
+                caption: "проверок пройдено",
+                footer: [
+                    ("Предупреждений", "\(data.warningCount)"),
+                    ("Сбоев", "\(data.failureCount)"),
+                ],
+                colors: data.failureCount > 0
+                    ? [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
+                    : (data.warningCount > 0
+                        ? [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
+                        : [Color(hex: 0x059669), Color(hex: 0x0F766E)])
+            )
 
-            Card {
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    SectionHeader("Проверки", subtitle: "всего \(checks.count)")
-
-                    if checks.isEmpty {
-                        InlineEmpty(icon: "stethoscope", text: "Сервер не вернул ни одной проверки", tint: Theme.textDim)
-                    } else {
+            OwnerSection("Проверки") {
+                SysCount(text: "всего \(checks.count)")
+            } content: {
+                if checks.isEmpty {
+                    InlineEmpty(icon: "stethoscope", text: "Сервер не вернул ни одной проверки", tint: Theme.textDim)
+                } else {
+                    VStack(spacing: 0) {
                         ForEach(Array(checks.enumerated()), id: \.element.id) { index, check in
-                            if index > 0 { RowDivider() }
+                            if index > 0 { SysDivider() }
                             DiagnosticCheckRow(check: check)
                         }
                     }
@@ -921,12 +904,21 @@ struct DiagnosticsScreen: View {
 private struct DiagnosticCheckRow: View {
     let check: DiagnosticCheck
 
-    private var kind: StatusChip.Kind {
+    private var color: Color {
         switch check.state {
-        case .ok: .good
-        case .warning: .warning
-        case .failure: .danger
-        case .unknown: .neutral
+        case .ok: Theme.positive
+        case .warning: Theme.warning
+        case .failure: Theme.negative
+        case .unknown: Theme.textDim
+        }
+    }
+
+    private var icon: String {
+        switch check.state {
+        case .ok: "checkmark"
+        case .warning: "exclamationmark.triangle.fill"
+        case .failure: "xmark"
+        case .unknown: "questionmark"
         }
     }
 
@@ -941,15 +933,16 @@ private struct DiagnosticCheckRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: Spacing.md) {
+            TintedIcon(systemName: icon, tint: color, size: 36)
             VStack(alignment: .leading, spacing: 2) {
                 Text(check.title)
-                    .font(Typography.callout)
+                    .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(Theme.text)
                     .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
                 if let detail = check.detail, !detail.isEmpty {
                     Text(detail)
-                        .font(Typography.caption)
+                        .font(.system(size: 13))
                         .foregroundStyle(Theme.textDim)
                         .fixedSize(horizontal: false, vertical: true)
                         .multilineTextAlignment(.leading)
@@ -958,8 +951,78 @@ private struct DiagnosticCheckRow: View {
 
             Spacer(minLength: Spacing.sm)
 
-            StatusChip(label, kind: kind)
+            Text(label)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(color)
+                .fixedSize()
         }
+        .padding(.vertical, Spacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// ── Общие детали экранов системы ─────────────────────────────────────────────
+
+/// Разделитель с отступом под иконку — строки читаются как один список.
+private struct SysDivider: View {
+    var body: some View {
+        Rectangle().fill(Theme.borderSoft).frame(height: 1).padding(.leading, 52)
+    }
+}
+
+/// Приглушённая цифра справа от заголовка секции.
+private struct SysCount: View {
+    let text: String
+    var body: some View {
+        Text(text)
+            .font(.system(size: 13, weight: .semibold))
+            .monospacedDigit()
+            .foregroundStyle(Theme.textDim)
+            .lineLimit(1)
+    }
+}
+
+/// Строка настройки: иконка в кружке, название и цветной статус справа.
+private struct SysStatusRow: View {
+    let icon: String
+    let title: String
+    let value: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: Spacing.md) {
+            TintedIcon(systemName: icon, tint: color, size: 40)
+            Text(title)
+                .font(.system(size: 16))
+                .foregroundStyle(Theme.text)
+                .lineLimit(1)
+            Spacer(minLength: Spacing.sm)
+            Text(value)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(color)
+                .lineLimit(1)
+        }
+        .padding(.vertical, Spacing.sm)
+    }
+}
+
+/// Пилюля фильтра: выбранная — тёмная, как в выписке.
+private struct SysChip: View {
+    let title: String
+    let isOn: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button {
+            withAnimation(Motion.tap) { action() }
+        } label: {
+            Text(title)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(isOn ? Color.white : Theme.text)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(isOn ? AnyShapeStyle(Theme.text) : AnyShapeStyle(Theme.surface), in: Capsule())
+        }
+        .buttonStyle(.pressable)
     }
 }
