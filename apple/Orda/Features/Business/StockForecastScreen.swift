@@ -28,15 +28,7 @@ struct StockForecastScreen: View {
         }
         .background(Theme.background)
         .navigationTitle("Прогноз склада")
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Toggle(isOn: $onlyUrgent) {
-                    Label("Только срочное", systemImage: "exclamationmark.triangle")
-                }
-                .toggleStyle(.button)
-            }
-            LogoutToolbarItem()
-        }
+        .toolbar { LogoutToolbarItem() }
         .task {
             if store == nil {
                 let created = StockForecastStore(api: api)
@@ -51,57 +43,88 @@ struct StockForecastScreen: View {
     private func list(_ rows: [StockForecastRow]) -> some View {
         let shown = onlyUrgent ? rows.filter(\.isUrgent) : rows
 
-        if shown.isEmpty {
+        if rows.isEmpty {
             WideEmptyState(
                 icon: "chart.line.downtrend.xyaxis",
-                title: onlyUrgent ? "Срочного нет" : "Считать нечего",
-                message: onlyUrgent
-                    ? "Ни одна позиция не кончается в ближайшую неделю."
-                    : "Нет ни остатков, ни продаж за последние 30 дней."
+                title: "Считать нечего",
+                message: "Нет ни остатков, ни продаж за последние 30 дней."
             )
         } else {
             ScrollView {
-                LazyVStack(spacing: 0) {
+                VStack(spacing: Spacing.lg) {
                     summary(rows)
 
-                    ForEach(shown) { row in
-                        ForecastRowView(row: row)
-                            .padding(.horizontal, Spacing.lg)
-                            .padding(.vertical, Spacing.sm)
-                        RowDivider().padding(.horizontal, Spacing.lg)
+                    // Фильтр — кнопками над списком, а не переключателем в
+                    // панели: там его не замечали, и «срочное» не находили.
+                    PillSegment(
+                        options: [(value: false, title: "Все"), (value: true, title: "Срочное")] as [(value: Bool, title: String)],
+                        selection: $onlyUrgent
+                    )
+
+                    if shown.isEmpty {
+                        WideEmptyState(
+                            icon: "checkmark.seal",
+                            title: "Срочного нет",
+                            message: "Ни одна позиция не кончается в ближайшую неделю."
+                        )
+                        .padding(.top, Spacing.lg)
+                    } else {
+                        // Список ленивый и на белой подложке: позиций на складе
+                        // бывают сотни, строить их все сразу незачем.
+                        LazyVStack(spacing: 0) {
+                            ForEach(Array(shown.enumerated()), id: \.element.id) { index, row in
+                                if index > 0 { RowDivider().padding(.leading, 40 + Spacing.md) }
+                                ForecastRowView(row: row)
+                                    .padding(.vertical, Spacing.sm)
+                            }
+                        }
+                        .padding(.horizontal, Spacing.lg)
+                        .padding(.vertical, Spacing.sm)
+                        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
                     }
                 }
-                .padding(.vertical, Spacing.sm)
+                .padding(.horizontal, Spacing.lg)
+                .padding(.bottom, Spacing.xxl)
+                .frame(maxWidth: 720)
+                .frame(maxWidth: .infinity)
             }
         }
     }
 
+    /// Сколько позиций вот-вот кончится — главная цифра; разбивка по срокам и
+    /// залежавшееся — под ней. Цвет карточки — по самому срочному.
     private func summary(_ rows: [StockForecastRow]) -> some View {
         let critical = rows.filter { $0.status == "critical" }.count
         let warning = rows.filter { $0.status == "warning" }.count
+        // Не срочно, но важно: деньги стоят на полке мёртвым грузом.
         let idle = rows.filter { $0.status == "no_sales" }.count
+        let urgent = critical + warning
 
-        return Card {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                if critical > 0 {
-                    StatRow("Кончается за 3 дня", value: "\(critical)", valueColor: Theme.negative, icon: "exclamationmark.triangle")
-                }
-                if warning > 0 {
-                    if critical > 0 { RowDivider() }
-                    StatRow("На исходе, до недели", value: "\(warning)", valueColor: Theme.warning, icon: "clock")
-                }
-                if idle > 0 {
-                    if critical > 0 || warning > 0 { RowDivider() }
-                    // Не срочно, но важно: деньги стоят на полке мёртвым грузом.
-                    StatRow("Не продавалось за 30 дней", value: "\(idle)", icon: "zzz")
-                }
-                if critical == 0 && warning == 0 && idle == 0 {
-                    StatRow("Запаса хватает по всем позициям", value: "\(rows.count)", valueColor: Theme.positive, icon: "checkmark.circle")
-                }
+        return Group {
+            if urgent > 0 {
+                HeroSummary(
+                    title: "Скоро закончится",
+                    value: "\(urgent) \(pluralize(urgent, "позиция", "позиции", "позиций"))",
+                    caption: "из \(rows.count) на складе",
+                    footer: [
+                        ("За 3 дня", "\(critical)"),
+                        ("До недели", "\(warning)"),
+                        ("Без продаж 30 дн.", "\(idle)"),
+                    ],
+                    colors: critical > 0
+                        ? [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
+                        : [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
+                )
+            } else {
+                HeroSummary(
+                    title: "Запаса хватает",
+                    value: "\(rows.count) \(pluralize(rows.count, "позиция", "позиции", "позиций"))",
+                    caption: "ничего не кончается в ближайшую неделю",
+                    footer: idle > 0 ? [("Без продаж 30 дн.", "\(idle)")] : [],
+                    colors: [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+                )
             }
         }
-        .padding(.horizontal, Spacing.lg)
-        .padding(.bottom, Spacing.sm)
     }
 }
 
@@ -109,31 +132,38 @@ private struct ForecastRowView: View {
     let row: StockForecastRow
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Spacing.md) {
-            VStack(alignment: .leading, spacing: Spacing.xs) {
+        HStack(spacing: Spacing.md) {
+            TintedIcon(systemName: icon, tint: tint, size: 40)
+
+            VStack(alignment: .leading, spacing: 4) {
                 Text(row.name)
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Theme.text)
                     .lineLimit(2)
 
                 Text(subtitle)
-                    .font(Typography.caption)
+                    .font(.system(size: 13))
                     .foregroundStyle(Theme.textDim)
                     .lineLimit(1)
             }
 
             Spacer(minLength: Spacing.sm)
 
-            VStack(alignment: .trailing, spacing: Spacing.xs) {
+            // Статус — цветной подписью, а не плашкой: плашка съедала место
+            // у названия, и длинные позиции обрезались.
+            VStack(alignment: .trailing, spacing: 4) {
                 if let days = row.daysLeft {
                     Text("\(days) \(pluralize(days, "день", "дня", "дней"))")
-                        .font(Typography.callout.weight(.semibold))
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(daysColor)
                 }
-                StatusChip(row.statusLabel, kind: chipKind)
+                Text(row.statusLabel)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(tint)
             }
         }
+        .contentShape(Rectangle())
     }
 
     private var subtitle: String {
@@ -153,13 +183,23 @@ private struct ForecastRowView: View {
         }
     }
 
-    private var chipKind: StatusChip.Kind {
+    private var tint: Color {
         switch row.status {
-        case "critical": .danger
-        case "warning": .warning
-        case "low": .info
-        case "no_sales": .neutral
-        default: .good
+        case "critical": Theme.negative
+        case "warning": Theme.warning
+        case "low": Theme.info
+        case "no_sales": Theme.textDim
+        default: Theme.positive
+        }
+    }
+
+    private var icon: String {
+        switch row.status {
+        case "critical": "exclamationmark.triangle.fill"
+        case "warning": "clock.fill"
+        case "low": "arrow.down.circle.fill"
+        case "no_sales": "zzz"
+        default: "checkmark.circle.fill"
         }
     }
 }
