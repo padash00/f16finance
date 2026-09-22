@@ -146,7 +146,7 @@ extension Color {
         #endif
     }
 
-    init(hex: UInt32) {
+    public init(hex: UInt32) {
         self.init(
             .sRGB,
             red: Double((hex >> 16) & 0xFF) / 255,

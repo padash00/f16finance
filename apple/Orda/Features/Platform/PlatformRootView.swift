@@ -65,6 +65,13 @@ struct PlatformRootView: View {
             async let businessLoad: Void = businessStore.bootstrap()
             _ = await (platformLoad, businessLoad)
 
+            if let wanted = LaunchOptions.requestedOrganization,
+               let organization = platform.organizations.first(where: { $0.slug == wanted || $0.id == wanted }),
+               auth.organizationID != organization.id {
+                await auth.setOrganization(organization.id)
+                await businessStore.bootstrap()
+            }
+
             if let page = LaunchOptions.requestedPage { openIfAllowed(pageID: page) }
         }
         // Суперадмину уведомления приходят те же, что и остальным, — и вести
@@ -117,7 +124,21 @@ struct PlatformRootView: View {
         #endif
     }
 
+    @ViewBuilder
     private var phoneTabs: some View {
+        // Выбрана организация — суперадмин смотрит как её владелец: тот же
+        // кабинет, плюс вкладка платформы первой.
+        if auth.organizationID != nil && resolver.canSeeOwnerAnalytics {
+            OwnerTabs(resolver: resolver, accent: Theme.accent(for: .platform), hasPlatform: true) {
+                PlatformOverviewScreen()
+                    .toolbar { OrganizationSwitcher() }
+            }
+        } else {
+            platformPhoneTabs
+        }
+    }
+
+    private var platformPhoneTabs: some View {
         TabView(selection: $phoneTab) {
             NavigationStack {
                 PlatformOverviewScreen()

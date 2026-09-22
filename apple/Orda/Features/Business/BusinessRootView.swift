@@ -110,7 +110,11 @@ struct BusinessRootView: View {
     @ViewBuilder
     private var content: some View {
         #if os(iOS)
-        if sizeClass == .compact {
+        if sizeClass == .compact && resolver.canSeeOwnerAnalytics {
+            // Владельцу и тем, кому открыты деньги, — кабинет по смыслу:
+            // главная, аналитика, сервисы плиткой.
+            OwnerTabs(resolver: resolver, accent: accent)
+        } else if sizeClass == .compact {
             phoneTabs
         } else {
             splitLayout
@@ -501,6 +505,15 @@ struct SectionRoute: Hashable {
 enum LaunchOptions {
     static var requestedPage: String? {
         let value = UserDefaults.standard.string(forKey: "ordaPage")?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return value.isEmpty ? nil : value
+    }
+
+    /// Организация суперадмина при запуске: `Orda.app -ordaOrganization f16`
+    /// (адрес или идентификатор). Для снимков экрана и проверки кабинета
+    /// владельца без ручного выбора в переключателе.
+    static var requestedOrganization: String? {
+        let value = UserDefaults.standard.string(forKey: "ordaOrganization")?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return value.isEmpty ? nil : value
     }
