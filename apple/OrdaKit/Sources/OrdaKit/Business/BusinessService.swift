@@ -1171,8 +1171,9 @@ public struct BusinessService: Sendable {
     ///
     /// Величины приходят посчитанными: формула живёт на сервере, чтобы сайт и
     /// приложение показывали одну и ту же EBITDA.
-    public func pnl(from: String, to: String, includeExtra: Bool = false) async throws -> PnlReport {
+    public func pnl(from: String, to: String, includeExtra: Bool = false, withPrevious: Bool = false) async throws -> PnlReport {
         var query = ["from": from, "to": to]
+        if withPrevious { query["with_previous"] = "1" }
         if includeExtra { query["include_extra"] = "1" }
         let response: Envelope<PnlReport> = try await api.send(
             APIRequest(path: "/api/admin/profitability/summary", query: query)
@@ -1340,6 +1341,17 @@ public struct BusinessService: Sendable {
     public func createReceipt(_ draft: ReceiptDraft, companyID: String?) async throws {
         let body = try JSONEncoder().encode(
             ReceiptCreateRequest(payload: draft.payload(), companyID: companyID)
+        )
+        _ = try await api.send(
+            APIRequest(path: "/api/admin/store/receipts", method: .post, body: body)
+        )
+    }
+
+    /// Провести оприходование — излишки без поставщика и оплаты. Требует
+    /// `store-postings.create`.
+    public func createPosting(_ draft: ReceiptDraft, companyID: String?) async throws {
+        let body = try JSONEncoder().encode(
+            PostingCreateRequest(posting: draft.postingPayload(), companyID: companyID)
         )
         _ = try await api.send(
             APIRequest(path: "/api/admin/store/receipts", method: .post, body: body)

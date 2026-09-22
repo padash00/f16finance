@@ -31,8 +31,53 @@ public struct MonthlyPnl: Decodable, Sendable, Identifiable, Hashable {
     public let netMargin: Double
     public let capex: Double
     public let profitDistribution: Double
+    /// Выручка по способам оплаты — раскрытие строки «Выручка».
+    public let income: PnlIncome
+    /// Статьи расходов внутри каждой строки: ключ — строка отчёта
+    /// (`cogs`, `operating`, `payroll`…), как на сайте.
+    public let categories: [String: [PnlCategoryAmount]]
+    /// Для сверки с «Расходами»: всё из журнала и отклонённые из них.
+    public let check: PnlCheck
 
     public var id: String { month }
+
+    /// Статьи строки отчёта, крупные сверху.
+    public func parts(_ line: PnlLine) -> [PnlCategoryAmount] {
+        if line == .revenue {
+            return [
+                PnlCategoryAmount(name: "Наличные", amount: income.cash),
+                PnlCategoryAmount(name: "Kaspi", amount: income.kaspi),
+                PnlCategoryAmount(name: "Карта", amount: income.card),
+                PnlCategoryAmount(name: "Онлайн", amount: income.online),
+            ].filter { $0.amount.rounded() != 0 }
+        }
+        return categories[line.rawValue] ?? []
+    }
+
+    /// Значение строки отчёта.
+    public func value(_ line: PnlLine) -> Double {
+        switch line {
+        case .revenue: revenue
+        case .cogs: cogs
+        case .grossProfit: grossProfit
+        case .operating: operatingExpenses
+        case .pos: posCommission
+        case .payroll: payroll
+        case .payrollTaxes: payrollTaxes
+        case .ebitda: ebitda
+        case .depreciation: depreciation
+        case .operatingProfit: operatingProfit
+        case .financial: financialExpenses
+        case .tax: incomeTax
+        case .nonOperating: nonOperating
+        case .netProfit: netProfit
+        case .capex: capex
+        case .distribution: profitDistribution
+        }
+    }
+
+    /// Остаётся после покупки оборудования и выплат партнёрам.
+    public var leftover: Double { netProfit - capex - profitDistribution }
 
     /// Первое число месяца — для подписей и сортировки.
     public var date: Date? { DateParsing.parseDateOnly("\(month)-01") }
@@ -80,6 +125,10 @@ public struct MonthlyPnl: Decodable, Sendable, Identifiable, Hashable {
         netMargin = try c.decodeFlexibleDouble(forKey: .netMargin) ?? 0
         capex = try c.decodeFlexibleDouble(forKey: .capex) ?? 0
         profitDistribution = try c.decodeFlexibleDouble(forKey: .profitDistribution) ?? 0
+        // Новые поля — необязательные: старый ответ без них тоже читается.
+        income = (try? c.decodeIfPresent(PnlIncome.self, forKey: .income)) ?? PnlIncome()
+        categories = (try? c.decodeIfPresent([String: [PnlCategoryAmount]].self, forKey: .categories)) ?? [:]
+        check = (try? c.decodeIfPresent(PnlCheck.self, forKey: .check)) ?? PnlCheck()
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -87,25 +136,165 @@ public struct MonthlyPnl: Decodable, Sendable, Identifiable, Hashable {
         case operatingExpenses, posCommission, payroll, payrollTaxes, otherOperating
         case ebitda, ebitdaMargin, depreciation, amortization, operatingProfit
         case financialExpenses, incomeTax, nonOperating, netProfit, netMargin
-        case capex, profitDistribution
+        case capex, profitDistribution, income, categories, check
     }
+}
+
+/// Строка отчёта — цепочка как на сайте (`app/(main)/profitability`).
+public enum PnlLine: String, Sendable, CaseIterable, Hashable {
+    case revenue, cogs, grossProfit, operating, pos, payroll, payrollTaxes, ebitda
+    case depreciation, operatingProfit, financial, tax, nonOperating, netProfit
+    case capex, distribution
+
+    public var title: String {
+        switch self {
+        case .revenue: "Выручка"
+        case .cogs: "Себестоимость"
+        case .grossProfit: "Валовая прибыль"
+        case .operating: "Операционные расходы"
+        case .pos: "Комиссия банка"
+        case .payroll: "Зарплаты"
+        case .payrollTaxes: "Налоги на зарплату"
+        case .ebitda: "EBITDA"
+        case .depreciation: "Амортизация"
+        case .operatingProfit: "Операционная прибыль"
+        case .financial: "Проценты по кредитам"
+        case .tax: "Налог"
+        case .nonOperating: "Разовые расходы"
+        case .netProfit: "Чистая прибыль"
+        case .capex: "Покупка оборудования"
+        case .distribution: "Выплаты партнёрам"
+        }
+    }
+
+    /// Итоговая строка (подытог), а не статья.
+    public var isTotal: Bool { [.grossProfit, .ebitda, .operatingProfit, .netProfit].contains(self) }
+    /// Расход — рост плохо.
+    public var isExpense: Bool { !isTotal && self != .revenue }
+
+    /// Цепочка до чистой прибыли.
+    public static let chain: [PnlLine] = [
+        .revenue, .cogs, .grossProfit, .operating, .pos, .payroll, .payrollTaxes, .ebitda,
+        .depreciation, .operatingProfit, .financial, .tax, .nonOperating, .netProfit,
+    ]
+    /// После чистой прибыли — в ОПиУ не входят.
+    public static let offChain: [PnlLine] = [.capex, .distribution]
+}
+
+public struct PnlIncome: Decodable, Sendable, Hashable {
+    public var cash: Double = 0
+    public var kaspi: Double = 0
+    public var card: Double = 0
+    public var online: Double = 0
+    public init() {}
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        cash = try c.decodeFlexibleDouble(forKey: .cash) ?? 0
+        kaspi = try c.decodeFlexibleDouble(forKey: .kaspi) ?? 0
+        card = try c.decodeFlexibleDouble(forKey: .card) ?? 0
+        online = try c.decodeFlexibleDouble(forKey: .online) ?? 0
+    }
+    private enum CodingKeys: String, CodingKey { case cash, kaspi, card, online }
+}
+
+public struct PnlCategoryAmount: Decodable, Sendable, Hashable, Identifiable {
+    public let name: String
+    public let amount: Double
+    public var id: String { name }
+    public init(name: String, amount: Double) {
+        self.name = name
+        self.amount = amount
+    }
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        name = try c.decodeFlexibleString(forKey: .name) ?? "Без статьи"
+        amount = try c.decodeFlexibleDouble(forKey: .amount) ?? 0
+    }
+    private enum CodingKeys: String, CodingKey { case name, amount }
+}
+
+public struct PnlCheck: Decodable, Sendable, Hashable {
+    public var expensesAll: Double = 0
+    public var declined: Double = 0
+    public var declinedCount: Int = 0
+    public init() {}
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        expensesAll = try c.decodeFlexibleDouble(forKey: .expensesAll) ?? 0
+        declined = try c.decodeFlexibleDouble(forKey: .declined) ?? 0
+        declinedCount = Int(try c.decodeFlexibleDouble(forKey: .declinedCount) ?? 0)
+    }
+    private enum CodingKeys: String, CodingKey { case expensesAll, declined, declinedCount }
+}
+
+/// ОПиУ одной точки.
+public struct PnlCompany: Decodable, Sendable, Identifiable, Hashable {
+    public let id: String
+    public let name: String
+    public let isExtra: Bool
+    public let months: [MonthlyPnl]
+    public let previous: MonthlyPnl?
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeFlexibleString(forKey: .id) ?? ""
+        name = try c.decodeFlexibleString(forKey: .name) ?? "Точка"
+        isExtra = (try? c.decodeIfPresent(Bool.self, forKey: .isExtra)) ?? false
+        months = (try? c.decodeIfPresent([MonthlyPnl].self, forKey: .months)) ?? []
+        previous = try? c.decodeIfPresent(MonthlyPnl.self, forKey: .previous)
+    }
+    private enum CodingKeys: String, CodingKey { case id, name, isExtra, months, previous }
+}
+
+/// Месяц, в котором внесены не все отчёты смен.
+public struct PnlIncompleteMonth: Decodable, Sendable, Hashable {
+    public let month: String
+    public let companyID: String
+    public let company: String
+    public let days: Int
+    public let expectedDays: Int
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        month = try c.decodeFlexibleString(forKey: .month) ?? ""
+        companyID = try c.decodeFlexibleString(forKey: .companyId) ?? ""
+        company = try c.decodeFlexibleString(forKey: .company) ?? "Точка"
+        days = Int(try c.decodeFlexibleDouble(forKey: .days) ?? 0)
+        expectedDays = Int(try c.decodeFlexibleDouble(forKey: .expectedDays) ?? 0)
+    }
+    private enum CodingKeys: String, CodingKey { case month, companyId, company, days, expectedDays }
 }
 
 /// Ответ `GET /api/admin/profitability/summary`.
 public struct PnlReport: Decodable, Sendable {
     public let months: [MonthlyPnl]
+    /// Месяц перед первым показанным — для сравнения.
+    public let previous: MonthlyPnl?
+    public let companies: [PnlCompany]
+    public let incompleteMonths: [PnlIncompleteMonth]
+    /// Отдельные кассы, которые итоги по умолчанию не складывают.
+    public let extraNames: [String]
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         months = (try? c.decodeIfPresent([MonthlyPnl].self, forKey: .months)) ?? []
+        previous = try? c.decodeIfPresent(MonthlyPnl.self, forKey: .previous)
+        companies = (try? c.decodeIfPresent([PnlCompany].self, forKey: .companies)) ?? []
+        incompleteMonths = (try? c.decodeIfPresent([PnlIncompleteMonth].self, forKey: .incompleteMonths)) ?? []
+        extraNames = (try? c.decodeIfPresent(Extra.self, forKey: .extra))?.names ?? []
     }
 
-    private enum CodingKeys: String, CodingKey { case months }
+    private struct Extra: Decodable { let names: [String] }
+    private enum CodingKeys: String, CodingKey { case months, previous, companies, incompleteMonths, extra }
 
     /// Отчёт за произвольный набор месяцев — например, за отфильтрованный
     /// период без пустых месяцев.
     public init(months: [MonthlyPnl]) {
         self.months = months
+        self.previous = nil
+        self.companies = []
+        self.incompleteMonths = []
+        self.extraNames = []
     }
 
     /// Итог по всем месяцам — той же цепочкой строк, что и месяц.

@@ -97,10 +97,9 @@ struct ReceiptsScreen: View {
         .background(Theme.background)
         .navigationTitle(kind.title)
         .toolbar {
-            // Форма пока одна — приёмка от поставщика. Оприходование это
-            // другой документ, без накладной и денег, и делать вид, что кнопка
-            // ведёт туда же, нечестно.
-            if canCreate, kind == .supplier {
+            // Форма одна на оба документа: у оприходования она без
+            // поставщика, накладной и оплаты — как на сайте.
+            if canCreate {
                 ToolbarItem(placement: .primaryAction) {
                     Button { isAdding = true } label: { Image(systemName: "plus") }
                 }
@@ -109,7 +108,7 @@ struct ReceiptsScreen: View {
         }
         .task { await store.loadReceipts() }
         .refreshable { await store.loadReceipts() }
-        .sheet(isPresented: $isAdding) { AddReceiptSheet() }
+        .sheet(isPresented: $isAdding) { AddReceiptSheet(isPosting: kind == .posting) }
     }
 
     private var summary: some View {

@@ -12,6 +12,10 @@ import SwiftUI
 /// сайте: здесь ручной ввод, потому что у машины считают позиции, а не
 /// настраивают правила.
 struct AddReceiptSheet: View {
+    /// Оприходование — те же позиции, но без поставщика, накладной и оплаты:
+    /// товар нашёлся на месте, а не куплен.
+    var isPosting = false
+
     @Environment(BusinessStore.self) private var store
     @Environment(\.dismiss) private var dismiss
 
@@ -41,16 +45,16 @@ struct AddReceiptSheet: View {
         NavigationStack {
             ScreenScroll {
                 VStack(spacing: Spacing.lg) {
-                    scanCard
+                    if !isPosting { scanCard }
                     headerCard
-                    paymentCard
+                    if !isPosting { paymentCard }
                     linesCard
                     pickerCard
                     footer
                 }
             }
             .background(Theme.background)
-            .navigationTitle("Приёмка")
+            .navigationTitle(isPosting ? "Оприходование" : "Приёмка")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -208,7 +212,7 @@ struct AddReceiptSheet: View {
     private var headerCard: some View {
         Card {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                FieldLabel("Куда принимаем")
+                FieldLabel(isPosting ? "Куда оприходовать" : "Куда принимаем")
                 Picker("Место", selection: $draft.locationID) {
                     Text("Не выбрано").tag("")
                     ForEach(locations) { location in
@@ -217,20 +221,22 @@ struct AddReceiptSheet: View {
                 }
                 .pickerStyle(.menu)
 
-                FieldLabel("Поставщик")
-                Picker("Поставщик", selection: $draft.supplierID) {
-                    Text("Не выбран").tag("")
-                    ForEach(suppliers, id: \.id) { supplier in
-                        Text(supplier.name).tag(supplier.id)
+                if !isPosting {
+                    FieldLabel("Поставщик")
+                    Picker("Поставщик", selection: $draft.supplierID) {
+                        Text("Не выбран").tag("")
+                        ForEach(suppliers, id: \.id) { supplier in
+                            Text(supplier.name).tag(supplier.id)
+                        }
                     }
+                    .pickerStyle(.menu)
                 }
-                .pickerStyle(.menu)
 
-                DatePicker("Дата поставки", selection: $receivedAt, in: ...Date(), displayedComponents: .date)
+                DatePicker(isPosting ? "Дата" : "Дата поставки", selection: $receivedAt, in: ...Date(), displayedComponents: .date)
                     .font(Typography.callout)
 
-                FieldLabel("Номер накладной")
-                TextField("Необязательно", text: $draft.invoiceNumber)
+                FieldLabel(isPosting ? "Комментарий" : "Номер накладной")
+                TextField(isPosting ? "Откуда взялся товар — необязательно" : "Необязательно", text: isPosting ? $draft.comment : $draft.invoiceNumber)
                     .textFieldStyle(.plain)
                     .font(Typography.callout)
                     .foregroundStyle(Theme.text)
@@ -277,16 +283,16 @@ struct AddReceiptSheet: View {
         if !draft.lines.isEmpty {
             Card {
                 VStack(alignment: .leading, spacing: Spacing.md) {
-                    SectionHeader("В накладной", subtitle: "\(draft.lines.count) \(pluralize(draft.lines.count, "позиция", "позиции", "позиций"))")
+                    SectionHeader(isPosting ? "Позиции" : "В накладной", subtitle: "\(draft.lines.count) \(pluralize(draft.lines.count, "позиция", "позиции", "позиций"))")
 
                     ForEach($draft.lines) { $line in
-                        ReceiptLineEditor(line: $line) {
+                        ReceiptLineEditor(line: $line, isPosting: isPosting) {
                             draft.lines.removeAll { $0.itemID == line.itemID }
                         }
                         RowDivider()
                     }
 
-                    StatRow("Сумма накладной", value: Money.format(prepared.total), emphasized: true)
+                    StatRow(isPosting ? "На сумму" : "Сумма накладной", value: Money.format(prepared.total), emphasized: true)
                     if prepared.bonusCount > 0 {
                         // Бонус не входит в сумму: это подарок поставщика, и
                         // включать его значит завысить себестоимость.
@@ -341,7 +347,7 @@ struct AddReceiptSheet: View {
 
     @ViewBuilder
     private var footer: some View {
-        if let blocker = prepared.validationMessage {
+        if let blocker = blockingMessage {
             Text(blocker)
                 .font(Typography.callout)
                 .foregroundStyle(Theme.warning)
@@ -355,17 +361,24 @@ struct AddReceiptSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
 
-        Button(isSaving ? "Принимаем…" : "Принять") {
+        Button(isSaving ? (isPosting ? "Оприходуем…" : "Принимаем…") : (isPosting ? "Оприходовать" : "Принять")) {
             Task { await save() }
         }
         .buttonStyle(PrimaryButtonStyle())
-        .disabled(isSaving || !prepared.isValid)
+        .disabled(isSaving || blockingMessage != nil)
     }
 
     // ── Данные ───────────────────────────────────────────────────────────────
 
+    private var blockingMessage: String? {
+        isPosting ? prepared.postingValidationMessage : prepared.validationMessage
+    }
+
+    /// Оприходовать сервер разрешает только на склад или витрину.
     private var locations: [StoreLocation] {
-        (store.store?.locations ?? []).filter { $0.kind != "catalog" }
+        (store.store?.locations ?? []).filter {
+            isPosting ? ($0.kind == "warehouse" || $0.kind == "point_display") : $0.kind != "catalog"
+        }
     }
 
     private var suppliers: [(id: String, name: String)] {
@@ -410,7 +423,7 @@ struct AddReceiptSheet: View {
         errorMessage = nil
 
         let companyID = store.companies.count == 1 ? store.companies[0].id : nil
-        if await store.createReceipt(prepared, companyID: companyID) {
+        if await store.createReceipt(prepared, companyID: companyID, posting: isPosting) {
             Haptics.success()
             dismiss()
         } else {
@@ -430,6 +443,7 @@ struct AddReceiptSheet: View {
 /// Строка накладной: количество, цена, наценка.
 private struct ReceiptLineEditor: View {
     @Binding var line: ReceiptLine
+    var isPosting = false
     let onDelete: () -> Void
 
     @State private var salePrice = ""
@@ -451,15 +465,17 @@ private struct ReceiptLineEditor: View {
 
             NumberField(title: "Количество, \(line.unit)", value: $line.quantity)
 
-            Toggle(isOn: $line.isBonus) {
-                Text("Бонус от поставщика")
-                    .font(Typography.callout)
-                    .foregroundStyle(Theme.textMuted)
+            if !isPosting {
+                Toggle(isOn: $line.isBonus) {
+                    Text("Бонус от поставщика")
+                        .font(Typography.callout)
+                        .foregroundStyle(Theme.textMuted)
+                }
             }
 
             // У бонуса цены нет по определению — поле только мешало бы.
             if !line.isBonus {
-                NumberField(title: "Цена закупки", value: $line.unitCost)
+                NumberField(title: isPosting ? "Себестоимость (необязательно)" : "Цена закупки", value: $line.unitCost)
 
                 MoneyField(title: "Новая цена продажи", text: $salePrice)
                     .onChange(of: salePrice) { _, value in

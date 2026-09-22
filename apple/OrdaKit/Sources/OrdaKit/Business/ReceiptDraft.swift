@@ -128,6 +128,35 @@ public struct ReceiptDraft: Sendable, Equatable {
 
     public var isValid: Bool { validationMessage == nil }
 
+    /// Что мешает провести оприходование: без поставщика, оплаты и цены —
+    /// это излишки, найденные на месте, а не покупка.
+    public var postingValidationMessage: String? {
+        if locationID.isEmpty { return "Выберите, куда оприходовать" }
+        if lines.isEmpty { return "Добавьте хотя бы одну позицию" }
+        if lines.contains(where: { $0.quantity <= 0 }) {
+            return "У каждой позиции должно быть количество"
+        }
+        return nil
+    }
+
+    func postingPayload() -> PostingPayload {
+        let trimmed = comment.trimmingCharacters(in: .whitespacesAndNewlines)
+        return PostingPayload(
+            locationID: locationID,
+            receivedAt: receivedAt,
+            comment: trimmed.isEmpty ? nil : trimmed,
+            items: lines.map {
+                PostingItemPayload(
+                    itemID: $0.itemID,
+                    quantity: $0.quantity,
+                    unitCost: $0.unitCost,
+                    salePrice: $0.salePrice,
+                    expiryDate: $0.expiryDate
+                )
+            }
+        )
+    }
+
     func payload() -> ReceiptPayload {
         ReceiptPayload(
             locationID: locationID,
@@ -197,6 +226,47 @@ struct ReceiptPayload: Encodable {
         case paymentMode = "payment_mode"
         case isConsignment = "is_consignment"
         case dueDate = "due_date"
+    }
+}
+
+struct PostingItemPayload: Encodable {
+    let itemID: String
+    let quantity: Double
+    let unitCost: Double
+    let salePrice: Double?
+    let expiryDate: String?
+
+    enum CodingKeys: String, CodingKey {
+        case quantity
+        case itemID = "item_id"
+        case unitCost = "unit_cost"
+        case salePrice = "sale_price"
+        case expiryDate = "expiry_date"
+    }
+}
+
+struct PostingPayload: Encodable {
+    let locationID: String
+    let receivedAt: String
+    let comment: String?
+    let items: [PostingItemPayload]
+
+    enum CodingKeys: String, CodingKey {
+        case comment, items
+        case locationID = "location_id"
+        case receivedAt = "received_at"
+    }
+}
+
+/// Тот же запрос, что шлёт сайт со страницы «Оприходование».
+struct PostingCreateRequest: Encodable {
+    let action = "createPosting"
+    let posting: PostingPayload
+    let companyID: String?
+
+    enum CodingKeys: String, CodingKey {
+        case action, posting
+        case companyID = "company_id"
     }
 }
 

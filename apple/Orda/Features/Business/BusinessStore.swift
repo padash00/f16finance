@@ -107,20 +107,6 @@ final class BusinessStore {
         }
     }
 
-    private(set) var pnl: PnlReport?
-    private(set) var isLoadingPnl = false
-    private(set) var pnlError: APIError?
-
-    /// Период ОПиУ. По умолчанию двенадцать месяцев — полный год для
-    /// сравнения сезонов. ОПиУ помесячный: свои даты расширяются до целых
-    /// месяцев, в которые попадают.
-    var pnlPeriod: AnalyticsPeriod = .last12Months {
-        didSet {
-            guard oldValue != pnlPeriod else { return }
-            Task { await loadPnl() }
-        }
-    }
-
     private(set) var devices: PointProjectList?
     private(set) var isLoadingDevices = false
     private(set) var devicesError: APIError?
@@ -362,9 +348,13 @@ final class BusinessStore {
 
     private(set) var receiptSaveError: String?
 
-    func createReceipt(_ draft: ReceiptDraft, companyID: String?) async -> Bool {
+    func createReceipt(_ draft: ReceiptDraft, companyID: String?, posting: Bool = false) async -> Bool {
         do {
-            try await service.createReceipt(draft, companyID: companyID)
+            if posting {
+                try await service.createPosting(draft, companyID: companyID)
+            } else {
+                try await service.createReceipt(draft, companyID: companyID)
+            }
             // Приёмка меняет остатки и, если в долг, долги поставщикам.
             await loadReceipts()
             await loadStore()
@@ -842,21 +832,6 @@ final class BusinessStore {
             debtsError = error
         } catch {
             debtsError = .transport(message: error.localizedDescription)
-        }
-    }
-
-    func loadPnl() async {
-        isLoadingPnl = true
-        defer { isLoadingPnl = false }
-        let days = pnlPeriod.bounds()
-        let bounds = (from: String(days.from.prefix(7)), to: String(days.to.prefix(7)))
-        do {
-            pnl = try await service.pnl(from: bounds.from, to: bounds.to, includeExtra: ExtraCashPreference.shared.includeExtra)
-            pnlError = nil
-        } catch let error as APIError {
-            pnlError = error
-        } catch {
-            pnlError = .transport(message: error.localizedDescription)
         }
     }
 

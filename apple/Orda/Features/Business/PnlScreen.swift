@@ -2,517 +2,531 @@ import OrdaKit
 import OrdaUI
 import SwiftUI
 
-/// ОПиУ и EBITDA по месяцам.
-///
-/// Отличается от «Отчётов» тем, что показывает не оборот, а прибыль по всей
-/// цепочке — от выручки до чистой. Владельцу это нужно для разговора с
-/// инвестором и банком, где оборот значения не имеет.
-///
-/// Отчёт развёрнут в две стороны. Вниз — цепочка строк: каждая следующая
-/// величина получается вычитанием предыдущей, и порядок здесь не оформление, а
-/// сам отчёт. Вбок — доля каждой строки в выручке: «ФОТ 480 000 ₸» ничего не
-/// говорит, пока не видно, что это 26 % выручки, и что в прошлом месяце было
-/// 19 %.
-///
-/// Все величины приходят с сервера посчитанными: формула одна на сайт и
-/// приложение, иначе EBITDA в двух местах разошлась бы. Суммы за период
-/// складываются здесь — период выбирает владелец, сервер отдаёт месяцы.
-struct PnlScreen: View {
-    @Environment(BusinessStore.self) private var store
-    @Environment(\.access) private var access
+/// Загрузка ОПиУ за месяц вместе с прошлым месяцем.
+@MainActor
+@Observable
+final class PnlStore {
+    private(set) var report: PnlReport?
+    private(set) var error: APIError?
+    private(set) var isLoading = false
 
-    @State private var selected: MonthlyPnl?
-    /// Месяц, который правим. Не флаг: лист должен знать, за какой именно
-    /// месяц загружать строку.
-    @State private var editingMonth: EditingMonth?
-
-    /// Право `profitability.edit` проверяет и сервер.
-    private var canEdit: Bool {
-        access?.can("profitability.edit") ?? false
+    /// Месяц отчёта `YYYY-MM`. По умолчанию прошлый — полный: в идущем
+    /// месяце прибыль всегда «хуже», чем будет.
+    var month: String = PnlStore.shift(PnlPeriod.monthString(Date()), by: -1) {
+        didSet { if oldValue != month { reload() } }
     }
 
-    var body: some View {
-        @Bindable var bindable = store
+    private let service: BusinessService
+    private var generation = 0
 
-        return ScreenScroll {
+    init(api: APIClient) { service = BusinessService(api: api) }
+
+    func reload() { Task { await load() } }
+
+    func load() async {
+        generation += 1
+        let mine = generation
+        isLoading = true
+        defer { if mine == generation { isLoading = false } }
+        do {
+            let result = try await service.pnl(
+                from: month,
+                to: month,
+                includeExtra: ExtraCashPreference.shared.includeExtra,
+                withPrevious: true
+            )
+            guard mine == generation else { return }
+            report = result
+            error = nil
+        } catch let apiError as APIError {
+            if mine == generation { error = apiError }
+        } catch {
+            if mine == generation { self.error = .transport(message: error.localizedDescription) }
+        }
+    }
+
+    static func shift(_ month: String, by offset: Int) -> String {
+        let parts = month.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 2 else { return month }
+        let total = parts[0] * 12 + (parts[1] - 1) + offset
+        return String(format: "%04d-%02d", total / 12, total % 12 + 1)
+    }
+
+    static func title(_ month: String) -> String {
+        let names = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"]
+        let parts = month.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 2, (1...12).contains(parts[1]) else { return month }
+        return "\(names[parts[1] - 1]) \(parts[0])"
+    }
+}
+
+/// ОПиУ — как на сайте (`app/(main)/profitability`): месяц против прошлого,
+/// строки отчёта раскрываются до статей, под отчётом — сверка с «Доходами» и
+/// «Расходами» и разбивка по точкам.
+///
+/// Считает сервер (`lib/domain/profitability-report`) — только из журналов
+/// доходов и расходов, те же цифры, что на сайте и в PDF.
+struct PnlScreen: View {
+    @Environment(\.api) private var api
+    @State private var store: PnlStore?
+    /// Точка отчёта; пусто — все точки.
+    @State private var companyID: String?
+    @State private var expanded: Set<PnlLine> = []
+
+    var body: some View {
+        ScrollView {
             VStack(spacing: Spacing.lg) {
-                PeriodBar(
-                    selection: $bindable.pnlPeriod,
-                    quick: [.thisMonth, .thisQuarter, .thisYear, .last12Months],
-                    trailing: AnyView(Text("по целым месяцам")),
-                    showsExtra: true
-                )
-                if let error = store.pnlError, store.pnl == nil {
-                    ErrorStateView(error: error) { Task { await store.loadPnl() } }
-                } else if let report = store.pnl {
-                    content(report)
+                if let store {
+                    monthBar(store)
+                    filters(store)
+                    if let report = store.report {
+                        content(report, store: store)
+                    } else if let error = store.error {
+                        ErrorStateView(error: error) { store.reload() }
+                    } else {
+                        loading
+                    }
                 } else {
-                    VStack(spacing: Spacing.lg) {
-                        Skeleton(height: 96, cornerRadius: Radius.lg)
-                        Skeleton(height: 240, cornerRadius: Radius.lg)
-                        Skeleton(height: 200, cornerRadius: Radius.lg)
+                    loading
+                }
+            }
+            .padding(.horizontal, Spacing.lg)
+            .padding(.bottom, Spacing.xxl)
+            .frame(maxWidth: 720)
+            .frame(maxWidth: .infinity)
+        }
+        .background(Theme.background)
+        .navigationTitle("ОПиУ")
+        .toolbar { LogoutToolbarItem() }
+        .task {
+            if store == nil {
+                let created = PnlStore(api: api)
+                store = created
+                await created.load()
+            }
+        }
+        .refreshable { await store?.load() }
+        .onChange(of: ExtraCashPreference.shared.includeExtra) { _, _ in store?.reload() }
+    }
+
+    private var loading: some View {
+        VStack(spacing: Spacing.lg) {
+            Skeleton(height: 190, cornerRadius: 28)
+            Skeleton(height: 420, cornerRadius: 22)
+        }
+    }
+
+    // ── Месяц и фильтры ──────────────────────────────────────────────────────
+
+    private func monthBar(_ store: PnlStore) -> some View {
+        let current = PnlPeriod.monthString(Date())
+        return HStack(spacing: Spacing.md) {
+            stepButton("chevron.left", enabled: true) { store.month = PnlStore.shift(store.month, by: -1) }
+            Spacer()
+            Menu {
+                ForEach(0..<36, id: \.self) { offset in
+                    let month = PnlStore.shift(current, by: -offset)
+                    Button(PnlStore.title(month)) { store.month = month }
+                }
+            } label: {
+                VStack(spacing: 1) {
+                    HStack(spacing: 4) {
+                        Text(PnlStore.title(store.month))
+                            .font(.system(size: 17, weight: .bold, design: .rounded))
+                        Image(systemName: "chevron.down").font(.system(size: 10, weight: .bold))
+                    }
+                    .foregroundStyle(Theme.text)
+                    if store.month == current {
+                        Text("месяц идёт")
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.warning)
                     }
                 }
             }
+            Spacer()
+            stepButton("chevron.right", enabled: store.month < current) { store.month = PnlStore.shift(store.month, by: 1) }
         }
-        .background(Theme.background)
-        .onChange(of: ExtraCashPreference.shared.includeExtra) { _, _ in Task { await store.loadPnl() } }
-        .navigationTitle("ОПиУ и EBITDA")
-        .toolbar { LogoutToolbarItem() }
-        .task { await store.loadPnl() }
-        .refreshable { await store.loadPnl() }
-        .sheet(item: $editingMonth) { target in
-            ProfitabilityInputSheet(month: target.id)
-                // Сохранённые вводы меняют EBITDA — пересчитываем сразу,
-                // иначе владелец увидит прежнюю цифру и решит, что не
-                // сохранилось.
-                .onDisappear { Task { await store.loadPnl() } }
+    }
+
+    private func stepButton(_ icon: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(enabled ? Theme.text : Theme.textDim.opacity(0.5))
+                .frame(width: 44, height: 44)
+                .background(Theme.surface, in: Circle())
         }
+        .buttonStyle(.pressable)
+        .disabled(!enabled)
     }
 
     @ViewBuilder
-    private func content(_ report: PnlReport) -> some View {
-        // Месяцы без выручки и без расходов скрываем: это будущее или
-        // период до начала работы, и нули в таблице только мешают.
-        let months = report.months.filter { $0.revenue != 0 || $0.netProfit != 0 }
-
-        if months.isEmpty {
-            WideEmptyState(
-                icon: "chart.pie",
-                title: "Данных пока нет",
-                message: "ОПиУ появится, когда в журналах будут доходы и расходы."
-            )
-        } else {
-            let totals = PnlReport(months: months).totals
-
-            VStack(spacing: Spacing.lg) {
-                tiles(totals)
-                payrollNotice(months)
-                periodReport(totals, months: months)
-                revenueSplit(totals)
-                trend(months)
-                monthList(months)
+    private func filters(_ store: PnlStore) -> some View {
+        let companies = store.report?.companies ?? []
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            if companies.count > 1 {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: Spacing.sm) {
+                        chip("Все точки", isOn: companyID == nil) { companyID = nil }
+                        ForEach(companies) { company in
+                            chip(company.name, isOn: companyID == company.id) {
+                                companyID = companyID == company.id ? nil : company.id
+                            }
+                        }
+                    }
+                }
+                .scrollClipDisabled()
             }
+            // Экстра-касса имеет смысл только для итога по всем точкам.
+            if companyID == nil { ExtraCashToggle() }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func chip(_ title: String, isOn: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            withAnimation(Motion.tap) { action() }
+        } label: {
+            Text(title)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(isOn ? .white : Theme.text)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(isOn ? AnyShapeStyle(Theme.text) : AnyShapeStyle(Theme.surface), in: Capsule())
+        }
+        .buttonStyle(.pressable)
+    }
+
+    // ── Содержимое ───────────────────────────────────────────────────────────
+
+    @ViewBuilder
+    private func content(_ report: PnlReport, store: PnlStore) -> some View {
+        let company = companyID.flatMap { id in report.companies.first { $0.id == id } }
+        let current = company?.months.first ?? (companyID == nil ? report.months.first : nil)
+        let previous = companyID == nil ? report.previous : company?.previous
+        let incomplete = report.incompleteMonths.filter { companyID == nil || $0.companyID == companyID }
+
+        if !incomplete.isEmpty {
+            HStack(alignment: .top, spacing: Spacing.md) {
+                TintedIcon(systemName: "exclamationmark.triangle.fill", tint: Theme.warning, size: 36)
+                Text("Месяц внесён не полностью: " + incomplete.map { "\($0.company) — \($0.days) дн. из \($0.expectedDays)" }.joined(separator: ", ") + ". Выручка и прибыль вырастут, когда внесут отчёты смен.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Theme.text)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(Spacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.warning.opacity(0.12), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+
+        if let current {
+            hero(current, previous: previous)
+            statement(current, previous: previous)
+            reconciliation(current, companyName: company?.name, extraNames: report.extraNames)
+            if companyID == nil && report.companies.count > 1 {
+                companiesCard(report)
+            }
+        } else {
+            EmptyStateView(
+                icon: "chart.pie",
+                title: "Данных нет",
+                message: company.map { "У точки \($0.name) за этот месяц нет ни доходов, ни расходов." } ?? "За этот месяц нет ни доходов, ни расходов."
+            )
         }
     }
 
-    // ── Верхние показатели ───────────────────────────────────────────────────
+    // ── Главная цифра ────────────────────────────────────────────────────────
 
-    private func tiles(_ totals: PnlTotals) -> some View {
-        // Главная цифра ОПиУ — сколько осталось в итоге; остальное — её
-        // расшифровка по ступеням отчёта.
-        HeroSummary(
+    private func hero(_ current: MonthlyPnl, previous: MonthlyPnl?) -> some View {
+        let change = previous.flatMap { Percent.change(current: current.netProfit, previous: $0.netProfit) }
+        return HeroSummary(
             title: "Чистая прибыль",
-            value: Money.format(totals.netProfit),
-            caption: "маржа \(Percent.format(totals.netMargin)) от выручки",
+            value: Money.format(current.netProfit),
+            caption: [
+                "маржа \(Percent.format(current.netMargin))",
+                change.map { "\(Percent.format($0, signed: true)) к \(PnlStore.title(previous!.month).lowercased())" },
+            ].compactMap { $0 }.joined(separator: " · "),
             footer: [
-                ("Выручка", Money.format(totals.revenue)),
-                ("Валовая", Money.format(totals.grossProfit)),
-                ("EBITDA · \(Percent.format(totals.ebitdaMargin))", Money.format(totals.ebitda)),
+                ("Выручка", Money.format(current.revenue)),
+                ("EBITDA · \(Percent.format(current.ebitdaMargin))", Money.format(current.ebitda)),
+                ("Валовая", Money.format(current.grossProfit)),
             ],
-            colors: totals.netProfit >= 0
+            colors: current.netProfit >= 0
                 ? [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
                 : [Color(hex: 0xDC2626), Color(hex: 0x9F1239)]
         )
     }
 
-    /// Предупреждение о незаполненном ФОТ.
-    ///
-    /// Зарплата не выводится из журнала расходов — её задают руками. Пока не
-    /// задали, EBITDA завышена ровно на фонд оплаты труда, а выглядит она при
-    /// этом совершенно обычно. Молчать об этом нельзя: на такую цифру смотрят
-    /// в разговоре с банком.
-    @ViewBuilder
-    private func payrollNotice(_ months: [MonthlyPnl]) -> some View {
-        let empty = months.filter { !$0.hasManualPayroll }
-        if !empty.isEmpty {
-            Card(accent: Theme.warning) {
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    Label("EBITDA завышена", systemImage: "exclamationmark.triangle")
-                        .font(Typography.callout.weight(.semibold))
-                        .foregroundStyle(Theme.warning)
-                    Text(noticeText(empty))
-                        .font(Typography.caption)
-                        .foregroundStyle(Theme.textMuted)
-                    if canEdit, let first = empty.first {
-                        Button("Заполнить за \(first.label)") {
-                            editingMonth = EditingMonth(first.month)
-                        }
-                        .buttonStyle(SecondaryButtonStyle())
-                    }
-                }
-            }
+    // ── Отчёт ────────────────────────────────────────────────────────────────
+
+    /// Цепочка как на сайте. Пустые статьи не показываем, итоги — всегда.
+    private func statement(_ current: MonthlyPnl, previous: MonthlyPnl?) -> some View {
+        let lines = PnlLine.chain.filter { line in
+            line.isTotal || line == .revenue
+                || current.value(line).rounded() != 0
+                || (previous?.value(line).rounded() ?? 0) != 0
         }
-    }
-
-    private func noticeText(_ empty: [MonthlyPnl]) -> String {
-        let names = empty.prefix(3).map(\.label).joined(separator: ", ")
-        let tail = empty.count > 3 ? " и ещё \(empty.count - 3)" : ""
-        return "Фонд оплаты труда и налоги с него задаются вручную — из журнала расходов они не выводятся. Не заполнены: \(names)\(tail). Пока их нет, EBITDA и чистая прибыль за эти месяцы выше настоящих."
-    }
-
-    // ── Отчёт за период ──────────────────────────────────────────────────────
-
-    /// Та же цепочка, что у месяца, но сложенная за весь период.
-    ///
-    /// Раньше period показывался четырьмя плитками, а сам отчёт — только внутри
-    /// раскрытого месяца. Чтобы увидеть годовые расходы на ФОТ, приходилось
-    /// открывать двенадцать месяцев подряд и складывать в уме.
-    private func periodReport(_ totals: PnlTotals, months: [MonthlyPnl]) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                SectionHeader(
-                    "Отчёт за период",
-                    subtitle: "\(months.count) \(pluralize(months.count, "месяц", "месяца", "месяцев")) · доля от выручки"
-                )
-
-                PnlRow("Выручка", amount: totals.revenue, share: 100, icon: "arrow.down")
-                if totals.cogs > 0 {
-                    PnlRow("Себестоимость", amount: -totals.cogs, share: totals.share(totals.cogs))
-                }
-                PnlRow("Валовая прибыль", amount: totals.grossProfit, share: totals.grossMargin, emphasized: true)
-
-                RowDivider()
-
-                if totals.operatingExpenses > 0 {
-                    PnlRow("Операционные", amount: -totals.operatingExpenses, share: totals.share(totals.operatingExpenses))
-                }
-                if totals.posCommission > 0 {
-                    PnlRow("Комиссии эквайринга", amount: -totals.posCommission, share: totals.share(totals.posCommission))
-                }
-                if totals.payroll > 0 {
-                    PnlRow("Фонд оплаты труда", amount: -totals.payroll, share: totals.share(totals.payroll))
-                }
-                if totals.payrollTaxes > 0 {
-                    PnlRow("Налоги с ФОТ", amount: -totals.payrollTaxes, share: totals.share(totals.payrollTaxes))
-                }
-                if totals.otherOperating > 0 {
-                    PnlRow("Прочие операционные", amount: -totals.otherOperating, share: totals.share(totals.otherOperating))
-                }
-
-                PnlRow("EBITDA", amount: totals.ebitda, share: totals.ebitdaMargin, emphasized: true)
-
-                if totals.depreciation > 0 || totals.amortization > 0 {
-                    RowDivider()
-                    if totals.depreciation > 0 {
-                        PnlRow("Износ", amount: -totals.depreciation, share: totals.share(totals.depreciation))
-                    }
-                    if totals.amortization > 0 {
-                        PnlRow("Амортизация", amount: -totals.amortization, share: totals.share(totals.amortization))
-                    }
-                    PnlRow("Операционная прибыль", amount: totals.operatingProfit, share: totals.share(totals.operatingProfit), emphasized: true)
-                }
-
-                if totals.financialExpenses > 0 {
-                    PnlRow("Финансовые расходы", amount: -totals.financialExpenses, share: totals.share(totals.financialExpenses))
-                }
-                if totals.incomeTax > 0 {
-                    PnlRow("Налог на прибыль", amount: -totals.incomeTax, share: totals.share(totals.incomeTax))
-                }
-                if totals.nonOperating > 0 {
-                    PnlRow("Неоперационные", amount: -totals.nonOperating, share: totals.share(totals.nonOperating))
-                }
-
-                PnlRow("Чистая прибыль", amount: totals.netProfit, share: totals.netMargin, emphasized: true)
-
-                // CAPEX и дивиденды в отчёт не входят: первое — вложение,
-                // второе происходит уже после чистой прибыли. Но владельцу
-                // важно видеть, что деньги ушли и туда.
-                if totals.capex > 0 || totals.profitDistribution > 0 {
-                    RowDivider()
-                    Text("Вне отчёта")
-                        .font(Typography.label)
-                        .foregroundStyle(Theme.textDim)
-                    if totals.capex > 0 {
-                        PnlRow("Вложения (CAPEX)", amount: totals.capex, share: totals.share(totals.capex), icon: "hammer")
-                    }
-                    if totals.profitDistribution > 0 {
-                        PnlRow("Распределение прибыли", amount: totals.profitDistribution, share: totals.share(totals.profitDistribution), icon: "arrow.up.forward")
-                    }
-                }
-            }
-        }
-    }
-
-    /// Чем платят.
-    ///
-    /// Доля наличных — это не любопытство: от неё зависит и комиссия
-    /// эквайринга, и то, сколько денег физически лежит в кассе к инкассации.
-    @ViewBuilder
-    private func revenueSplit(_ totals: PnlTotals) -> some View {
-        if totals.cashRevenue > 0 || totals.cashlessRevenue > 0 {
-            Card {
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    SectionHeader("Чем платили", subtitle: "за весь период")
-                    PnlRow("Наличными", amount: totals.cashRevenue, share: totals.share(totals.cashRevenue), icon: "banknote")
-                    PnlRow("Безналично", amount: totals.cashlessRevenue, share: totals.share(totals.cashlessRevenue), icon: "creditcard")
-                }
-            }
-        }
-    }
-
-    // ── Месяцы ───────────────────────────────────────────────────────────────
-
-    private func monthList(_ months: [MonthlyPnl]) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("По месяцам", subtitle: "нажмите месяц, чтобы раскрыть")
-
-                ForEach(Array(months.enumerated()), id: \.element.id) { index, month in
-                    if index > 0 { RowDivider() }
-                    Button {
-                        // Повторное нажатие сворачивает: раскрытая
-                        // строка — это состояние, а не переход.
-                        selected = selected?.id == month.id ? nil : month
-                    } label: {
-                        MonthRow(
-                            month: month,
-                            previous: index > 0 ? months[index - 1] : nil,
-                            isExpanded: selected?.id == month.id
-                        )
-                    }
-                    .buttonStyle(.pressable)
-
-                    if selected?.id == month.id {
-                        MonthBreakdown(month: month)
-
-                        // ФОТ, налоги, амортизация и комиссии банка ни
-                        // из чего не выводятся — их задают руками. Без
-                        // них EBITDA считается по неполной картине, и
-                        // отправлять за этим на сайт означает, что
-                        // цифре в приложении нельзя верить.
-                        if canEdit {
-                            Button("Заполнить ФОТ, налоги и эквайринг") {
-                                editingMonth = EditingMonth(month.month)
-                            }
-                            .buttonStyle(SecondaryButtonStyle())
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func trend(_ months: [MonthlyPnl]) -> some View {
-        let points = months.compactMap { month -> TimePoint? in
-            guard let date = month.date else { return nil }
-            return TimePoint(label: month.label, date: date, value: month.ebitda)
-        }
-
-        return Group {
-            if points.count > 1 {
-                TrendChart(
-                    title: "EBITDA по месяцам",
-                    subtitle: "прибыль до износа, процентов и налогов",
-                    points: points,
-                    color: ChartPalette.series2
-                )
-            }
-        }
-    }
-}
-
-/// Строка отчёта: название, сумма и доля в выручке.
-///
-/// Доля стоит под суммой, а не отдельной колонкой: на телефоне три колонки
-/// сжимают названия статей до многоточия, и отчёт перестаёт читаться.
-private struct PnlRow: View {
-    private let label: String
-    private let amount: Double
-    private let share: Double?
-    private let icon: String?
-    private let isEmphasized: Bool
-
-    init(
-        _ label: String,
-        amount: Double,
-        share: Double?,
-        icon: String? = nil,
-        emphasized: Bool = false
-    ) {
-        self.label = label
-        self.amount = amount
-        self.share = share
-        self.icon = icon
-        self.isEmphasized = emphasized
-    }
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Spacing.md) {
-            if let icon {
-                Image(systemName: icon)
+        let offLines = PnlLine.offChain.filter { current.value($0).rounded() != 0 || (previous?.value($0).rounded() ?? 0) != 0 }
+        return OwnerSection("Отчёт") {
+            if let previous {
+                Text("к \(PnlStore.title(previous.month).lowercased())")
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.textDim)
-                    .frame(width: 18)
             }
-            Text(label)
-                .font(isEmphasized ? Typography.callout.weight(.semibold) : Typography.callout)
-                .foregroundStyle(isEmphasized ? Theme.text : Theme.textMuted)
-
-            Spacer(minLength: Spacing.sm)
-
-            VStack(alignment: .trailing, spacing: 1) {
-                Text(amount < 0 ? Money.signed(amount) : Money.format(amount))
-                    .font(isEmphasized ? Typography.headline : Typography.callout.weight(.medium))
-                    .monospacedDigit()
-                    .foregroundStyle(valueColor)
-                if let share {
-                    Text(Percent.format(share))
-                        .font(Typography.caption)
-                        .monospacedDigit()
-                        .foregroundStyle(Theme.textDim)
+        } content: {
+            VStack(spacing: 0) {
+                ForEach(lines, id: \.self) { line in
+                    lineRow(line, current: current, previous: previous)
                 }
+                if !offLines.isEmpty {
+                    Text("После чистой прибыли — в ОПиУ не входят")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Theme.warning)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, Spacing.md)
+                        .padding(.bottom, Spacing.xs)
+                    ForEach(offLines, id: \.self) { line in
+                        lineRow(line, current: current, previous: previous)
+                    }
+                    totalRow(
+                        "Остаётся после покупок и выплат",
+                        value: current.leftover,
+                        previous: previous?.leftover,
+                        revenue: current.revenue,
+                        isFinal: false
+                    )
+                }
+                Text("Нажмите на строку, чтобы увидеть статьи")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textDim)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, Spacing.md)
             }
         }
-        .padding(.vertical, 1)
     }
 
-    /// Красным — только расходы и убыток. Итоговые строки красим по знаку,
-    /// промежуточные оставляем спокойными: если покрасить всё, глаз перестаёт
-    /// различать, где действительно плохо.
-    private var valueColor: Color {
-        if amount < 0 { return Theme.negative }
-        if isEmphasized { return Theme.positive }
-        return Theme.text
+    @ViewBuilder
+    private func lineRow(_ line: PnlLine, current: MonthlyPnl, previous: MonthlyPnl?) -> some View {
+        if line.isTotal {
+            totalRow(line.title, value: current.value(line), previous: previous?.value(line), revenue: current.revenue, isFinal: line == .netProfit)
+        } else {
+            let parts = mergedParts(line, current: current, previous: previous)
+            let isOpen = expanded.contains(line)
+            let value = current.value(line)
+            let prev = previous?.value(line)
+            VStack(spacing: 0) {
+                Button {
+                    guard !parts.isEmpty else { return }
+                    withAnimation(Motion.transition) {
+                        if isOpen { expanded.remove(line) } else { expanded.insert(line) }
+                    }
+                } label: {
+                    HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(Theme.textDim)
+                            .rotationEffect(.degrees(isOpen ? 90 : 0))
+                            .opacity(parts.isEmpty ? 0 : 1)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(line.title)
+                                .font(.system(size: 15, weight: line == .revenue ? .semibold : .regular))
+                                .foregroundStyle(Theme.text)
+                            Text(share(value, of: current.revenue))
+                                .font(.system(size: 12))
+                                .foregroundStyle(Theme.textDim)
+                        }
+                        Spacer(minLength: Spacing.sm)
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text((line.isExpense && value.rounded() != 0 ? "−" : "") + Money.format(value))
+                                .font(.system(size: 15, weight: line == .revenue ? .semibold : .medium, design: .rounded))
+                                .monospacedDigit()
+                                .foregroundStyle(line.isExpense ? Theme.textMuted : Theme.text)
+                            if let prev {
+                                deltaText(value - prev, expense: line.isExpense)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 10)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                if isOpen {
+                    VStack(spacing: 6) {
+                        ForEach(parts, id: \.name) { part in
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(part.name)
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(Theme.textMuted)
+                                    .lineLimit(1)
+                                Spacer(minLength: Spacing.sm)
+                                Text(Money.format(part.cur))
+                                    .font(.system(size: 13, weight: .medium))
+                                    .monospacedDigit()
+                                    .foregroundStyle(Theme.text)
+                                if previous != nil {
+                                    deltaText(part.cur - part.prev, expense: line.isExpense)
+                                        .frame(minWidth: 80, alignment: .trailing)
+                                }
+                            }
+                        }
+                    }
+                    .padding(Spacing.md)
+                    .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .padding(.leading, 18)
+                    .padding(.bottom, Spacing.sm)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+                Rectangle().fill(Theme.borderSoft).frame(height: 1)
+            }
+        }
     }
-}
 
-/// Строка месяца: EBITDA, маржа и изменение к прошлому месяцу.
-private struct MonthRow: View {
-    let month: MonthlyPnl
-    let previous: MonthlyPnl?
-    let isExpanded: Bool
-
-    var body: some View {
-        HStack(spacing: Spacing.md) {
-            Image(systemName: "chevron.right")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Theme.textDim)
-                .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                .animation(Motion.value, value: isExpanded)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(month.label)
-                    .font(Typography.callout)
+    private func totalRow(_ title: String, value: Double, previous: Double?, revenue: Double, isFinal: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: isFinal ? 17 : 15, weight: .bold))
                     .foregroundStyle(Theme.text)
-                // Изменение к прошлому месяцу: сама по себе EBITDA ничего не
-                // говорит, пока не видно, куда она движется.
-                if let change {
-                    Text("\(Percent.format(change, signed: true)) к прошлому месяцу")
-                        .font(Typography.caption)
-                        .monospacedDigit()
-                        .foregroundStyle(change >= 0 ? Theme.positive : Theme.negative)
-                }
+                Text(share(value, of: revenue))
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textDim)
             }
-
             Spacer(minLength: Spacing.sm)
-
-            VStack(alignment: .trailing, spacing: 1) {
-                Text(Money.format(month.ebitda))
-                    .font(Typography.callout.weight(.medium))
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(Money.format(value))
+                    .font(.system(size: isFinal ? 18 : 15, weight: .bold, design: .rounded))
                     .monospacedDigit()
-                    .foregroundStyle(month.ebitda >= 0 ? Theme.text : Theme.negative)
-                Text("\(Percent.format(month.ebitdaMargin)) от \(Money.format(month.revenue))")
-                    .font(Typography.caption)
-                    .monospacedDigit()
-                    .foregroundStyle(Theme.textDim)
-            }
-        }
-        .padding(.vertical, Spacing.xs)
-        .contentShape(Rectangle())
-    }
-
-    private var change: Double? {
-        guard let previous else { return nil }
-        return Percent.change(current: month.ebitda, previous: previous.ebitda)
-    }
-}
-
-/// Раскрытая цепочка от выручки до чистой прибыли.
-///
-/// Порядок строк — это и есть отчёт: каждая следующая величина получается
-/// вычитанием предыдущей строки. Переставлять их нельзя.
-private struct MonthBreakdown: View {
-    let month: MonthlyPnl
-
-    var body: some View {
-        VStack(spacing: Spacing.sm) {
-            PnlRow("Выручка", amount: month.revenue, share: month.revenue > 0 ? 100 : nil, icon: "arrow.down")
-            if month.cashRevenue > 0 || month.cashlessRevenue > 0 {
-                PnlRow("· наличными", amount: month.cashRevenue, share: month.share(month.cashRevenue))
-                PnlRow("· безналично", amount: month.cashlessRevenue, share: month.share(month.cashlessRevenue))
-            }
-            if month.cogs > 0 {
-                PnlRow("Себестоимость", amount: -month.cogs, share: month.share(month.cogs))
-            }
-            PnlRow("Валовая прибыль", amount: month.grossProfit, share: month.share(month.grossProfit), emphasized: true)
-
-            if month.operatingExpenses > 0 {
-                PnlRow("Операционные", amount: -month.operatingExpenses, share: month.share(month.operatingExpenses))
-            }
-            if month.posCommission > 0 {
-                PnlRow("Комиссии эквайринга", amount: -month.posCommission, share: month.share(month.posCommission))
-            }
-            if month.payroll > 0 {
-                PnlRow("Фонд оплаты труда", amount: -month.payroll, share: month.share(month.payroll))
-            }
-            if month.payrollTaxes > 0 {
-                PnlRow("Налоги с ФОТ", amount: -month.payrollTaxes, share: month.share(month.payrollTaxes))
-            }
-            if month.otherOperating > 0 {
-                PnlRow("Прочие операционные", amount: -month.otherOperating, share: month.share(month.otherOperating))
-            }
-
-            PnlRow("EBITDA", amount: month.ebitda, share: month.ebitdaMargin, emphasized: true)
-
-            if !month.hasManualPayroll {
-                Text("ФОТ за этот месяц не заполнен — EBITDA выше настоящей.")
-                    .font(Typography.caption)
-                    .foregroundStyle(Theme.warning)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            if month.depreciation > 0 {
-                PnlRow("Износ", amount: -month.depreciation, share: month.share(month.depreciation))
-            }
-            if month.amortization > 0 {
-                PnlRow("Амортизация", amount: -month.amortization, share: month.share(month.amortization))
-            }
-            if month.depreciation > 0 || month.amortization > 0 {
-                PnlRow("Операционная прибыль", amount: month.operatingProfit, share: month.share(month.operatingProfit), emphasized: true)
-            }
-
-            if month.financialExpenses > 0 {
-                PnlRow("Финансовые расходы", amount: -month.financialExpenses, share: month.share(month.financialExpenses))
-            }
-            if month.incomeTax > 0 {
-                PnlRow("Налог на прибыль", amount: -month.incomeTax, share: month.share(month.incomeTax))
-            }
-            if month.nonOperating > 0 {
-                PnlRow("Неоперационные", amount: -month.nonOperating, share: month.share(month.nonOperating))
-            }
-
-            PnlRow("Чистая прибыль", amount: month.netProfit, share: month.netMargin, emphasized: true)
-
-            // CAPEX и дивиденды в отчёт не входят: первое — вложение,
-            // второе происходит уже после чистой прибыли. Но владельцу
-            // важно видеть, что деньги ушли и туда.
-            if month.capex > 0 || month.profitDistribution > 0 {
-                RowDivider()
-                Text("Вне отчёта")
-                    .font(Typography.label)
-                    .foregroundStyle(Theme.textDim)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                if month.capex > 0 {
-                    PnlRow("Вложения (CAPEX)", amount: month.capex, share: month.share(month.capex), icon: "hammer")
-                }
-                if month.profitDistribution > 0 {
-                    PnlRow("Распределение прибыли", amount: month.profitDistribution, share: month.share(month.profitDistribution), icon: "arrow.up.forward")
+                    .foregroundStyle(isFinal ? (value < 0 ? Theme.negative : Theme.positive) : Theme.text)
+                if let previous {
+                    deltaText(value - previous, expense: false)
                 }
             }
         }
-        .padding(Spacing.md)
-        .background(Theme.surfaceRaised)
-        .clipShape(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, 12)
+        .background(
+            (isFinal ? Theme.positive.opacity(0.10) : Theme.surfaceRaised),
+            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+        )
+        .padding(.vertical, 6)
+    }
+
+    /// Разница к прошлому месяцу суммой: рост расхода — красный, рост
+    /// выручки и прибыли — зелёный. Как колонка «Изменение» на сайте.
+    private func deltaText(_ delta: Double, expense: Bool) -> some View {
+        let rounded = delta.rounded()
+        let good = rounded == 0 ? nil : ((rounded > 0) != expense)
+        return Text(Money.signed(rounded))
+            .font(.system(size: 12, weight: .semibold))
+            .monospacedDigit()
+            .foregroundStyle(good.map { $0 ? Theme.positive : Theme.negative } ?? Theme.textDim)
+    }
+
+    private func share(_ value: Double, of revenue: Double) -> String {
+        revenue > 0 ? Percent.format(value / revenue * 100) + " выручки" : "—"
+    }
+
+    /// Статьи обоих месяцев одним списком, по сумме этого месяца.
+    private func mergedParts(_ line: PnlLine, current: MonthlyPnl, previous: MonthlyPnl?) -> [(name: String, cur: Double, prev: Double)] {
+        let cur = Dictionary(current.parts(line).map { ($0.name, $0.amount) }, uniquingKeysWith: +)
+        let prev = Dictionary((previous?.parts(line) ?? []).map { ($0.name, $0.amount) }, uniquingKeysWith: +)
+        return Set(cur.keys).union(prev.keys)
+            .map { (name: $0, cur: cur[$0] ?? 0, prev: prev[$0] ?? 0) }
+            .filter { $0.cur.rounded() != 0 || $0.prev.rounded() != 0 }
+            .sorted { $0.cur == $1.cur ? $0.prev > $1.prev : $0.cur > $1.cur }
+    }
+
+    // ── Сверка ───────────────────────────────────────────────────────────────
+
+    /// Откуда взялись цифры: суммы страниц «Доходы» и «Расходы» за тот же
+    /// месяц. Если не сходится — видно, на чём.
+    private func reconciliation(_ current: MonthlyPnl, companyName: String?, extraNames: [String]) -> some View {
+        let pnlExpenses = current.revenue - current.netProfit
+        let filter: String = if let companyName {
+            "фильтр точки — \(companyName)"
+        } else if !extraNames.isEmpty {
+            "все точки, \(extraNames.joined(separator: ", ")) \(ExtraCashPreference.shared.includeExtra ? "включён" : "не включён") в итоги"
+        } else {
+            "все точки"
+        }
+        return OwnerSection("Сверка") {
+            Text("с «Доходами» и «Расходами»")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.textDim)
+        } content: {
+            VStack(spacing: 0) {
+                reconRow("Итого в «Доходах»", Money.format(current.revenue))
+                reconRow("= Выручка в отчёте", Money.format(current.revenue), bold: true)
+                Rectangle().fill(Theme.border).frame(height: 1).padding(.vertical, Spacing.sm)
+                reconRow("Итого в «Расходах» (все статусы)", Money.format(current.check.expensesAll))
+                if current.check.declined.rounded() != 0 {
+                    reconRow("− отклонённые (\(current.check.declinedCount) шт.)", "−" + Money.format(current.check.declined), dim: true)
+                }
+                if current.capex.rounded() != 0 {
+                    reconRow("− покупка оборудования", "−" + Money.format(current.capex), dim: true)
+                }
+                if current.profitDistribution.rounded() != 0 {
+                    reconRow("− выплаты партнёрам", "−" + Money.format(current.profitDistribution), dim: true)
+                }
+                reconRow("= Расходы в отчёте (с налогом)", Money.format(pnlExpenses), bold: true)
+                Text("На тех страницах выберите весь месяц и тот же фильтр: \(filter). Выручка \(Money.format(current.revenue)) − расходы \(Money.format(pnlExpenses)) = чистая прибыль \(Money.format(current.netProfit)).")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textDim)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, Spacing.md)
+            }
+        }
+    }
+
+    private func reconRow(_ label: String, _ value: String, bold: Bool = false, dim: Bool = false) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(label)
+                .font(.system(size: 14, weight: bold ? .semibold : .regular))
+                .foregroundStyle(dim ? Theme.textDim : Theme.text)
+            Spacer(minLength: Spacing.sm)
+            Text(value)
+                .font(.system(size: 14, weight: bold ? .bold : .medium, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(dim ? Theme.textDim : Theme.text)
+        }
+        .padding(.vertical, 6)
+    }
+
+    // ── По точкам ────────────────────────────────────────────────────────────
+
+    private func companiesCard(_ report: PnlReport) -> some View {
+        let rows = report.companies.compactMap { company -> (PnlCompany, MonthlyPnl)? in
+            guard let month = company.months.first, month.revenue.rounded() != 0 || month.netProfit.rounded() != 0 else { return nil }
+            return (company, month)
+        }
+        .sorted { $0.1.revenue > $1.1.revenue }
+        let top = max(rows.map(\.1.revenue).max() ?? 1, 1)
+        return OwnerSection("По точкам") {
+            Text("нажмите — отчёт точки")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.textDim)
+        } content: {
+            VStack(spacing: Spacing.md) {
+                ForEach(Array(rows.enumerated()), id: \.element.0.id) { index, item in
+                    let (company, month) = item
+                    Button {
+                        withAnimation(Motion.tap) { companyID = company.id }
+                    } label: {
+                        AmountRow(
+                            leading: { LetterBadge(text: company.name, tint: OwnerTint.point(index)) },
+                            title: company.name + (company.isExtra ? " · вне итогов" : ""),
+                            subtitle: "прибыль \(Money.format(month.netProfit)) · маржа \(Percent.format(month.netMargin))",
+                            amount: Money.format(month.revenue),
+                            change: company.previous.flatMap { Percent.change(current: month.revenue, previous: $0.revenue) },
+                            share: month.revenue / top,
+                            tint: OwnerTint.point(index),
+                            showsChevron: true
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
     }
 }
