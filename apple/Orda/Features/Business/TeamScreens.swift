@@ -570,38 +570,12 @@ struct SalaryScreen: View {
         let totals = report.totals
 
         VStack(spacing: Spacing.lg) {
-            DashboardGrid {
-                MetricTile(
-                    label: "К выплате",
-                    value: Money.format(totals.netAmount),
-                    icon: "wallet.bifold.fill",
-                    accent: Theme.brand
-                )
-                MetricTile(
-                    label: "Выплачено",
-                    value: Money.format(totals.paidAmount),
-                    icon: "checkmark.circle.fill",
-                    accent: Theme.positive
-                )
-                MetricTile(
-                    label: "Осталось",
-                    value: Money.format(totals.remainingAmount),
-                    icon: "hourglass",
-                    accent: totals.remainingAmount > 0 ? Theme.warning : Theme.positive
-                )
-                MetricTile(
-                    label: "Рассчитано",
-                    value: "\(totals.paidOperators) из \(totals.activeOperators)",
-                    icon: "person.2.fill",
-                    accent: Theme.info
-                )
-            }
+            SalaryHero(totals: totals)
 
             SplitDashboard {
                 payroll(report)
             } side: {
                 breakdown(totals)
-                progress(totals)
             }
 
             adminStaff
@@ -713,24 +687,6 @@ struct SalaryScreen: View {
             }
         }
     }
-
-    /// Насколько неделя закрыта деньгами.
-    private func progress(_ totals: SalaryTotals) -> some View {
-        let ratio = totals.netAmount > 0 ? min(totals.paidAmount / totals.netAmount, 1) : 0
-
-        return Card {
-            VStack(spacing: Spacing.md) {
-                SectionHeader("Выплаты")
-                ProgressRing(
-                    progress: ratio,
-                    label: Percent.format(ratio * 100),
-                    caption: "выплачено",
-                    color: ratio >= 1 ? Theme.positive : Theme.brand
-                )
-                .frame(maxWidth: .infinity)
-            }
-        }
-    }
 }
 
 /// Строка админ-сотрудника: оклад пополам, что прибавили и что удержали.
@@ -755,9 +711,10 @@ struct StaffSalaryRowView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             HStack(spacing: Spacing.md) {
+                PersonInitial(name: row.name, isActive: row.isActive)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(row.name)
-                        .font(Typography.callout)
+                        .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(row.isActive ? Theme.text : Theme.textDim)
                         .lineLimit(1)
                     Text(subtitle)
@@ -770,7 +727,7 @@ struct StaffSalaryRowView: View {
 
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(Money.format(row.toPay))
-                        .font(Typography.callout.weight(.medium))
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(Theme.text)
                     if row.paidThisMonth > 0.01 {
@@ -814,23 +771,93 @@ struct StaffSalaryRowView: View {
     }
 }
 
+/// Кружок с первой буквой имени — у человека в списке есть «лицо».
+struct PersonInitial: View {
+    let name: String
+    var isActive = true
+
+    private static let palette: [Color] = [
+        Color(hex: 0x10B981), Color(hex: 0x3B82F6), Color(hex: 0xF59E0B),
+        Color(hex: 0x8B5CF6), Color(hex: 0xEC4899), Color(hex: 0x14B8A6),
+    ]
+
+    var body: some View {
+        // Цвет закреплён за именем: у одного человека он один на всех экранах.
+        let hash = name.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0x7FFFFFFF }
+        let tint = isActive ? Self.palette[hash % Self.palette.count] : Theme.textDim
+        Text(String(name.trimmingCharacters(in: .whitespaces).prefix(1)).uppercased())
+            .font(.system(size: 16, weight: .bold, design: .rounded))
+            .foregroundStyle(tint)
+            .frame(width: 40, height: 40)
+            .background(tint.opacity(0.14), in: Circle())
+    }
+}
+
+/// Главная цифра зарплаты: сколько отдать за неделю и сколько уже отдано.
+struct SalaryHero: View {
+    let totals: SalaryTotals
+
+    var body: some View {
+        let ratio = totals.netAmount > 0 ? min(max(totals.paidAmount / totals.netAmount, 0), 1) : 0
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            Text("К выплате за неделю")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.white.opacity(0.85))
+            Text(Money.format(totals.netAmount))
+                .font(.system(size: 36, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+            VStack(alignment: .leading, spacing: 6) {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(.white.opacity(0.25))
+                        Capsule().fill(.white).frame(width: max(6, geo.size.width * ratio))
+                    }
+                }
+                .frame(height: 8)
+                Text("выплачено \(Money.format(totals.paidAmount)) · \(Percent.format(ratio * 100))")
+                    .font(.system(size: 13, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(.white.opacity(0.85))
+            }
+            HStack(spacing: Spacing.xl) {
+                footer("Осталось", Money.format(totals.remainingAmount))
+                footer("Рассчитано", "\(totals.paidOperators) из \(totals.activeOperators)")
+            }
+        }
+        .padding(Spacing.xl)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            LinearGradient(colors: [Color(hex: 0x2563EB), Color(hex: 0x7C3AED)], startPoint: .topLeading, endPoint: .bottomTrailing),
+            in: RoundedRectangle(cornerRadius: 28, style: .continuous)
+        )
+    }
+
+    private func footer(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.system(size: 12))
+                .foregroundStyle(.white.opacity(0.7))
+            Text(value)
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+        }
+    }
+}
+
 /// Строка зарплаты: имя, смены, сумма и статус выплаты.
 struct SalaryRowView: View {
     let row: SalaryRow
 
-    private var chipKind: StatusChip.Kind {
-        switch row.week.status {
-        case "paid": .good
-        case "partial": .warning
-        default: .neutral
-        }
-    }
-
     var body: some View {
         HStack(spacing: Spacing.md) {
+            PersonInitial(name: row.operatorName, isActive: row.isActive)
             VStack(alignment: .leading, spacing: 1) {
                 Text(row.operatorName)
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(row.isActive ? Theme.text : Theme.textDim)
                     .lineLimit(1)
                 Text("\(row.week.shiftsCount) \(pluralize(row.week.shiftsCount, "смена", "смены", "смен"))")
@@ -843,20 +870,35 @@ struct SalaryRowView: View {
 
             VStack(alignment: .trailing, spacing: 2) {
                 Text(Money.format(row.week.netAmount))
-                    .font(Typography.callout.weight(.medium))
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(Theme.text)
-                // Остаток показываем только когда он есть: у закрытых недель
-                // строка «осталось 0 ₸» — шум.
-                if row.week.remainingAmount > 0.01 {
-                    Text("осталось \(Money.format(row.week.remainingAmount))")
-                        .font(Typography.caption)
-                        .monospacedDigit()
-                        .foregroundStyle(Theme.warning)
-                }
+                    .lineLimit(1)
+                    .fixedSize()
+                // Статус — подписью под суммой, а не плашкой: плашка съедала
+                // полстроки, и имя обрезалось до трёх букв.
+                Text(statusText)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(statusColor)
+                    .lineLimit(1)
+                    .fixedSize()
             }
+        }
+        .padding(.vertical, Spacing.xs)
+    }
 
-            StatusChip(row.week.statusLabel, kind: chipKind)
+    private var statusText: String {
+        if row.week.status == "partial", row.week.remainingAmount > 0.01 {
+            return "осталось \(Money.format(row.week.remainingAmount))"
+        }
+        return row.week.statusLabel.lowercased()
+    }
+
+    private var statusColor: Color {
+        switch row.week.status {
+        case "paid": Theme.positive
+        case "partial": Theme.warning
+        default: Theme.textDim
         }
     }
 }

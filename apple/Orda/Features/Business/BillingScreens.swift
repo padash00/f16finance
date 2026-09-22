@@ -650,37 +650,39 @@ struct WeekStepper: View {
     private var isCurrent: Bool { week == PayWeek.start() }
 
     var body: some View {
-        Card {
-            HStack(spacing: Spacing.md) {
-                Button { week = PayWeek.shifted(week, by: -1) } label: {
-                    Image(systemName: "chevron.left").font(.system(size: 14, weight: .semibold))
+        // Неделя листается круглыми кнопками по краям — как месяц в выписке.
+        HStack(spacing: Spacing.md) {
+            stepButton("chevron.left", enabled: true) { week = PayWeek.shifted(week, by: -1) }
+
+            Spacer()
+
+            VStack(spacing: 1) {
+                Text(label)
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .foregroundStyle(Theme.text)
+                if isCurrent {
+                    Text("текущая неделя")
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.brand)
                 }
-                .buttonStyle(.pressable)
-                .foregroundStyle(Theme.brand)
-
-                Spacer()
-
-                VStack(spacing: 1) {
-                    Text(label)
-                        .font(Typography.headline)
-                        .foregroundStyle(Theme.text)
-                    if isCurrent {
-                        Text("текущая неделя")
-                            .font(Typography.caption)
-                            .foregroundStyle(Theme.brand)
-                    }
-                }
-
-                Spacer()
-
-                Button { week = PayWeek.shifted(week, by: 1) } label: {
-                    Image(systemName: "chevron.right").font(.system(size: 14, weight: .semibold))
-                }
-                .buttonStyle(.pressable)
-                .disabled(!allowsFuture && isCurrent)
-                .foregroundStyle(!allowsFuture && isCurrent ? Theme.textDim : Theme.brand)
             }
+
+            Spacer()
+
+            stepButton("chevron.right", enabled: allowsFuture || !isCurrent) { week = PayWeek.shifted(week, by: 1) }
         }
+    }
+
+    private func stepButton(_ icon: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(enabled ? Theme.text : Theme.textDim.opacity(0.5))
+                .frame(width: 44, height: 44)
+                .background(Theme.surface, in: Circle())
+        }
+        .buttonStyle(.pressable)
+        .disabled(!enabled)
     }
 
     private var label: String {

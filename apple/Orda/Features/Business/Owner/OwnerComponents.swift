@@ -292,3 +292,60 @@ struct OwnerFootnote: View {
             .padding(.horizontal, Spacing.xs)
     }
 }
+
+/// Цветная карточка с главной цифрой раздела и парой подписей под ней.
+///
+/// Заменяет стопку одинаковых плиток: одна цифра — главная, остальные —
+/// её расшифровка, как баланс и движения в банковском приложении.
+struct HeroSummary: View {
+    let title: String
+    let value: String
+    var caption: String? = nil
+    var footer: [(String, String)] = []
+    var colors: [Color] = [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Text(title)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.white.opacity(0.85))
+            Text(value)
+                .font(.system(size: 36, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .contentTransition(.numericText())
+            if let caption {
+                Text(caption)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.85))
+            }
+            if !footer.isEmpty {
+                HStack(alignment: .top, spacing: Spacing.lg) {
+                    ForEach(footer, id: \.0) { label, text in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(label)
+                                .font(.system(size: 12))
+                                .foregroundStyle(.white.opacity(0.7))
+                            Text(text)
+                                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                .monospacedDigit()
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.6)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding(.top, Spacing.sm)
+            }
+        }
+        .padding(Spacing.xl)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing),
+            in: RoundedRectangle(cornerRadius: 28, style: .continuous)
+        )
+    }
+}

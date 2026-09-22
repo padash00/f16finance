@@ -401,32 +401,18 @@ struct CashflowScreen: View {
             let totals = report.totals
 
             VStack(spacing: Spacing.lg) {
-                DashboardGrid {
-                    MetricTile(
-                        label: "Пришло",
-                        value: Money.format(totals.income),
-                        icon: "arrow.down.circle.fill",
-                        accent: Theme.brand
-                    )
-                    MetricTile(
-                        label: "Ушло",
-                        value: Money.format(totals.expense),
-                        icon: "arrow.up.circle.fill",
-                        accent: Theme.negative
-                    )
-                    MetricTile(
-                        label: "Чистый поток",
-                        value: Money.format(totals.net),
-                        icon: "chart.line.uptrend.xyaxis",
-                        accent: totals.net >= 0 ? Theme.positive : Theme.negative
-                    )
-                    MetricTile(
-                        label: "Баланс на конец",
-                        value: Money.format(totals.endingBalance),
-                        icon: "wallet.pass",
-                        accent: totals.endingBalance >= 0 ? Theme.info : Theme.negative
-                    )
-                }
+                HeroSummary(
+                    title: totals.net >= 0 ? "Осталось денег за период" : "Ушло больше, чем пришло",
+                    value: Money.signed(totals.net),
+                    footer: [
+                        ("Пришло", Money.format(totals.income)),
+                        ("Ушло", Money.format(totals.expense)),
+                        ("Баланс на конец", Money.format(totals.endingBalance)),
+                    ],
+                    colors: totals.net >= 0
+                        ? [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+                        : [Color(hex: 0xDC2626), Color(hex: 0x9F1239)]
+                )
 
                 balanceChart(report)
 

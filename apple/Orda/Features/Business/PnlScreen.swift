@@ -99,44 +99,21 @@ struct PnlScreen: View {
     // ── Верхние показатели ───────────────────────────────────────────────────
 
     private func tiles(_ totals: PnlTotals) -> some View {
-        DashboardGrid {
-            MetricTile(
-                label: "Выручка за период",
-                value: Money.format(totals.revenue),
-                icon: "arrow.down.circle.fill",
-                accent: Theme.brand
-            )
-            MetricTile(
-                label: "Валовая прибыль",
-                value: Money.format(totals.grossProfit),
-                icon: "chart.bar.fill",
-                accent: Theme.info
-            )
-            MetricTile(
-                label: "EBITDA",
-                value: Money.format(totals.ebitda),
-                icon: "chart.line.uptrend.xyaxis",
-                accent: totals.ebitda >= 0 ? Theme.positive : Theme.negative
-            )
-            MetricTile(
-                label: "Маржа EBITDA",
-                value: Percent.format(totals.ebitdaMargin),
-                icon: "percent",
-                accent: Theme.info
-            )
-            MetricTile(
-                label: "Чистая прибыль",
-                value: Money.format(totals.netProfit),
-                icon: "banknote.fill",
-                accent: totals.netProfit >= 0 ? Theme.positive : Theme.negative
-            )
-            MetricTile(
-                label: "Чистая маржа",
-                value: Percent.format(totals.netMargin),
-                icon: "percent",
-                accent: totals.netProfit >= 0 ? Theme.positive : Theme.negative
-            )
-        }
+        // Главная цифра ОПиУ — сколько осталось в итоге; остальное — её
+        // расшифровка по ступеням отчёта.
+        HeroSummary(
+            title: "Чистая прибыль",
+            value: Money.format(totals.netProfit),
+            caption: "маржа \(Percent.format(totals.netMargin)) от выручки",
+            footer: [
+                ("Выручка", Money.format(totals.revenue)),
+                ("Валовая", Money.format(totals.grossProfit)),
+                ("EBITDA · \(Percent.format(totals.ebitdaMargin))", Money.format(totals.ebitda)),
+            ],
+            colors: totals.netProfit >= 0
+                ? [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+                : [Color(hex: 0xDC2626), Color(hex: 0x9F1239)]
+        )
     }
 
     /// Предупреждение о незаполненном ФОТ.
