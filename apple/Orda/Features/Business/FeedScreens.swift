@@ -2475,10 +2475,7 @@ struct ModerationScreen: View {
         @Bindable var bindable = store
 
         return VStack(spacing: 0) {
-            Picker("Статус", selection: $bindable.status) {
-                ForEach(ModerationStatus.allCases) { Text($0.label).tag($0) }
-            }
-            .pickerStyle(.segmented)
+            PillSegment(options: ModerationStatus.allCases.map { ($0, $0.label) }, selection: $bindable.status)
             .padding(.horizontal, Spacing.lg)
             .padding(.vertical, Spacing.md)
             .onChange(of: store.status) { _, _ in

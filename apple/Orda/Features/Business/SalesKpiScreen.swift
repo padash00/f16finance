@@ -61,10 +61,7 @@ struct SalesKpiScreen: View {
             } else if isLoading && payout == nil {
                 LoadingRows(count: 4)
             } else if let payout {
-                Picker("Раздел", selection: $section) {
-                    ForEach(Section.allCases) { Text($0.label).tag($0) }
-                }
-                .pickerStyle(.segmented)
+                PillSegment(options: Section.allCases.map { ($0, $0.label) }, selection: $section)
 
                 if section == .people {
                     people

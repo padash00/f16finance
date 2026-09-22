@@ -124,6 +124,7 @@ struct BusinessRootView: View {
         #endif
     }
 
+    #if os(iOS)
     // ── iPhone ───────────────────────────────────────────────────────────────
 
     /// Вкладки — то же правило, что и в боковом меню: только выданное.
@@ -200,6 +201,7 @@ struct BusinessRootView: View {
         case .sections, .profile: EmptyView()
         }
     }
+    #endif
 
     // ── iPad и Mac ───────────────────────────────────────────────────────────
 

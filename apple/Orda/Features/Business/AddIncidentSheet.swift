@@ -53,10 +53,7 @@ struct AddIncidentSheet: View {
     private var whatCard: some View {
         Card {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                Picker("Что записываем", selection: $draft.kind) {
-                    ForEach(IncidentKind.allCases) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.segmented)
+                PillSegment(options: IncidentKind.allCases.map { ($0, $0.title) }, selection: $draft.kind)
 
                 FieldLabel("Что произошло")
                 TextField("Коротко: суть", text: $draft.title, axis: .vertical)
@@ -100,10 +97,7 @@ struct AddIncidentSheet: View {
                 .pickerStyle(.menu)
 
                 FieldLabel("Серьёзность")
-                Picker("Серьёзность", selection: $draft.severity) {
-                    ForEach(IncidentSeverity.allCases) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.segmented)
+                PillSegment(options: IncidentSeverity.allCases.map { ($0, $0.title) }, selection: $draft.severity)
             }
         }
     }

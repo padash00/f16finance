@@ -82,10 +82,7 @@ struct AddTaskSheet: View {
                 .pickerStyle(.menu)
 
                 FieldLabel("Срочность")
-                Picker("Срочность", selection: $draft.priority) {
-                    ForEach(TaskPriority.allCases) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.segmented)
+                PillSegment(options: TaskPriority.allCases.map { ($0, $0.title) }, selection: $draft.priority)
             }
         }
     }

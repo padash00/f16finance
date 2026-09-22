@@ -124,6 +124,7 @@ struct PlatformRootView: View {
         #endif
     }
 
+    #if os(iOS)
     @ViewBuilder
     private var phoneTabs: some View {
         // Выбрана организация — суперадмин смотрит как её владелец: тот же
@@ -171,6 +172,7 @@ struct PlatformRootView: View {
         }
         .tint(Theme.accent(for: .platform))
     }
+    #endif
 
     /// «Моя компания» — та же аналитика, что у владельца.
     @ViewBuilder

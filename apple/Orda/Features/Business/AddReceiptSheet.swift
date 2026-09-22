@@ -245,10 +245,7 @@ struct AddReceiptSheet: View {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 SectionHeader("Оплата")
 
-                Picker("Оплата", selection: $draft.payment) {
-                    ForEach(ReceiptPayment.allCases) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.segmented)
+                PillSegment(options: ReceiptPayment.allCases.map { ($0, $0.title) }, selection: $draft.payment)
 
                 if draft.payment == .now {
                     Picker("Чем", selection: $draft.paymentMethod) {

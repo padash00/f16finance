@@ -78,10 +78,7 @@ struct EditTaskSheet: View {
                     .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
 
                 FieldLabel("Приоритет")
-                Picker("Приоритет", selection: $priority) {
-                    ForEach(TaskPriority.allCases) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.segmented)
+                PillSegment(options: TaskPriority.allCases.map { ($0, $0.title) }, selection: $priority)
 
                 FieldLabel("Состояние")
                 Picker("Состояние", selection: $status) {
