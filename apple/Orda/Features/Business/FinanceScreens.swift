@@ -888,8 +888,11 @@ struct WeeklyReportScreen: View {
     }
 
     private func weekChart(_ report: WeeklyReport) -> some View {
+        // Дни, которые ещё не наступили, не рисуем: нули в конце идущей
+        // недели читались как обвал выручки.
+        let today = Calendar.current.startOfDay(for: Date())
         let points = report.dailyTotals.compactMap { day -> TimePoint? in
-            guard let date = day.day else { return nil }
+            guard let date = day.day, Calendar.current.startOfDay(for: date) <= today else { return nil }
             return TimePoint(label: day.label, date: date, value: day.income)
         }
 
