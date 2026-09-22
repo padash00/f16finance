@@ -59,8 +59,8 @@ struct ReportsScreen: View {
                     ("Средняя смена", Money.format(totals.avgTransaction)),
                 ],
                 colors: totals.profit >= 0
-                    ? [Color(hex: 0x059669), Color(hex: 0x0F766E)]
-                    : [Color(hex: 0xDC2626), Color(hex: 0x9F1239)]
+                    ? Theme.heroGradient
+                    : Theme.heroNegative
             )
 
             trend(report)

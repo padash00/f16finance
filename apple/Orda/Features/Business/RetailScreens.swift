@@ -342,7 +342,7 @@ struct DiscountsScreen: View {
             value: "\(board.live.count)",
             caption: board.live.isEmpty ? "чек проходит по полной цене" : nil,
             footer: footer,
-            colors: [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+            colors: Theme.heroGradient
         )
         .padding(.horizontal, Spacing.lg)
         .padding(.vertical, Spacing.md)
@@ -1046,7 +1046,7 @@ struct StationsScreen: View {
             value: "\(board.busyStations.count) из \(board.workingStations.count)",
             caption: "загрузка зала \(load)",
             footer: footer,
-            colors: [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+            colors: Theme.heroGradient
         )
     }
 
@@ -1825,7 +1825,7 @@ struct StoreShiftsScreen: View {
                         ("Открыто сейчас", "\(open.count)"),
                         ("С расхождением", "\(discrepancies.count)"),
                     ],
-                    colors: [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+                    colors: Theme.heroGradient
                 )
                 .padding(.horizontal, Spacing.lg)
                 .padding(.vertical, Spacing.md)
@@ -1999,7 +1999,7 @@ private struct StoreShiftDetailView: View {
                 ("Средний чек", Money.format(report.averageCheck)),
                 ("Возвраты", Money.format(report.returns)),
             ],
-            colors: [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+            colors: Theme.heroGradient
         )
 
         SplitDashboard {

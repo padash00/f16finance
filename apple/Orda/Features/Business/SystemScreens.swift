@@ -393,8 +393,8 @@ struct SettingsScreen: View {
                     ("Бюджет в месяц", Money.format(data.monthlyBudgetTotal)),
                 ],
                 colors: data.isCompanyLimitReached
-                    ? [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
-                    : [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+                    ? Theme.heroGradient
+                    : Theme.heroGradient
             )
 
             if data.isCompanyLimitReached {
@@ -652,8 +652,8 @@ struct TelegramScreen: View {
                     ("Вебхук", webhookOK ? "есть" : "нет"),
                 ],
                 colors: status.isOperational
-                    ? [Color(hex: 0x0EA5E9), Color(hex: 0x2563EB)]
-                    : [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
+                    ? Theme.heroAccent
+                    : Theme.heroGradient
             )
 
             OwnerSection("Настройка канала") {
@@ -877,10 +877,10 @@ struct DiagnosticsScreen: View {
                     ("Сбоев", "\(data.failureCount)"),
                 ],
                 colors: data.failureCount > 0
-                    ? [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
+                    ? Theme.heroNegative
                     : (data.warningCount > 0
-                        ? [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
-                        : [Color(hex: 0x059669), Color(hex: 0x0F766E)])
+                        ? Theme.heroGradient
+                        : Theme.heroGradient)
             )
 
             OwnerSection("Проверки") {

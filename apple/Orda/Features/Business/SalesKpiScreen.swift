@@ -186,8 +186,8 @@ struct SalesKpiScreen: View {
                 ("Продавцов", "\(payout.totals.people)"),
             ],
             colors: payout.totals.toPay > 0
-                ? [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
-                : [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+                ? Theme.heroGradient
+                : Theme.heroGradient
         )
     }
 
@@ -547,7 +547,7 @@ struct SalesKpiScreen: View {
                     ("Чеков", "\(report.totals.receipts)"),
                     ("Смен", "\(report.totals.shifts)"),
                 ],
-                colors: [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+                colors: Theme.heroGradient
             )
 
             OwnerSection("Продавцы") {

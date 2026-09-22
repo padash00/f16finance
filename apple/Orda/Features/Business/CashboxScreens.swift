@@ -193,7 +193,7 @@ struct ReceiptsListScreen: View {
                         ("Средний чек", Money.format(summary.averageCheck)),
                         ("Скидки", Money.format(summary.discounts + summary.loyaltyDiscounts)),
                     ],
-                    colors: [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+                    colors: Theme.heroGradient
                 )
 
                 // Сумма считается по загруженным чекам. Если в периоде их
@@ -431,7 +431,7 @@ private struct PosReceiptDetailView: View {
                 caption: receipt.occurredAt.map { "пробит \($0.formatted(.dateTime.day().month(.wide).hour().minute()))" },
                 footer: [("Оплата", receipt.paymentKind.label)]
                     + (receipt.customerID != nil ? [("Покупатель", "по карте лояльности")] : []),
-                colors: [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+                colors: Theme.heroGradient
             )
 
             OwnerSection("Состав") {
@@ -723,8 +723,8 @@ struct ReturnsScreen: View {
             caption: sale.hasPreviousReturns ? "по чеку уже были возвраты" : date,
             footer: footer,
             colors: sale.hasPreviousReturns
-                ? [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
-                : [Color(hex: 0x0EA5E9), Color(hex: 0x2563EB)]
+                ? Theme.heroGradient
+                : Theme.heroAccent
         )
     }
 
@@ -1268,7 +1268,7 @@ struct AdvertisingScreen: View {
                     ("Экранов молчит", "\(silent.count)"),
                     ("Плейлистов", "\(playlists.count)"),
                 ],
-                colors: [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+                colors: Theme.heroGradient
             )
 
             if let actionError = store.actionError {

@@ -32,6 +32,11 @@ struct LoginView: View {
 
     private enum Field { case login, password }
 
+    @Environment(\.colorScheme) private var colorScheme
+
+    /// Логотип navy на светлом, белый — в тёмной теме.
+    private var logoColor: Color { colorScheme == .dark ? .white : Theme.navy }
+
     private var configuration = AppConfiguration.current
 
     /// Инициализатор явный, а не выведенный: у экрана есть приватное поле, и
@@ -45,7 +50,7 @@ struct LoginView: View {
 
     var body: some View {
         ZStack {
-            AuroraBackground()
+            BrandBackground()
 
             // Форму центрируем по высоте: на iPad и Mac экран втрое выше
             // формы, и прижатая к верху карточка выглядит поломанной.
@@ -145,13 +150,9 @@ struct LoginView: View {
                         .buttonStyle(.plain)
                         .padding(.top, Spacing.xxs)
                             }
-                            .padding(Spacing.lg)
-                            .background(Theme.surface.opacity(0.92), in: RoundedRectangle(cornerRadius: Radius.xl, style: .continuous))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: Radius.xl, style: .continuous)
-                                    .strokeBorder(Theme.border, lineWidth: 1)
-                            }
-                            .shadow(color: .black.opacity(0.35), radius: 30, x: 0, y: 18)
+                            .padding(Spacing.xl)
+                            .background(Theme.surface, in: RoundedRectangle(cornerRadius: Radius.xl, style: .continuous))
+                            .shadow(color: Theme.navy.opacity(0.10), radius: 24, x: 0, y: 12)
                             .shake(on: auth.signInError ?? "")
                         }
                         .frame(maxWidth: 420)
@@ -188,7 +189,6 @@ struct LoginView: View {
         // Тёмная схема на весь экран, а не только на фон: поля и карточка
         // берут цвета из темы, и на тёмной обложке светлая форма выглядела бы
         // вырезанной из другого приложения.
-        .environment(\.colorScheme, .dark)
         .animation(Motion.value, value: auth.signInError)
         .sheet(isPresented: $showingHelp) { LoginHelpSheet(enteredLogin: login) }
     }
@@ -226,13 +226,25 @@ struct LoginView: View {
         // расходилась с заставкой, из которой знак сюда прилетает.
         // Знак на планшете крупнее не ради красоты: он там за метр от глаз,
         // на столе или на подставке, а не в руке.
-        let size: CGFloat = isWide(width) ? 140 : 76
+        let height: CGFloat = isWide(width) ? 84 : 58
 
-        return OrdaPointLockup(
-            symbolSize: size,
-            wordmarkOpacity: waitsForIntro ? 0 : 1,
-            descriptor: "Управление клубом и точками продаж"
-        )
+        return VStack(spacing: Spacing.lg) {
+            OrdaControlLogo(
+                height: height,
+                color: logoColor,
+                subtitleColor: Theme.textDim
+            )
+            VStack(spacing: Spacing.xs) {
+                Text("Бизнес под контролем.")
+                    .font(.system(size: isWide(width) ? 26 : 22, weight: .bold))
+                    .foregroundStyle(Theme.text)
+                Text("Операции, деньги, люди и склад — в одном месте.")
+                    .font(.system(size: 15))
+                    .foregroundStyle(Theme.textDim)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .padding(.bottom, Spacing.sm)
         .opacity(waitsForIntro ? 0 : 1)
         .animation(.easeIn(duration: 0.22), value: waitsForIntro)
     }
@@ -319,141 +331,29 @@ struct LoginView: View {
     }
 }
 
-/// Фон экрана входа.
-///
-/// Экран входа всегда тёмный — независимо от выбранной темы. Так делают
-/// банковские приложения, и не ради моды: это единственный экран, который
-/// видят до входа, и он должен читаться как обложка, а не как пустая страница
-/// настроек. Светлый вариант выцветал в белый лист, особенно на планшете, где
-/// карточка занимает шестую часть экрана.
-///
-/// Растровой картинки нет намеренно: снимок растянулся бы на планшете и мылил
-/// бы на Retina. Всё рисуется по размеру экрана и остаётся резким везде.
-struct AuroraBackground: View {
-    @State private var phase: CGFloat = 0
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    /// Тёмная основа. Не чёрный: чистый чёрный на OLED даёт провал, в котором
-    /// теряются края карточки.
-    private let base = Color(red: 0.043, green: 0.067, blue: 0.078)
-
+/// Фон входа: тёплый белый (в тёмной теме — Deep Navy) и одна мягкая
+/// кобальтовая дуга в углу — тот же мотив, что в заставке. Растровой картинки
+/// нет: всё рисуется по размеру экрана и резко везде.
+struct BrandBackground: View {
     var body: some View {
         ZStack {
-            base.ignoresSafeArea()
-
-            // Свечение там, где содержимое: на телефоне это знак и название,
-            // на планшете — левая колонка. Раньше оно стояло у самого верха, и
-            // на планшете форма оказывалась в сером поле, а свет грелся сам по
-            // себе выше неё.
+            Theme.background.ignoresSafeArea()
             GeometryReader { proxy in
-                let wide = proxy.size.width >= 820
-                ZStack {
-                    RadialGradient(
-                        colors: [Theme.brand.opacity(0.40), Theme.brand.opacity(0.12), .clear],
-                        center: UnitPoint(x: wide ? 0.26 : 0.5, y: wide ? 0.46 : 0.28),
-                        startRadius: 0,
-                        endRadius: max(proxy.size.width, proxy.size.height) * 0.52
-                    )
-
-                    // Холодный отсвет с другой стороны: без него половина
-                    // экрана проваливалась в одинаковую темноту.
-                    RadialGradient(
-                        colors: [Theme.accent.opacity(0.22), .clear],
-                        center: UnitPoint(
-                            x: wide ? 0.78 : 0.18 + phase * 0.06,
-                            y: wide ? 0.58 : 0.9
-                        ),
-                        startRadius: 0,
-                        endRadius: max(proxy.size.width, proxy.size.height) * 0.42
-                    )
-                }
-                .frame(width: proxy.size.width, height: proxy.size.height)
+                let w = proxy.size.width
+                let h = proxy.size.height
+                Circle()
+                    .stroke(Theme.cobalt.opacity(0.14), lineWidth: max(w, h) * 0.22)
+                    .frame(width: max(w, h) * 1.1, height: max(w, h) * 1.1)
+                    .position(x: w * 1.05, y: h * 1.02)
+                    .blur(radius: 24)
+                Circle()
+                    .fill(Theme.cobalt.opacity(0.06))
+                    .frame(width: w * 0.9, height: w * 0.9)
+                    .position(x: w * 0.05, y: h * 0.08)
+                    .blur(radius: 50)
             }
             .ignoresSafeArea()
             .allowsHitTesting(false)
-
-            lattice
-            vignette
         }
-        .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 10).repeatForever(autoreverses: true)) {
-                phase = 1
-            }
-        }
-    }
-
-    /// Решётка из фирменных знаков — тот же знак, что на заставке: экран
-    /// входа и заставка должны выглядеть одним приложением.
-    ///
-    /// Рисуется в `Canvas`, а не полусотней вложенных `Shape`: столько фигур в
-    /// иерархии видов заметно тормозят, а один слой рисуется за проход.
-    private var lattice: some View {
-        GeometryReader { proxy in
-            Canvas { context, size in
-                let cell: CGFloat = 108
-                let mark = cell * 0.56
-
-                var row = 0
-                var y = -mark
-                while y < size.height + mark {
-                    let shift = row.isMultiple(of: 2) ? 0 : cell / 2
-                    var x = -mark + shift
-                    while x < size.width + mark {
-                        let rect = CGRect(x: x, y: y, width: mark, height: mark)
-                        // Четыре дуги и точка — тот же разбор знака, что и в
-                        // заставке: обои не «похожи на логотип», а сделаны из
-                        // него.
-                        for quadrant in 0..<4 {
-                            let path = ArcSegment(
-                                centerDegrees: Double(quadrant) * 90 + 45,
-                                spanDegrees: 70,
-                                radius: 0.355,
-                                width: 0.155
-                            ).path(in: rect)
-                            context.fill(path, with: .color(Color.white.opacity(0.026)))
-                        }
-                        let dot = mark * 0.196
-                        context.fill(
-                            Path(ellipseIn: CGRect(
-                                x: rect.midX - dot / 2,
-                                y: rect.midY - dot / 2,
-                                width: dot,
-                                height: dot
-                            )),
-                            with: .color(Color.white.opacity(0.05))
-                        )
-                        x += cell
-                    }
-                    y += rowStep(cell)
-                    row += 1
-                }
-            }
-            // Решётка живёт по краям: под карточкой она мешала бы читать поля.
-            .mask(
-                RadialGradient(
-                    colors: [.clear, .black.opacity(0.6), .black],
-                    center: .center,
-                    startRadius: min(proxy.size.width, proxy.size.height) * 0.20,
-                    endRadius: max(proxy.size.width, proxy.size.height) * 0.60
-                )
-            )
-        }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-    }
-
-    private func rowStep(_ cell: CGFloat) -> CGFloat { cell * 0.86 }
-
-    /// Затемнение по краям: собирает взгляд к центру, где форма.
-    private var vignette: some View {
-        RadialGradient(
-            colors: [.clear, base.opacity(0.85)],
-            center: .center,
-            startRadius: 160,
-            endRadius: 760
-        )
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
     }
 }

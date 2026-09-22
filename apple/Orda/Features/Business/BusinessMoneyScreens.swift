@@ -90,7 +90,7 @@ struct ApprovalsScreen: View {
                 ("Наличные", Money.format(cash)),
                 ("Kaspi", Money.format(kaspi)),
             ],
-            colors: [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
+            colors: Theme.heroGradient
         )
     }
 
@@ -327,8 +327,8 @@ struct LedgerScreen: View {
                 ("Расходы", Money.format(store.expenseTotal)),
             ],
             colors: store.profit >= 0
-                ? [Color(hex: 0x059669), Color(hex: 0x0F766E)]
-                : [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
+                ? Theme.heroGradient
+                : Theme.heroNegative
         )
     }
 

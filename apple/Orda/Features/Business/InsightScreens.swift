@@ -11,11 +11,11 @@ import SwiftUI
 
 /// Цвета карточек AI-разделов — те же, что у главных карточек владельца.
 private enum InsightPalette {
-    static let ai = [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
-    static let green = [Color(hex: 0x059669), Color(hex: 0x0F766E)]
-    static let red = [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
-    static let orange = [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
-    static let teal = [Color(hex: 0x0F766E), Color(hex: 0x0E7490)]
+    static let ai = Theme.heroGradient
+    static let green = Theme.heroGradient
+    static let red = Theme.heroNegative
+    static let orange = Theme.heroGradient
+    static let teal = Theme.heroGradient
 
     /// Оценка «из 100»: зелёная — хорошо, оранжевая — внимание, красная — плохо.
     static func score(_ value: Int) -> [Color] {

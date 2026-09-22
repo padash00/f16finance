@@ -87,11 +87,12 @@ struct OrganizationContextBanner: View {
                 .buttonStyle(.pressable)
                 .font(Typography.caption.weight(.bold))
             }
-            .foregroundStyle(Color.black.opacity(0.85))
+            .foregroundStyle(Color.white)
             .padding(.horizontal, Spacing.lg)
             .padding(.vertical, Spacing.sm)
             .frame(maxWidth: .infinity)
-            .background(Theme.accent(for: .platform))
+            // Navy, а не кобальт: полоса — служебная подпись, а не кнопка.
+            .background(Theme.navy)
         }
     }
 }

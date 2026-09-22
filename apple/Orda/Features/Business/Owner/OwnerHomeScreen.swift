@@ -241,7 +241,7 @@ struct OwnerHomeScreen: View {
             change: change,
             changeCaption: pos?.previous.sameTime == true ? "к этому часу вчера" : "к вчера",
             footer: footer,
-            colors: [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+            colors: Theme.heroAccent
         ) { navigate(.analytics) }
     }
 
@@ -256,7 +256,7 @@ struct OwnerHomeScreen: View {
             change: change,
             changeCaption: "к тем же дням прошлого месяца",
             footer: [("Прибыль", Money.format(cur?.profit)), ("Расходы", Money.format(cur?.expense))],
-            colors: [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+            colors: Theme.heroGradient
         ) { navigate(.analytics) }
     }
 
@@ -265,16 +265,16 @@ struct OwnerHomeScreen: View {
     private var quickActions: some View {
         HStack(alignment: .top, spacing: Spacing.sm) {
             if resolver.can("expenses.create") {
-                RoundAction(icon: "minus", title: "Расход", tint: Color(hex: 0xEF4444)) { sheet = .expense }
+                RoundAction(icon: "minus", title: "Расход", tint: Theme.brand) { sheet = .expense }
             }
             if resolver.can("income.create") {
-                RoundAction(icon: "plus", title: "Доход", tint: Color(hex: 0x10B981)) { sheet = .income }
+                RoundAction(icon: "plus", title: "Доход", tint: Theme.brand) { sheet = .income }
             }
             if resolver.can("tasks.create") {
-                RoundAction(icon: "checklist", title: "Задача", tint: Color(hex: 0x3B82F6)) { sheet = .task }
+                RoundAction(icon: "checklist", title: "Задача", tint: Theme.brand) { sheet = .task }
             }
-            RoundAction(icon: "chart.pie.fill", title: "Аналитика", tint: Color(hex: 0x8B5CF6)) { navigate(.analytics) }
-            RoundAction(icon: "square.grid.2x2.fill", title: "Сервисы", tint: Color(hex: 0xF59E0B)) { navigate(.services) }
+            RoundAction(icon: "chart.pie.fill", title: "Аналитика", tint: Theme.brand) { navigate(.analytics) }
+            RoundAction(icon: "square.grid.2x2.fill", title: "Сервисы", tint: Theme.brand) { navigate(.services) }
         }
     }
 

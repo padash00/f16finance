@@ -249,8 +249,8 @@ struct LedgerStatementScreen: View {
                 + (pending.isEmpty ? "" : " · \(pending.count) на согласовании"),
             footer: summaryFooter,
             colors: isIncome
-                ? [Color(hex: 0x059669), Color(hex: 0x0F766E)]
-                : [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
+                ? Theme.heroGradient
+                : Theme.heroNegative
         )
         .animation(Motion.value, value: total)
     }

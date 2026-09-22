@@ -257,7 +257,7 @@ struct PerformanceScreen: View {
                 ("В норме", "\(norm)"),
                 ("Ниже нормы", "\(below)"),
             ],
-            colors: [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+            colors: Theme.heroGradient
         )
     }
 
@@ -408,8 +408,8 @@ private struct PerformanceDetail: View {
                         ("Смен", "\(item.shifts)"),
                     ],
                     colors: item.pi >= 1
-                        ? [Color(hex: 0x059669), Color(hex: 0x0F766E)]
-                        : [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
+                        ? Theme.heroGradient
+                        : Theme.heroGradient
                 )
 
                 if !trend.isEmpty {
@@ -638,7 +638,7 @@ struct RatingsScreen: View {
                 ("Смен", "\(shifts)"),
                 ("Лидер", working.first?.name ?? "—"),
             ],
-            colors: [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+            colors: Theme.heroGradient
         )
     }
 
@@ -954,7 +954,7 @@ private struct AchievementDetail: View {
                         ("Смен", "\(result.stat.shifts)"),
                         ("Доля", Percent.format(result.stat.share)),
                     ],
-                    colors: [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
+                    colors: Theme.heroGradient
                 )
 
                 if !result.earned.isEmpty {

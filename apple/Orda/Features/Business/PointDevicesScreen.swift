@@ -108,8 +108,8 @@ struct PointDevicesScreen: View {
                         ("Молчат сутки", "\(offline.count)"),
                     ],
                     colors: offline.isEmpty
-                        ? [Color(hex: 0x0F766E), Color(hex: 0x0E7490)]
-                        : [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
+                        ? Theme.heroGradient
+                        : Theme.heroNegative
                 )
 
                 if !offline.isEmpty {

@@ -265,8 +265,8 @@ struct AdminExamDetailScreen: View {
                 ("Статус", exam.statusLabel.isEmpty ? "—" : exam.statusLabel),
             ],
             colors: allPassed
-                ? [Color(hex: 0x059669), Color(hex: 0x0F766E)]
-                : [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+                ? Theme.heroGradient
+                : Theme.heroGradient
         )
     }
 

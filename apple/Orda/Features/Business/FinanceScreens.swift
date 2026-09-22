@@ -122,7 +122,7 @@ struct TaxScreen: View {
                     ("ИПН \(Percent.format(summary.rate))", Money.format(summary.ipn)),
                     ("Соцплатежи", Money.format(summary.selfSocial)),
                 ],
-                colors: [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
+                colors: Theme.heroGradient
             )
 
             if !summary.excludedCompanies.isEmpty {
@@ -408,8 +408,8 @@ struct CashflowScreen: View {
                         ("Баланс на конец", Money.format(totals.endingBalance)),
                     ],
                     colors: totals.net >= 0
-                        ? [Color(hex: 0x059669), Color(hex: 0x0F766E)]
-                        : [Color(hex: 0xDC2626), Color(hex: 0x9F1239)]
+                        ? Theme.heroGradient
+                        : Theme.heroNegative
                 )
 
                 balanceChart(report)
@@ -643,7 +643,7 @@ struct GoalsScreen: View {
                         ("В работе", "\(open.count)"),
                         ("Закрытых периодов", "\(closed.count)"),
                     ],
-                    colors: [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+                    colors: Theme.heroGradient
                 )
 
                 SplitDashboard {
@@ -871,8 +871,8 @@ struct WeeklyReportScreen: View {
                         ("Остаток наличных", Money.format(totals.remainCash)),
                     ],
                     colors: totals.net >= 0
-                        ? [Color(hex: 0x059669), Color(hex: 0x0F766E)]
-                        : [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
+                        ? Theme.heroGradient
+                        : Theme.heroNegative
                 )
 
                 weekChart(report)
@@ -1244,7 +1244,7 @@ struct ValuationScreen: View {
                         ("EBITDA · \(Percent.format(valuation.ebitdaMargin))", Money.format(valuation.ebitda12mo)),
                         ("Чистая прибыль", Money.format(valuation.netProfit12mo)),
                     ],
-                    colors: [Color(hex: 0x0F766E), Color(hex: 0x0E7490)]
+                    colors: Theme.heroGradient
                 )
                 HStack(spacing: Spacing.sm) {
                     if let period = valuation.periodLabel {

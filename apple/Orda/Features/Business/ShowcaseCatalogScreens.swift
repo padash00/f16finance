@@ -144,7 +144,7 @@ struct ShowcaseScreen: View {
                 ("Пустых", "\(empty)"),
                 ("Выставлено", "\(rows.count - empty)"),
             ],
-            colors: [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
+            colors: Theme.heroGradient
         )
     }
 
@@ -290,7 +290,7 @@ struct CatalogScreen: View {
                 ("Нет в наличии", "\(missing)"),
                 ("С ценой", "\(priced)"),
             ],
-            colors: [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+            colors: Theme.heroGradient
         )
     }
 

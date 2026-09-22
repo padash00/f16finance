@@ -112,8 +112,8 @@ struct StockForecastScreen: View {
                         ("Без продаж 30 дн.", "\(idle)"),
                     ],
                     colors: critical > 0
-                        ? [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
-                        : [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
+                        ? Theme.heroNegative
+                        : Theme.heroGradient
                 )
             } else {
                 HeroSummary(
@@ -121,7 +121,7 @@ struct StockForecastScreen: View {
                     value: "\(rows.count) \(pluralize(rows.count, "позиция", "позиции", "позиций"))",
                     caption: "ничего не кончается в ближайшую неделю",
                     footer: idle > 0 ? [("Без продаж 30 дн.", "\(idle)")] : [],
-                    colors: [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+                    colors: Theme.heroGradient
                 )
             }
         }

@@ -207,7 +207,7 @@ private struct OperatorDetail: View {
                         ("Долги", Money.format(person.stats.totalDebts)),
                     ],
                     colors: person.isActive
-                        ? [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+                        ? Theme.heroGradient
                         : [Color(hex: 0x64748B), Color(hex: 0x475569)]
                 )
 
@@ -886,7 +886,7 @@ struct SalaryHero: View {
         .padding(Spacing.xl)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            LinearGradient(colors: [Color(hex: 0x2563EB), Color(hex: 0x7C3AED)], startPoint: .topLeading, endPoint: .bottomTrailing),
+            LinearGradient(colors: Theme.heroGradient, startPoint: .topLeading, endPoint: .bottomTrailing),
             in: RoundedRectangle(cornerRadius: 28, style: .continuous)
         )
     }

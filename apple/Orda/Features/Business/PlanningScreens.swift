@@ -85,7 +85,7 @@ struct ExpenseWhitelistScreen: View {
                         ("На все точки", "\(board.vendors.count - board.companyScopedCount)"),
                         ("Ограничены точкой", "\(board.companyScopedCount)"),
                     ],
-                    colors: [Color(hex: 0x0F766E), Color(hex: 0x0E7490)]
+                    colors: Theme.heroGradient
                 )
 
                 explainer
@@ -347,8 +347,8 @@ struct SimulationScreen: View {
                     ("Устройств", Quantity.format(projection.totalDevices)),
                 ],
                 colors: projection.isUnderPotential
-                    ? [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
-                    : [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+                    ? Theme.heroGradient
+                    : Theme.heroGradient
             )
 
             if let fact {
@@ -694,10 +694,10 @@ struct SupplierBillingScreen: View {
                     ("Счетов открыто", "\(totals.openCount)"),
                 ],
                 colors: totals.hasOverdue
-                    ? [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
+                    ? Theme.heroNegative
                     : totals.open > 0
-                        ? [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
-                        : [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+                        ? Theme.heroGradient
+                        : Theme.heroGradient
             )
 
             PillSegment(options: options, selection: $filter)
@@ -963,10 +963,10 @@ private struct SupplierDebtDetail: View {
     }
 
     private var heroColors: [Color] {
-        if debt.isOverdue { return [Color(hex: 0xE11D48), Color(hex: 0x9F1239)] }
-        if debt.isOpen { return [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)] }
-        if debt.isWrittenOff { return [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)] }
-        return [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+        if debt.isOverdue { return Theme.heroNegative }
+        if debt.isOpen { return Theme.heroGradient }
+        if debt.isWrittenOff { return Theme.heroGradient }
+        return Theme.heroGradient
     }
 }
 

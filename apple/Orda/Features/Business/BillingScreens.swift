@@ -101,9 +101,9 @@ struct SubscriptionScreen: View {
 
     private func heroColors(_ status: String?) -> [Color] {
         switch status {
-        case "past_due": [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
-        case "trialing": [Color(hex: 0x0EA5E9), Color(hex: 0x2563EB)]
-        case "active": [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+        case "past_due": Theme.heroNegative
+        case "trialing": Theme.heroAccent
+        case "active": Theme.heroGradient
         default: [Color(hex: 0x64748B), Color(hex: 0x475569)]
         }
     }
@@ -321,8 +321,8 @@ struct IncidentsScreen: View {
                 ("Ждут решения", "\(pending)"),
             ],
             colors: fines > bonuses
-                ? [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
-                : [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+                ? Theme.heroNegative
+                : Theme.heroGradient
         )
         .padding(.horizontal, Spacing.lg)
         .padding(.vertical, Spacing.md)
@@ -422,8 +422,8 @@ private struct IncidentDetail: View {
                         value: Money.signed(incident.netAmount),
                         caption: incident.statusLabel,
                         colors: incident.netAmount > 0
-                            ? [Color(hex: 0x059669), Color(hex: 0x0F766E)]
-                            : [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
+                            ? Theme.heroGradient
+                            : Theme.heroNegative
                     )
                 }
 
@@ -570,8 +570,8 @@ struct PointDebtsScreen: View {
                     ("Позиций", "\(week.totalCount)"),
                 ],
                 colors: week.unpaidAmount > 0
-                    ? [Color(hex: 0xEA580C), Color(hex: 0xDC2626)]
-                    : [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+                    ? Theme.heroNegative
+                    : Theme.heroGradient
             )
 
             // Группируем по точкам: долг спрашивают с конкретной точки,

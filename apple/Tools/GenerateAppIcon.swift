@@ -2,9 +2,10 @@
 //
 // Генератор иконки приложения из фирменного знака.
 //
-// Знак тот же, что в заставке (`OrdaMark`): шестиугольник из трёх граней куба.
-// Рисуется кодом, поэтому иконка и заставка не могут разъехаться — меняется
-// геометрия в одном месте.
+// Знак ORDA CONTROL — тот же, что в заставке (`OrdaControlMark`): белое
+// кольцо и кобальтовый сегмент справа сверху на Deep Navy. Геометрия — из
+// docs/design/ORDA_CONTROL_DESIGN_SYSTEM.md; рисуется кодом, поэтому иконка и
+// заставка не разъедутся.
 //
 // Запуск (из каталога apple/):
 //   swift Tools/GenerateAppIcon.swift
@@ -15,89 +16,60 @@
 import AppKit
 import SwiftUI
 
-// ── Геометрия знака ──────────────────────────────────────────────────────────
+// ── Знак ─────────────────────────────────────────────────────────────────────
 
-/// Одна грань изометрического куба. Копия `RhombusFacet` из приложения —
-/// скрипт standalone и не может импортировать модуль приложения.
-struct IconFacet: Shape {
-    let index: Int
+/// Дуга с центром в середине рамки: углы в градусах, 0 — вправо, по часовой.
+struct IconArc: Shape {
+    let from: Double
+    let to: Double
+    let radius: CGFloat
 
     func path(in rect: CGRect) -> Path {
-        let width = rect.width
-        let height = rect.height
-        let centerX = rect.midX
-        let centerY = rect.midY
-
-        let top = CGPoint(x: centerX, y: 0)
-        let topRight = CGPoint(x: width, y: height * 0.25)
-        let bottomRight = CGPoint(x: width, y: height * 0.75)
-        let bottom = CGPoint(x: centerX, y: height)
-        let bottomLeft = CGPoint(x: 0, y: height * 0.75)
-        let topLeft = CGPoint(x: 0, y: height * 0.25)
-        let center = CGPoint(x: centerX, y: centerY)
-
         var path = Path()
-        switch index {
-        case 0:
-            path.move(to: topLeft); path.addLine(to: top)
-            path.addLine(to: topRight); path.addLine(to: center)
-        case 1:
-            path.move(to: topRight); path.addLine(to: bottomRight)
-            path.addLine(to: bottom); path.addLine(to: center)
-        default:
-            path.move(to: topLeft); path.addLine(to: center)
-            path.addLine(to: bottom); path.addLine(to: bottomLeft)
-        }
-        path.closeSubpath()
+        path.addArc(
+            center: CGPoint(x: rect.midX, y: rect.midY),
+            radius: radius,
+            startAngle: .degrees(from),
+            endAngle: .degrees(to),
+            clockwise: false
+        )
         return path
     }
 }
 
-/// Полотно иконки.
+/// Полотно иконки. Скруглять углы не нужно: маску накладывает система.
 ///
-/// Знак крупный, фон плотный, свечения нет. Свечение пропадает первым на
-/// маленьком размере — на домашнем экране от иконки оставалось тусклое пятно,
-/// хотя в 1024 она смотрелась хорошо. Скруглять углы не нужно: маску
-/// накладывает система.
+/// Свечения нет: на маленьком размере оно пропадает первым, и от иконки
+/// остаётся мутное пятно. Только плотный navy, белое кольцо и кобальт.
 struct IconCanvas: View {
-    /// Доля ширины под знак. Apple рекомендует поля 10–20 %.
-    private let markScale: CGFloat = 0.68
+    /// Доля стороны под знак (кольцо r=0.29 в поле знака).
+    private let markScale: CGFloat = 0.8
 
     var body: some View {
         GeometryReader { proxy in
             let side = proxy.size.width
-            let markWidth = side * markScale
-            let markHeight = markWidth * (108.0 / 96.0)
-
+            let mark = side * markScale
             ZStack {
                 LinearGradient(
                     colors: [
-                        Color(red: 0.055, green: 0.078, blue: 0.086),
-                        Color(red: 0.016, green: 0.024, blue: 0.028),
+                        Color(red: 0x17 / 255, green: 0x35 / 255, blue: 0x63 / 255),
+                        Color(red: 0x0B / 255, green: 0x1F / 255, blue: 0x3B / 255),
                     ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
+                    startPoint: .top,
+                    endPoint: .bottom
                 )
-
-                ZStack {
-                    ForEach(0..<3, id: \.self) { index in
-                        IconFacet(index: index)
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color(red: 0.30, green: 1.0, blue: 0.78)
-                                            .opacity(1.0 - Double(index) * 0.14),
-                                        Color(red: 0.06, green: 0.80, blue: 0.55)
-                                            .opacity(0.98 - Double(index) * 0.10),
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                    }
-                }
-                .frame(width: markWidth, height: markHeight)
+                Circle()
+                    .inset(by: mark * (0.5 - 0.29))
+                    .stroke(Color.white, lineWidth: mark * 0.15)
+                    .frame(width: mark, height: mark)
+                IconArc(from: -104, to: -14, radius: mark * 0.29)
+                    .stroke(
+                        Color(red: 0x25 / 255, green: 0x63 / 255, blue: 0xEB / 255),
+                        style: StrokeStyle(lineWidth: mark * 0.19, lineCap: .round)
+                    )
+                    .frame(width: mark, height: mark)
             }
+            .frame(width: side, height: side)
         }
     }
 }

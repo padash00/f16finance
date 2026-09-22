@@ -13,11 +13,11 @@ import SwiftUI
 /// все остальные — и читатель решил бы, что данные изменились.
 public enum ChartPalette {
     /// Первый ряд — основной показатель (выручка, начислено).
-    public static let series1 = Color.adaptive(dark: 0x059669, light: 0x047857)
+    public static let series1 = Color.adaptive(dark: 0x3B82F6, light: 0x2563EB)
     /// Второй ряд (Kaspi, вторая точка).
-    public static let series2 = Color.adaptive(dark: 0x3B82F6, light: 0x2563EB)
+    public static let series2 = Color.adaptive(dark: 0x2DD4BF, light: 0x0D9488)
     /// Третий ряд.
-    public static let series3 = Color.adaptive(dark: 0xEA580C, light: 0xC2410C)
+    public static let series3 = Color.adaptive(dark: 0xFBBF24, light: 0xD97706)
 
     public static let all: [Color] = [series1, series2, series3]
 

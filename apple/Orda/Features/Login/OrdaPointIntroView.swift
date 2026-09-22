@@ -1,18 +1,18 @@
 import OrdaUI
 import SwiftUI
 
-/// Заставка запуска: точка → сборка → замок → название → вход.
+/// Заставка запуска ORDA CONTROL: знак появляется → кобальтовый сегмент
+/// дотягивается → слово ORDA / CONTROL и слоган → переход в интерфейс.
 ///
 /// Это не ролик и не отдельный экран. Заставка лежит поверх уже собранного
-/// интерфейса, а знак в конце не исчезает, а переезжает в шапку входа тем же
-/// объектом — иначе получилась бы связка «заставка, чернота, другой экран»,
-/// то есть две разные программы вместо одной.
+/// интерфейса и в конце не обрывается, а растворяется в нём: фон светлеет,
+/// логотип уходит к шапке входа.
 ///
-/// Длительность держим в пределах 1,9 секунды. Это деловая программа: человек
-/// открыл её, чтобы работать, и брендом его можно задержать ровно настолько,
-/// чтобы он успел его прочитать.
+/// Длительность — около 3,5 секунды: быстрее логотип не успевали рассмотреть.
+/// Это деловая программа: брендом можно задержать ровно настолько, чтобы его
+/// успели прочитать.
 struct OrdaPointIntroView: View {
-    /// Общее пространство геометрии с экраном входа: по нему знак и переезжает.
+    /// Общее пространство геометрии с экраном входа.
     let namespace: Namespace.ID
     /// Заставка отработала — можно убирать.
     var onFinish: () -> Void
@@ -23,109 +23,100 @@ struct OrdaPointIntroView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    @State private var phase: Phase = .initial
-    /// Готовность каждого сегмента. Отдельными значениями, потому что они
-    /// приходят с задержкой друг за другом.
-    @State private var segments: [CGFloat] = [0, 0, 0, 0]
-    @State private var pointProgress: CGFloat = 0
+    /// Кольцо знака: 0 — нет, 1 — на месте.
+    @State private var ring: CGFloat = 0
+    /// Сколько кобальтового сегмента дорисовано.
+    @State private var sweep: CGFloat = 0
     @State private var glow: CGFloat = 0
-    @State private var lockScale: CGFloat = 1
-    @State private var wordmarkShown = false
+    /// Знак крупно (кадры 1–2) сменяется логотипом (кадр 3).
+    @State private var logoShown = false
+    @State private var taglineShown = false
     @State private var backgroundLifted = false
-    @State private var symbolFlewOut = false
+    @State private var handedOver = false
 
-    enum Phase {
-        case initial
-        /// Появилась центральная точка.
-        case point
-        /// Сегменты сходятся.
-        case converging
-        /// Знак собран, идёт короткое подтверждение.
-        case assembled
-        /// Появилось название.
-        case branded
-        /// Знак переезжает в шапку входа.
-        case transitioning
-        case completed
-    }
-
-    /// Все длительности — в одном месте: разбросанные по коду числа
-    /// расходятся с раскадровкой на первой же правке.
-    private enum Motion {
-        static let point: Duration = .milliseconds(180)
-        static let convergence: Duration = .milliseconds(540)
-        static let assembly: Duration = .milliseconds(220)
-        static let lock: Duration = .milliseconds(140)
-        static let wordmark: Duration = .milliseconds(300)
-        static let hold: Duration = .milliseconds(150)
-        static let handover: Duration = .milliseconds(420)
+    private enum Timing {
+        // Спокойный темп: при 2 секундах логотип не успевали рассмотреть.
+        static let appear: Duration = .milliseconds(500)
+        static let sweep: Duration = .milliseconds(950)
+        static let reveal: Duration = .milliseconds(800)
+        /// Пауза узнавания: логотип и слоган на экране целиком.
+        static let hold: Duration = .milliseconds(550)
+        static let handover: Duration = .milliseconds(760)
         /// Сколько ждать готовности данных, прежде чем уступить экран.
         static let maxWait: Duration = .milliseconds(2600)
-
-        /// Кривая сборки: быстро стартует, мягко приходит. Без пружины —
-        /// сегментам нельзя перелетать своё место и возвращаться.
-        static let assemble = Animation.timingCurve(0.22, 1.0, 0.36, 1.0, duration: 0.54)
-        static let settle = Animation.timingCurve(0.33, 1.0, 0.68, 1.0, duration: 0.3)
-        static let travel = Animation.timingCurve(0.32, 0.94, 0.24, 1.0, duration: 0.42)
     }
 
-    /// Размер знака в заставке. Одно число на все устройства: логотип не
-    /// должен прыгать по размеру между телефоном и планшетом.
-    private static let symbolSize: CGFloat = 112
+    /// Мягкая кривая без отскока: бренд спокойный, не игровой.
+    private static let ease = Animation.timingCurve(0.4, 0.0, 0.2, 1.0, duration: 0.95)
+
+    private static let markSize: CGFloat = 104
+    private static let logoHeight: CGFloat = 66
+    /// Во сколько раз логотип уменьшается к шапке входа.
+    private static let headoverScale: CGFloat = 0.72
 
     var body: some View {
         ZStack {
             background
 
-            // Один блок: знак и название живут в общей стопке с общей осью и
-            // заданным расстоянием. Никаких отдельных сдвигов по экрану — до
-            // этого название ставилось смещением от знака, и композиция
-            // разъезжалась: знак выше и левее, текст ниже и правее.
-            OrdaPointLockup(
-                symbolSize: Self.symbolSize,
-                segments: segments,
-                point: pointProgress,
-                glow: glow,
-                wordmarkOpacity: wordmarkShown ? 1 : 0,
-                // Проявление — на несколько точек: конечное место названия
-                // задано вёрсткой, анимация его не переносит.
-                wordmarkOffset: wordmarkShown ? 0 : 6,
-                wordmarkColor: .white
-            )
-            // Переход: композиция уменьшается к размеру шапки входа и гаснет,
-            // пока под ней проявляется та же композиция уже на своём месте.
-            //
-            // Раньше здесь был matchedGeometryEffect, но у него оказалось два
-            // источника разом — заставка и шапка существуют одновременно, — и
-            // SwiftUI не мог решить, чью геометрию считать настоящей: экран
-            // оставался пустым. Совпадение осей и пропорций даёт ту же
-            // непрерывность без неопределённости.
-            .scaleEffect(lockScale * (symbolFlewOut ? Self.headoverScale : 1))
-            .opacity(symbolFlewOut ? 0 : 1)
+            ZStack {
+                // Кадры 1–2: знак крупно, сегмент дотягивается.
+                OrdaControlMark(ringColor: .white, sweep: sweep, ring: ring, glow: glow)
+                    .frame(width: Self.markSize, height: Self.markSize)
+                    .scaleEffect(0.92 + 0.08 * ring)
+                    .opacity(logoShown ? 0 : Double(ring))
+                    .scaleEffect(logoShown ? 0.6 : 1)
+
+                // Кадр 3: логотип и слоган.
+                VStack(spacing: 18) {
+                    OrdaControlLogo(
+                        height: Self.logoHeight,
+                        color: .white,
+                        subtitleColor: .white.opacity(0.7)
+                    )
+                    Text("Бизнес под контролем.")
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .opacity(taglineShown ? 1 : 0)
+                        .offset(y: taglineShown ? 0 : 6)
+                }
+                .opacity(logoShown ? 1 : 0)
+                .scaleEffect(logoShown ? 1 : 1.08)
+            }
+            .scaleEffect(handedOver ? Self.headoverScale : 1)
+            .offset(y: handedOver ? -60 : 0)
+            .opacity(handedOver ? 0 : 1)
         }
-        // Своя система координат на весь экран: композиция считается от него,
-        // а не от чего-то, что окажется рядом.
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ignoresSafeArea()
         .task { await run() }
     }
 
-    /// Во сколько раз композиция уменьшается на переходе: до размера знака в
-    /// шапке входа, чтобы глаз читал это как один и тот же логотип.
-    private static let headoverScale: CGFloat = 76 / symbolSize
+    // ── Фон ──────────────────────────────────────────────────────────────────
 
-    // ── Куски ────────────────────────────────────────────────────────────────
-
+    /// Deep Navy с едва заметными кобальтовыми дугами — они не спорят с
+    /// логотипом, только дают глубину.
     private var background: some View {
         ZStack {
             Theme.launchBackground
-            // Слабый свет из центра — он же готовит переход: к концу заставки
-            // фон светлеет, а не сменяется рывком.
+            GeometryReader { proxy in
+                let w = proxy.size.width
+                let h = proxy.size.height
+                Circle()
+                    .stroke(Theme.cobalt.opacity(0.22), lineWidth: w * 0.5)
+                    .frame(width: w * 1.9, height: w * 1.9)
+                    .position(x: w * 1.15, y: h * 1.05)
+                    .blur(radius: 30)
+                Circle()
+                    .fill(Color(hex: 0x173563).opacity(0.55))
+                    .frame(width: w * 1.3, height: w * 1.3)
+                    .position(x: -w * 0.2, y: -h * 0.05)
+                    .blur(radius: 40)
+            }
             RadialGradient(
-                colors: [Theme.brandMint.opacity(0.16 + 0.12 * glow), .clear],
+                colors: [Theme.cobalt.opacity(0.10 + 0.18 * glow), .clear],
                 center: .center,
                 startRadius: 0,
-                endRadius: 320
+                endRadius: 260
             )
         }
         .opacity(backgroundLifted ? 0 : 1)
@@ -139,69 +130,52 @@ struct OrdaPointIntroView: View {
             return
         }
 
-        // 0,000–0,180 — центральная точка.
-        phase = .point
-        withAnimation(.easeOut(duration: 0.18)) { pointProgress = 1 }
-        guard await sleep(Motion.point) else { return }
+        // 0,00–0,30 — знак появляется: мягкое проявление и чуть-чуть масштаба.
+        withAnimation(.easeOut(duration: 0.5)) { ring = 1 }
+        guard await sleep(Timing.appear) else { return }
 
-        // 0,180–0,720 — сегменты сходятся, каждый со своей задержкой.
-        phase = .converging
-        for index in segments.indices {
-            withAnimation(Motion.assemble.delay(Double(index) * 0.035)) {
-                segments[index] = 1
-            }
-        }
-        guard await sleep(Motion.convergence) else { return }
-
-        // 0,720–0,940 — знак встал.
-        phase = .assembled
-        guard await sleep(Motion.assembly) else { return }
-
-        // Замок: одно короткое подтверждение и свет из центра.
+        // 0,30–0,90 — кобальтовый сегмент дотягивается до места и один раз
+        // вспыхивает: система готова. Не вращение — один проход.
+        withAnimation(Self.ease) { sweep = 1 }
+        guard await sleep(Timing.sweep) else { return }
         Haptics.tap()
-        withAnimation(.easeOut(duration: 0.07)) { lockScale = 1.015; glow = 1 }
-        guard await sleep(Motion.lock) else { return }
-        withAnimation(.easeInOut(duration: 0.22)) { lockScale = 1; glow = 0.35 }
+        withAnimation(.easeOut(duration: 0.18)) { glow = 1 }
+        withAnimation(.easeInOut(duration: 0.5).delay(0.18)) { glow = 0.3 }
 
-        // 0,980–1,280 — название.
-        phase = .branded
-        withAnimation(Motion.settle) { wordmarkShown = true }
-        guard await sleep(Motion.wordmark) else { return }
+        // 0,90–1,45 — логотип и слоган.
+        withAnimation(.easeInOut(duration: 0.55)) { logoShown = true }
+        withAnimation(.easeOut(duration: 0.45).delay(0.35)) { taglineShown = true }
+        guard await sleep(Timing.reveal) else { return }
+        guard await sleep(Timing.hold) else { return }
 
-        // Пауза узнавания — и заодно последний шанс догрузиться данным.
-        guard await sleep(Motion.hold) else { return }
         guard await waitForReadiness() else { return }
 
-        // 1,430–1,850 — знак уезжает в шапку входа, фон светлеет.
-        phase = .transitioning
-        withAnimation(Motion.travel) {
-            symbolFlewOut = true
+        // 1,45–2,00 — переход без жёсткой склейки: фон светлеет, логотип
+        // уходит вверх и растворяется в шапке входа или в главной.
+        withAnimation(.timingCurve(0.4, 0.0, 0.2, 1.0, duration: 0.75)) {
+            handedOver = true
             backgroundLifted = true
             glow = 0
         }
-        guard await sleep(Motion.handover) else { return }
-
-        phase = .completed
+        guard await sleep(Timing.handover) else { return }
         onFinish()
     }
 
-    /// При «уменьшении движения» показываем знак и уходим: сборку из четырёх
-    /// сегментов человек в этом режиме видеть не должен.
+    /// При «уменьшении движения» — сразу логотип, короткое проявление, уход.
     private func runReduced() async {
-        withAnimation(.easeOut(duration: 0.17)) {
-            pointProgress = 1
-            segments = [1, 1, 1, 1]
+        ring = 1
+        sweep = 1
+        withAnimation(.easeOut(duration: 0.18)) {
+            logoShown = true
+            taglineShown = true
         }
-        guard await sleep(.milliseconds(170)) else { return }
-        withAnimation(.easeOut(duration: 0.14)) { wordmarkShown = true }
-        guard await sleep(.milliseconds(160)) else { return }
+        guard await sleep(.milliseconds(350)) else { return }
         guard await waitForReadiness() else { return }
         withAnimation(.easeInOut(duration: 0.2)) {
-            symbolFlewOut = true
+            handedOver = true
             backgroundLifted = true
         }
         guard await sleep(.milliseconds(200)) else { return }
-        phase = .completed
         onFinish()
     }
 
@@ -212,7 +186,7 @@ struct OrdaPointIntroView: View {
         if goesToWorkspace() { return true }
         var waited: Duration = .zero
         let step: Duration = .milliseconds(60)
-        while !isReady(), waited < Motion.maxWait {
+        while !isReady(), waited < Timing.maxWait {
             guard await sleep(step) else { return false }
             waited += step
         }

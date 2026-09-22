@@ -171,7 +171,7 @@ struct SalaryRulesScreen: View {
                         ("Правил действует", "\(book.activeRules.count)"),
                         ("Надбавка за стаж", book.maxSeniorityPercent > 0 ? "до \(Percent.format(book.maxSeniorityPercent))" : "нет"),
                     ],
-                    colors: [Color(hex: 0x0F766E), Color(hex: 0x0E7490)]
+                    colors: Theme.heroGradient
                 )
 
                 if !book.activeTiers.isEmpty {
@@ -838,8 +838,8 @@ struct StructureScreen: View {
                         ("Без руководителя", "\(leaderless.count)"),
                     ],
                     colors: orphans.isEmpty
-                        ? [Color(hex: 0x0EA5E9), Color(hex: 0x2563EB)]
-                        : [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
+                        ? Theme.heroAccent
+                        : Theme.heroGradient
                 )
 
                 if !orphans.isEmpty {
@@ -1205,8 +1205,8 @@ private struct RoleAccessDetail: View {
                     ("Разделов", "\(role.openPages.count)"),
                 ],
                 colors: role.dangerousCount > 0
-                    ? [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
-                    : [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+                    ? Theme.heroNegative
+                    : Theme.heroGradient
             )
 
             if !role.pagesWithDanger.isEmpty {

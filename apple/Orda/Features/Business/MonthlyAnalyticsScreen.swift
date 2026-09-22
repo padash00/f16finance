@@ -99,7 +99,7 @@ struct MonthlyAnalyticsScreen: View {
                 ("Прибыль" + (margin.map { " · \(Percent.format($0))" } ?? ""), Money.format(data.profitTotal)),
                 ("Чеков · \(Money.format(avgCheck))", data.checksTotal.formatted()),
             ],
-            colors: [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+            colors: Theme.heroGradient
         )
     }
 

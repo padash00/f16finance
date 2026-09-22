@@ -123,7 +123,7 @@ struct ReceiptsScreen: View {
                     value: Money.format(active.reduce(0) { $0 + $1.totalAmount }),
                     footer: [(kind.countLabel, "\(active.count)")]
                         + (expiring > 0 ? [("Истекает срок", "\(expiring)")] : []),
-                    colors: [Color(hex: 0x0EA5E9), Color(hex: 0x2563EB)]
+                    colors: Theme.heroAccent
                 )
                 // Карточка стоит над списком: без отступа градиент упирался в
                 // края экрана и срезал скругления.
@@ -381,7 +381,7 @@ struct WriteoffsScreen: View {
                     value: Money.format(total),
                     caption: top.map { "больше всего — \($0.key.lowercased())" },
                     footer: footer,
-                    colors: [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
+                    colors: Theme.heroNegative
                 )
                 .padding(.horizontal, Spacing.lg)
                 .padding(.vertical, Spacing.md)
@@ -638,7 +638,7 @@ struct ShiftReportsScreen: View {
                         ("Открыто сейчас", "\(open.count)"),
                         ("С расхождением", "\(discrepancies.count)"),
                     ],
-                    colors: [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+                    colors: Theme.heroGradient
                 )
                 .padding(.horizontal, Spacing.lg)
                 .padding(.vertical, Spacing.md)
@@ -760,7 +760,7 @@ private struct ShiftReportDetail: View {
                         ("Kaspi", Money.format(shift.totals.kaspi)),
                         ("Чеков", "\(shift.totals.count)"),
                     ],
-                    colors: [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+                    colors: Theme.heroGradient
                 )
 
                 OwnerSection("Касса") {

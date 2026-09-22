@@ -94,7 +94,7 @@ struct StoreScreen: View {
                 ("Заявок ждёт", "\(pending)"),
                 ("Движений сегодня", "\(todayMovements.count)"),
             ],
-            colors: [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
+            colors: Theme.heroGradient
         )
     }
 

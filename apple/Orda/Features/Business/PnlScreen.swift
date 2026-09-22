@@ -252,8 +252,8 @@ struct PnlScreen: View {
                 ("Валовая", Money.format(current.grossProfit)),
             ],
             colors: current.netProfit >= 0
-                ? [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
-                : [Color(hex: 0xDC2626), Color(hex: 0x9F1239)]
+                ? Theme.heroGradient
+                : Theme.heroNegative
         )
     }
 

@@ -173,8 +173,8 @@ struct ProductionScreen: View {
                         ("Осталось", Money.format(totals.margin)),
                     ],
                     colors: totals.isHigh
-                        ? [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
-                        : [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+                        ? Theme.heroNegative
+                        : Theme.heroGradient
                 )
                 .padding(.horizontal, Spacing.lg)
             }
@@ -631,8 +631,8 @@ struct PurchasePlanScreen: View {
                 caption: plan.weekStart.map { "неделя с \($0.formatted(.dateTime.day().month(.abbreviated)))" },
                 footer: planFooter(plan),
                 colors: (plan.shareOfRevenue ?? 0) > 60
-                    ? [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
-                    : [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+                    ? Theme.heroNegative
+                    : Theme.heroGradient
             )
             .padding(.horizontal, Spacing.lg)
 
@@ -1021,8 +1021,8 @@ struct PurchaseOrdersScreen: View {
                     ("Всего", "\(store.orders.count)"),
                 ],
                 colors: store.overdue.isEmpty
-                    ? [Color(hex: 0x0EA5E9), Color(hex: 0x2563EB)]
-                    : [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
+                    ? Theme.heroAccent
+                    : Theme.heroNegative
             )
             .padding(.horizontal, Spacing.lg)
 
@@ -1514,7 +1514,7 @@ struct ConsumablesScreen: View {
                     ("Без нормы", "\(store.withoutNorm.count)"),
                     ("Выдач", "\(store.issues.count)"),
                 ],
-                colors: [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
+                colors: Theme.heroGradient
             )
             .padding(.horizontal, Spacing.lg)
 

@@ -204,7 +204,7 @@ struct OperatorRosterScreen: View {
                         value: Money.format(money.averagePerShift),
                         caption: "\(money.shifts) \(pluralize(money.shifts, "смена", "смены", "смен"))",
                         footer: moneyFooter(money),
-                        colors: [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+                        colors: Theme.heroGradient
                     )
 
                     if money.manualPlus > 0.01 || money.hasDeductions || money.advances > 0.01 {

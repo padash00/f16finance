@@ -171,10 +171,10 @@ private struct RevisionDetail: View {
                         ("Расхождений", "\(stocktake.mismatches.count)"),
                     ],
                     colors: stocktake.shortageAmount > 0
-                        ? [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
+                        ? Theme.heroNegative
                         : (stocktake.mismatches.isEmpty
-                            ? [Color(hex: 0x059669), Color(hex: 0x0F766E)]
-                            : [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)])
+                            ? Theme.heroGradient
+                            : Theme.heroGradient)
                 )
 
                 OwnerSection("Подробности") {
@@ -303,7 +303,7 @@ struct SuppliersScreen: View {
                         ("Поставщиков", "\(list.suppliers.count)"),
                         ("С долгом", "\(list.suppliers.filter(\.hasDebt).count)"),
                     ],
-                    colors: [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
+                    colors: Theme.heroGradient
                 )
                 .padding(.horizontal, Spacing.lg)
                 .padding(.vertical, Spacing.md)
@@ -436,8 +436,8 @@ private struct SupplierDetail: View {
                         ("Долг", Money.format(supplier.openDebtsAmount)),
                     ],
                     colors: supplier.hasDebt
-                        ? [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
-                        : [Color(hex: 0x0F766E), Color(hex: 0x0E7490)]
+                        ? Theme.heroGradient
+                        : Theme.heroGradient
                 )
 
                 OwnerSection("Реквизиты") {
@@ -642,8 +642,8 @@ private struct StaffDetail: View {
                         ("Выплачено", Money.format(paid)),
                     ],
                     colors: paid >= member.monthlySalary
-                        ? [Color(hex: 0x059669), Color(hex: 0x0F766E)]
-                        : [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+                        ? Theme.heroGradient
+                        : Theme.heroGradient
                 )
 
                 if let phone = member.phone, !phone.isEmpty {

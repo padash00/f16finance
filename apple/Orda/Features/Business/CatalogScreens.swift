@@ -62,8 +62,8 @@ struct ExpenseCategoriesScreen: View {
                     ("Близко к лимиту", "\(near.count)"),
                 ],
                 colors: over.isEmpty
-                    ? [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
-                    : [Color(hex: 0xE11D48), Color(hex: 0x9F1239)]
+                    ? Theme.heroGradient
+                    : Theme.heroNegative
             )
 
             if !over.isEmpty {
@@ -241,7 +241,7 @@ struct StoreAnalyticsScreen: View {
                     ("Средний чек", Money.format(analytics.salesCount > 0 ? analytics.totalSales / Double(analytics.salesCount) : 0)),
                     ("Без движения", "\(stale.count)"),
                 ],
-                colors: [Color(hex: 0xF59E0B), Color(hex: 0xEA580C)]
+                colors: Theme.heroGradient
             )
 
             let series = analytics.salesByDay

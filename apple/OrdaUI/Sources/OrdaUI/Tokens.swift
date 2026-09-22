@@ -3,76 +3,85 @@ import SwiftUI
 /// Токены оформления. Единственный источник цвета, отступа и радиуса в
 /// приложении — экраны не задают их напрямую.
 ///
-/// Палитра унаследована от веб-портала и Expo-версии (глубокий тёмный фон,
-/// изумрудный бренд), но пересобрана под нативный контекст: цвета
-/// адаптивные, поэтому на Mac в светлой теме приложение не выглядит
-/// чужеродным чёрным прямоугольником.
+/// Палитра ORDA CONTROL (docs/design/ORDA_CONTROL_DESIGN_SYSTEM.md): Deep Navy
+/// и кобальт на тёплом белом. Кобальт — только для действия и акцента,
+/// основа — нейтральная. Тёмная тема — на глубоком синем, не на чёрном:
+/// тот же продукт ночью, а не отдельная «киберпанк»-тема.
 public enum Theme {
 
     // ── Поверхности ──────────────────────────────────────────────────────────
 
     /// Фон приложения.
-    public static let background = Color.adaptive(dark: 0x070809, light: 0xF6F7F9)
+    public static let background = Color.adaptive(dark: 0x081830, light: 0xF6F6F3)
     /// Фон приподнятой области (боковая панель, панель инструментов).
-    public static let elevated = Color.adaptive(dark: 0x0D1014, light: 0xFFFFFF)
+    public static let elevated = Color.adaptive(dark: 0x0C1F3C, light: 0xFFFFFF)
     /// Карточка.
-    public static let surface = Color.adaptive(dark: 0x12161B, light: 0xFFFFFF)
+    public static let surface = Color.adaptive(dark: 0x0F2544, light: 0xFFFFFF)
     /// Карточка второго уровня (внутри карточки).
-    public static let surfaceRaised = Color.adaptive(dark: 0x181D23, light: 0xF2F4F7)
+    public static let surfaceRaised = Color.adaptive(dark: 0x15305A, light: 0xF3F4F6)
 
     // ── Границы ──────────────────────────────────────────────────────────────
 
-    public static let border = Color.adaptive(dark: 0x222831, light: 0xE3E7EC)
-    public static let borderSoft = Color.adaptive(dark: 0x191E25, light: 0xEDF0F4)
+    public static let border = Color.adaptive(dark: 0x1E3A63, light: 0xE5E7EB)
+    public static let borderSoft = Color.adaptive(dark: 0x17325A, light: 0xEEF0F3)
 
     // ── Текст ────────────────────────────────────────────────────────────────
 
-    public static let text = Color.adaptive(dark: 0xFFFFFF, light: 0x0B0F14)
+    public static let text = Color.adaptive(dark: 0xF3F4F6, light: 0x111827)
     /// Подписи, вторичная информация.
-    public static let textMuted = Color.adaptive(dark: 0xB6C0CD, light: 0x5A6673)
+    public static let textMuted = Color.adaptive(dark: 0xB4BFD0, light: 0x4B5563)
     /// Совсем тихий текст: единицы измерения, служебное.
-    public static let textDim = Color.adaptive(dark: 0x8B95A4, light: 0x8A94A1)
+    public static let textDim = Color.adaptive(dark: 0x8593AA, light: 0x6B7280)
 
     // ── Бренд и смысловые цвета ──────────────────────────────────────────────
 
-    public static let brand = Color.adaptive(dark: 0x10B981, light: 0x059669)
-    public static let brandBright = Color.adaptive(dark: 0x3DF0B6, light: 0x10B981)
+    /// Кобальт — действие, активное, фокус.
+    public static let brand = Color.adaptive(dark: 0x3B82F6, light: 0x2563EB)
+    public static let brandBright = Color.adaptive(dark: 0x60A5FA, light: 0x3B82F6)
+    /// Deep Navy — подложки бренда и главные карточки.
+    public static let navy = Color(hex: 0x0B1F3B)
+    /// Второй тон navy для градиента главной карточки.
+    public static let navyLight = Color(hex: 0x173563)
+    /// Кобальт знака — не адаптивный.
+    public static let cobalt = Color(hex: 0x2563EB)
+    /// Тёплый белый фон бренда.
+    public static let warmWhite = Color(hex: 0xFAFAF8)
 
-    // ── Знак Orda Point ──────────────────────────────────────────────────────
-    //
-    // Цвета знака не адаптивные, в отличие от остальной палитры: логотип
-    // должен читаться одинаково в приложении, в App Store и на визитке.
-    // Адаптивный бренд-цвет остаётся для интерфейса — кнопок, акцентов.
+    /// Главная карточка раздела — Deep Navy. Одна для всех разделов: цвет не
+    /// «кодирует» раздел, он говорит «это главная цифра».
+    public static let heroGradient: [Color] = [Color(hex: 0x0B1F3B), Color(hex: 0x1B3B6E)]
+    /// Главная карточка-акцент — кобальт (вторая карточка рядом с navy).
+    public static let heroAccent: [Color] = [Color(hex: 0x2563EB), Color(hex: 0x1D4ED8)]
+    /// Главная карточка с плохим итогом: убыток, долг, расходы больше доходов.
+    public static let heroNegative: [Color] = [Color(hex: 0xDC2626), Color(hex: 0x991B1B)]
 
-    /// Основная мята знака.
-    public static let brandMint = Color(hex: 0x20C997)
-    /// Глубокая мята: нижние сегменты, центральная точка.
-    public static let brandDeep = Color(hex: 0x0F7F6E)
+    // Старые имена знака: ведут на новые цвета, чтобы места, где они ещё
+    // встречаются, не выбивались из бренда.
+    public static let brandMint = Color(hex: 0x2563EB)
+    public static let brandDeep = Color(hex: 0x0B1F3B)
     /// Фон заставки. Тот же цвет стоит у системного экрана запуска, поэтому
     /// между ними нет вспышки.
-    public static let launchBackground = Color(hex: 0x071214)
+    public static let launchBackground = Color(hex: 0x0B1F3B)
     /// Текст поверх фирменного цвета.
     ///
     /// Отдельным именем, а не `.white` по месту: на плотном зелёном чёрный
     /// текст нечитаем, и однажды кто-нибудь поставит там `Theme.text`.
     public static let onBrand = Color.white
-    public static let positive = Color.adaptive(dark: 0x3DF0B6, light: 0x059669)
-    public static let negative = Color.adaptive(dark: 0xFB7185, light: 0xE11D48)
-    public static let warning = Color.adaptive(dark: 0xFBBF24, light: 0xD97706)
+    public static let positive = Color.adaptive(dark: 0x22C55E, light: 0x16A34A)
+    public static let negative = Color.adaptive(dark: 0xF87171, light: 0xDC2626)
+    public static let warning = Color.adaptive(dark: 0xF59E0B, light: 0xD97706)
     public static let info = Color.adaptive(dark: 0x60A5FA, light: 0x2563EB)
-    public static let accent = Color.adaptive(dark: 0x8B5CF6, light: 0x7C3AED)
+    /// Вспомогательный акцент (платформа, «онлайн»-оплаты) — спокойный
+    /// индиго, чтобы не спорить с кобальтом.
+    public static let accent = Color.adaptive(dark: 0x818CF8, light: 0x4F46E5)
 
     /// Акцент рабочего пространства. Роль должна читаться с первого взгляда —
     /// чтобы суперадмин не перепутал чужую организацию со своей.
     public static func accent(for workspace: WorkspaceAccent) -> Color {
+        // Одна дизайн-система для всех ролей: активное — кобальт у всех.
+        // Роль отличает содержимое и полоса «Смотрите как…», а не цвет кнопок.
         switch workspace {
-        case .platform: accent
-        case .owner: brand
-        case .staff: info
-        // Оператору раньше был назначен янтарный — но это статусный цвет
-        // предупреждения. В навигации он спорил с брендом и делал выделение
-        // похожим на ошибку. Янтарный остаётся только за статусами.
-        case .operator: brand
+        case .platform, .owner, .staff, .operator: brand
         }
     }
 
@@ -97,8 +106,8 @@ public enum Spacing {
 public enum Radius {
     public static let sm: CGFloat = 10
     public static let md: CGFloat = 14
-    public static let lg: CGFloat = 18
-    public static let xl: CGFloat = 22
+    public static let lg: CGFloat = 20
+    public static let xl: CGFloat = 28
     public static let pill: CGFloat = 999
 }
 

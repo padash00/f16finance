@@ -58,7 +58,7 @@ struct RootView: View {
                 // Страховка от застревания: что бы ни случилось со сценарием,
                 // человек не должен остаться наедине с логотипом.
                 .task {
-                    try? await Task.sleep(for: .seconds(5))
+                    try? await Task.sleep(for: .seconds(7))
                     introFinished = true
                 }
             }
@@ -224,7 +224,9 @@ struct LaunchView: View {
             Theme.background.ignoresSafeArea()
 
             VStack(spacing: Spacing.xl) {
-                OrdaPointSymbol()
+                // Знак без анимации сегмента: бренд не превращается в
+                // крутилку загрузки — она здесь не нужна, текст говорит сам.
+                OrdaControlMark(ringColor: Theme.text)
                     .frame(width: 64, height: 64)
                     .scaleEffect(appeared ? 1 : 0.85)
                     .opacity(appeared ? 1 : 0)

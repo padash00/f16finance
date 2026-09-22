@@ -12,23 +12,25 @@ import SwiftUI
 /// раздел находят быстрее, чем по названию.
 enum OwnerTint {
     static func forGroup(_ id: String) -> Color {
+        // Спокойная палитра ORDA CONTROL: кобальт, бирюза, янтарь, индиго,
+        // небесный и графит — различимы, но не пестрят.
         switch id {
-        case "finance": Color(hex: 0x10B981)
-        case "inventory": Color(hex: 0xF59E0B)
-        case "shifts": Color(hex: 0x8B5CF6)
-        case "staff": Color(hex: 0x3B82F6)
-        case "points": Color(hex: 0x14B8A6)
-        case "pos": Color(hex: 0xEC4899)
-        case "operations": Color(hex: 0xF97316)
-        case "system": Color(hex: 0x64748B)
-        default: Color(hex: 0x0EA5E9)
+        case "finance": Color(hex: 0x2563EB)
+        case "inventory": Color(hex: 0xD97706)
+        case "shifts": Color(hex: 0x4F46E5)
+        case "staff": Color(hex: 0x0D9488)
+        case "points": Color(hex: 0x0284C7)
+        case "pos": Color(hex: 0x7C3AED)
+        case "operations": Color(hex: 0xEA580C)
+        case "system": Color(hex: 0x475569)
+        default: Color(hex: 0x0284C7)
         }
     }
 
     /// Точки красятся по кругу — у каждой свой цвет в списке.
     static let points: [Color] = [
-        Color(hex: 0x10B981), Color(hex: 0x3B82F6), Color(hex: 0xF59E0B),
-        Color(hex: 0x8B5CF6), Color(hex: 0xEC4899), Color(hex: 0x14B8A6),
+        Color(hex: 0x2563EB), Color(hex: 0x0D9488), Color(hex: 0xD97706),
+        Color(hex: 0x4F46E5), Color(hex: 0x0284C7), Color(hex: 0x475569),
     ]
 
     static func point(_ index: Int) -> Color { points[index % points.count] }
@@ -302,7 +304,7 @@ struct HeroSummary: View {
     let value: String
     var caption: String? = nil
     var footer: [(String, String)] = []
-    var colors: [Color] = [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+    var colors: [Color] = Theme.heroGradient
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {

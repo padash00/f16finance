@@ -937,7 +937,7 @@ private struct CustomerDetail: View {
                         ("Средний чек", Money.format(customer.averageCheck)),
                         ("Баллы", Quantity.format(customer.loyaltyPoints)),
                     ],
-                    colors: [Color(hex: 0x4F46E5), Color(hex: 0x7C3AED)]
+                    colors: Theme.heroGradient
                 )
 
                 OwnerSection("Контакты") {
