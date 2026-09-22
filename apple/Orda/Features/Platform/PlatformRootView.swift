@@ -97,6 +97,12 @@ struct PlatformRootView: View {
         selection = item
 
         #if os(iOS)
+        // Новый кабинет владельца слушает свой маршрутизатор: у него другие
+        // вкладки, и старые `phoneTab`/`sectionsPath` он не видит.
+        OwnerRouter.shared.open(item.id)
+        #endif
+
+        #if os(iOS)
         switch item.id {
         case "platform.overview", "platform.organizations":
             phoneTab = item.id == "platform.overview" ? .platform : .organizations

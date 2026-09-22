@@ -544,26 +544,18 @@ struct PointDebtsScreen: View {
     @ViewBuilder
     private func content(_ week: PointDebtWeek) -> some View {
         VStack(spacing: Spacing.lg) {
-            DashboardGrid {
-                MetricTile(
-                    label: "Всего за неделю",
-                    value: Money.format(week.totalAmount),
-                    icon: "sum",
-                    accent: Theme.brand
-                )
-                MetricTile(
-                    label: "Не погашено",
-                    value: Money.format(week.unpaidAmount),
-                    icon: "exclamationmark.circle.fill",
-                    accent: week.unpaidAmount > 0 ? Theme.warning : Theme.positive
-                )
-                MetricTile(
-                    label: "Позиций",
-                    value: "\(week.totalCount)",
-                    icon: "list.bullet",
-                    accent: Theme.textMuted
-                )
-            }
+            HeroSummary(
+                title: week.unpaidAmount > 0 ? "Не погашено за неделю" : "Все долги погашены",
+                value: Money.format(week.unpaidAmount),
+                footer: [
+                    ("Всего за неделю", Money.format(week.totalAmount)),
+                    ("Погашено", Money.format(week.totalAmount - week.unpaidAmount)),
+                    ("Позиций", "\(week.totalCount)"),
+                ],
+                colors: week.unpaidAmount > 0
+                    ? [Color(hex: 0xEA580C), Color(hex: 0xDC2626)]
+                    : [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+            )
 
             // Группируем по точкам: долг спрашивают с конкретной точки,
             // а не со всей сети сразу.
@@ -612,14 +604,15 @@ private struct DebtRow: View {
 
     var body: some View {
         HStack(spacing: Spacing.md) {
-            VStack(alignment: .leading, spacing: 1) {
+            PersonInitial(name: debt.clientName, isActive: !debt.isPaid)
+            VStack(alignment: .leading, spacing: 2) {
                 Text(debt.clientName)
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(debt.isPaid ? Theme.textDim : Theme.text)
                     .lineLimit(1)
                 if let comment = debt.comment, !comment.isEmpty {
                     Text(comment)
-                        .font(Typography.caption)
+                        .font(.system(size: 13))
                         .foregroundStyle(Theme.textDim)
                         .lineLimit(1)
                 }
@@ -627,13 +620,20 @@ private struct DebtRow: View {
 
             Spacer(minLength: Spacing.sm)
 
-            Text(Money.format(debt.amount))
-                .font(Typography.callout.weight(.medium))
-                .monospacedDigit()
-                .foregroundStyle(debt.isPaid ? Theme.textDim : Theme.text)
-
-            StatusChip(debt.statusLabel, kind: debt.isPaid ? .good : .warning)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(Money.format(debt.amount))
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(debt.isPaid ? Theme.textDim : Theme.text)
+                    .strikethrough(debt.isPaid, color: Theme.textDim)
+                // Статус подписью, а не плашкой — плашка съедала полстроки.
+                Text(debt.statusLabel.lowercased())
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(debt.isPaid ? Theme.positive : Theme.warning)
+            }
+            .fixedSize()
         }
+        .padding(.vertical, Spacing.xs)
     }
 }
 

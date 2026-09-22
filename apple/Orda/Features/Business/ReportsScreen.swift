@@ -47,35 +47,21 @@ struct ReportsScreen: View {
         let totals = report.current
 
         VStack(spacing: Spacing.lg) {
-            DashboardGrid {
-                MetricTile(
-                    label: "Выручка",
-                    value: Money.format(totals.totalIncome),
-                    change: report.incomeChange,
-                    icon: "arrow.down.circle.fill",
-                    accent: Theme.brand
-                )
-                MetricTile(
-                    label: "Расходы",
-                    value: Money.format(totals.totalExpense),
-                    change: report.expenseChange,
-                    icon: "arrow.up.circle.fill",
-                    accent: Theme.negative
-                )
-                MetricTile(
-                    label: "Прибыль",
-                    value: Money.format(totals.profit),
-                    change: report.profitChange,
-                    icon: "chart.line.uptrend.xyaxis",
-                    accent: totals.profit >= 0 ? Theme.positive : Theme.negative
-                )
-                MetricTile(
-                    label: "Средний чек",
-                    value: Money.format(totals.avgTransaction),
-                    icon: "receipt.fill",
-                    accent: Theme.info
-                )
-            }
+            HeroSummary(
+                title: "Прибыль за период",
+                value: Money.format(totals.profit),
+                caption: report.profitChange.map { "\(Percent.format($0, signed: true)) к прошлому периоду" },
+                footer: [
+                    ("Выручка" + (report.incomeChange.map { " · \(Percent.format($0, signed: true))" } ?? ""), Money.format(totals.totalIncome)),
+                    ("Расходы" + (report.expenseChange.map { " · \(Percent.format($0, signed: true))" } ?? ""), Money.format(totals.totalExpense)),
+                    // Среднее на отчёт смены, а не чек покупателя: сервер делит
+                    // выручку на число строк дохода.
+                    ("Средняя смена", Money.format(totals.avgTransaction)),
+                ],
+                colors: totals.profit >= 0
+                    ? [Color(hex: 0x059669), Color(hex: 0x0F766E)]
+                    : [Color(hex: 0xDC2626), Color(hex: 0x9F1239)]
+            )
 
             trend(report)
 

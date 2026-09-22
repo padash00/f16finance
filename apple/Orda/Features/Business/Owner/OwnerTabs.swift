@@ -2,6 +2,32 @@ import OrdaKit
 import OrdaUI
 import SwiftUI
 
+/// Куда открыть кабинет владельца извне: уведомление, ссылка, быстрое
+/// действие с иконки, аргумент запуска.
+///
+/// Корневые экраны решают, можно ли туда (права), а вкладки — как туда
+/// попасть. Запрос живёт, пока его не заберут: уведомление может прийти
+/// раньше, чем вкладки появились на экране.
+@MainActor
+@Observable
+final class OwnerRouter {
+    static let shared = OwnerRouter()
+
+    struct Request: Equatable {
+        let id = UUID()
+        let pageID: String
+    }
+
+    private(set) var request: Request?
+
+    func open(_ pageID: String) { request = Request(pageID: pageID) }
+
+    func consume() -> Request? {
+        defer { request = nil }
+        return request
+    }
+}
+
 /// Вкладки кабинета владельца на телефоне.
 ///
 /// Пять вкладок по смыслу, а не по страницам сайта: главная, аналитика,
@@ -89,8 +115,8 @@ struct OwnerTabs<Platform: View>: View {
         }
         .tint(accent)
         .task {
-            // Вкладка и раздел при запуске: `-ordaTab analytics`,
-            // `-ordaPage expenses` — для снимков экрана. Ждём первый кадр:
+            // Вкладка при запуске (`-ordaTab analytics`, для снимков экрана) и
+            // раздел, запрошенный до появления вкладок. Ждём первый кадр:
             // путь, выставленный до появления стека, SwiftUI теряет.
             try? await Task.sleep(for: .milliseconds(400))
             switch UserDefaults.standard.string(forKey: "ordaTab") {
@@ -99,10 +125,31 @@ struct OwnerTabs<Platform: View>: View {
             case "profile": tab = .profile
             default: break
             }
-            if let page = LaunchOptions.requestedPage, homePath.isEmpty {
-                tab = .home
-                homePath = [SectionRoute(pageID: page)]
-            }
+            if let request = OwnerRouter.shared.consume() { route(request.pageID) }
+        }
+        .onChange(of: OwnerRouter.shared.request) { _, request in
+            guard request != nil, let request = OwnerRouter.shared.consume() else { return }
+            route(request.pageID)
+        }
+    }
+
+    /// Открыть раздел: у главной, аналитики и общения — своя вкладка,
+    /// остальное — поверх главной, как переход с плитки.
+    private func route(_ pageID: String) {
+        switch pageID {
+        case "home.dashboard", "business.dashboard":
+            tab = .home
+            homePath = []
+        case "platform.overview", "platform.organizations" where hasPlatform:
+            tab = .platform
+        case "team-chat" where talk?.title == "Чат", "tasks" where talk?.title == "Задачи":
+            tab = .talk
+        default:
+            // Не свой раздел (платформенный, веб-страница) — не открываем
+            // пустой экран, остаёмся где были.
+            guard NativePage.isNative(pageID: pageID) else { return }
+            tab = .home
+            homePath = [SectionRoute(pageID: pageID)]
         }
     }
 }

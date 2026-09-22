@@ -92,11 +92,11 @@ struct OperatorRowView: View {
 
     var body: some View {
         HStack(spacing: Spacing.md) {
-            OperatorAvatar(person: person, size: 36)
+            OperatorAvatar(person: person, size: 42)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(person.displayName)
-                    .font(Typography.callout)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(person.isActive ? Theme.text : Theme.textDim)
                     .lineLimit(1)
                 Text(person.position ?? "Оператор")
@@ -137,14 +137,20 @@ struct OperatorAvatar: View {
     var size: CGFloat = 36
 
     var body: some View {
-        Thumbnail(
-            url: person.photoURL,
-            side: size,
-            cornerRadius: size / 2,
-            fallbackText: person.initials
-        )
-        .overlay(Circle().stroke(Theme.border, lineWidth: 0.5))
-        .opacity(person.isActive ? 1 : 0.55)
+        if person.photoURL == nil {
+            // Без фото — цветной кружок с буквой: у каждого свой цвет, и
+            // список не сливается в серую колонку одинаковых кругов.
+            PersonInitial(name: person.displayName, isActive: person.isActive, size: size)
+        } else {
+            Thumbnail(
+                url: person.photoURL,
+                side: size,
+                cornerRadius: size / 2,
+                fallbackText: person.initials
+            )
+            .overlay(Circle().stroke(Theme.border, lineWidth: 0.5))
+            .opacity(person.isActive ? 1 : 0.55)
+        }
     }
 }
 
@@ -775,6 +781,7 @@ struct StaffSalaryRowView: View {
 struct PersonInitial: View {
     let name: String
     var isActive = true
+    var size: CGFloat = 40
 
     private static let palette: [Color] = [
         Color(hex: 0x10B981), Color(hex: 0x3B82F6), Color(hex: 0xF59E0B),
@@ -786,9 +793,9 @@ struct PersonInitial: View {
         let hash = name.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0x7FFFFFFF }
         let tint = isActive ? Self.palette[hash % Self.palette.count] : Theme.textDim
         Text(String(name.trimmingCharacters(in: .whitespaces).prefix(1)).uppercased())
-            .font(.system(size: 16, weight: .bold, design: .rounded))
+            .font(.system(size: size * 0.4, weight: .bold, design: .rounded))
             .foregroundStyle(tint)
-            .frame(width: 40, height: 40)
+            .frame(width: size, height: size)
             .background(tint.opacity(0.14), in: Circle())
     }
 }

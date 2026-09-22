@@ -328,6 +328,8 @@ struct HeroSummary: View {
                             Text(label)
                                 .font(.system(size: 12))
                                 .foregroundStyle(.white.opacity(0.7))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
                             Text(text)
                                 .font(.system(size: 15, weight: .semibold, design: .rounded))
                                 .monospacedDigit()
