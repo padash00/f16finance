@@ -10,6 +10,7 @@ import {
   buildSeries,
   buildWeekdays,
   comparisonRange,
+  countShifts,
   daysBetween,
   pickGroup,
   posCompareWindow,
@@ -20,7 +21,7 @@ import { isExtraCompany } from '@/lib/reports/extra-company'
 import { splitIncomeKaspiByCalendarDay, type ReportIncomeCalendarRow } from '@/lib/reports/income-calendar-kaspi'
 import { mergeDateRanges } from '@/lib/reports/period'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
-import { hasCapability, requireAnyCapability } from '@/lib/server/capabilities'
+import { hasCapability, requireCapability } from '@/lib/server/capabilities'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -61,16 +62,18 @@ type IncomeRow = ReportIncomeCalendarRow & { operator_id: string | null }
  *     &company_ids=id1,id2   — набор точек; пусто — все точки организации
  *     &compare=prev|year     — база сравнения
  *     &include_extra=1       — складывать ли «экстра»-кассу в итоги
+ *     &lite=1                — лёгкий ответ для главной: без товаров, статей
+ *                              расходов и операторов
  */
 export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
 
-    // Суммы — только тем, кто видит деньги: право на доходы или отчёты. Одного
-    // dashboard.view мало — оно открывает страницу, а не суммы на ней (так же
-    // решает главный экран приложения). Разбивки — по своим правам ниже.
-    const denied = await requireAnyCapability(access, ['reports.view', 'income.view'])
+    // Право на отчёты: здесь не только выручка, но и расходы с прибылью.
+    // Права на доходы мало — с ним человек видит приход, но не то, куда ушли
+    // деньги (как на сайте, где «Отчёты» закрыты тем же правом).
+    const denied = await requireCapability(access, 'reports.view')
     if (denied) return denied
 
     const url = new URL(req.url)
@@ -84,6 +87,9 @@ export async function GET(req: Request) {
     }
     const compare = url.searchParams.get('compare') === 'year' ? 'year' : 'prev'
     const includeExtra = ['1', 'true'].includes(url.searchParams.get('include_extra') || '')
+    // Главной приложения нужны итоги и точки. Разбор чеков по товарам за месяц —
+    // десятки тысяч строк, которые она не показывает, а просит дважды за вход.
+    const lite = ['1', 'true'].includes(url.searchParams.get('lite') || '')
     const requestedIds = Array.from(
       new Set((url.searchParams.get('company_ids') || '').split(',').map((s) => s.trim()).filter(Boolean)),
     )
@@ -98,10 +104,7 @@ export async function GET(req: Request) {
       if (requestedIds.some((id) => !allowed.has(id))) return json({ error: 'Точка недоступна' }, 403)
     }
 
-    const [canBreakdown, canOperators] = await Promise.all([
-      hasCapability(access, 'reports.view'),
-      hasCapability(access, 'operator-analytics.view'),
-    ])
+    const canOperators = await hasCapability(access, 'operator-analytics.view')
 
     // Список точек для фильтра — все точки в пределах организации.
     let companiesQuery: any = supabase.from('companies').select('id, name, code').order('name')
@@ -128,7 +131,9 @@ export async function GET(req: Request) {
 
     const period = { from, to, through, prevFrom, prevTo, compare, group, partial: to >= today }
 
-    if (selectedIds.length === 0) {
+    // Нет точек или период целиком в будущем — считать нечего. Раньше будущий
+    // период сравнивал один день базы с нулём.
+    if (selectedIds.length === 0 || through < from) {
       return json({ ok: true, data: emptyResponse(period, companies, requestedIds) })
     }
 
@@ -193,7 +198,7 @@ export async function GET(req: Request) {
       categoryGroups,
     })
 
-    const kpi = (t: typeof agg.totalsCur) => ({
+    const kpi = (t: typeof agg.totalsCur, shifts: number) => ({
       revenue: Math.round(t.totalIncome),
       expense: Math.round(t.totalExpense),
       profit: Math.round(t.profit),
@@ -203,7 +208,7 @@ export async function GET(req: Request) {
       kaspi: Math.round(t.incomeKaspi),
       card: Math.round(t.incomeCard),
       online: Math.round(t.incomeOnline),
-      shifts: t.transactionCount,
+      shifts,
     })
 
     const byCompany = selectedIds
@@ -226,7 +231,7 @@ export async function GET(req: Request) {
     const weekdays = buildWeekdays({ incomes, from, to: through })
 
     let operators: ReturnType<typeof buildOperators> | null = null
-    if (canOperators) {
+    if (canOperators && !lite) {
       const ids = Array.from(new Set(incomes.map((r) => r.operator_id).filter(Boolean))) as string[]
       const names = new Map<string, string>()
       for (let i = 0; i < ids.length; i += 500) {
@@ -237,7 +242,7 @@ export async function GET(req: Request) {
       operators = buildOperators({ incomes, from, to: through, prevFrom, prevTo, operatorName: (id) => names.get(id) || 'Оператор' })
     }
 
-    const pos = await loadPos(supabase, selectedIds, { from, to, prevFrom, prevTo: prevToFull })
+    const pos = await loadPos(supabase, selectedIds, { from, to, prevFrom, prevTo: prevToFull }, { items: !lite })
 
     return json({
       ok: true,
@@ -245,11 +250,14 @@ export async function GET(req: Request) {
         period,
         companies: companies.map((c) => ({ id: c.id, name: c.name || 'Точка', isExtra: extraIds.has(c.id) })),
         selectedCompanyIds: requestedIds,
-        kpi: { current: kpi(agg.totalsCur), previous: kpi(agg.totalsPrev) },
+        kpi: {
+          current: kpi(agg.totalsCur, countShifts(incomes, from, through)),
+          previous: kpi(agg.totalsPrev, countShifts(incomes, prevFrom, prevTo)),
+        },
         series,
         byCompany,
         weekdays,
-        expenseCategories: canBreakdown ? buildExpenseCategories({ expenses, from, to: through, prevFrom, prevTo }) : null,
+        expenseCategories: !lite ? buildExpenseCategories({ expenses, from, to: through, prevFrom, prevTo }) : null,
         operators,
         pos,
       },
@@ -265,10 +273,14 @@ async function loadPos(
   supabase: any,
   companyIds: string[],
   range: { from: string; to: string; prevFrom: string; prevTo: string },
+  options: { items: boolean },
 ) {
   const window = posCompareWindow({ ...range, now: new Date() })
-  const SALE_SELECT =
-    'id, sold_at, total_amount, cash_amount, kaspi_amount, card_amount, online_amount, items:point_sale_items(quantity, total_price, universal_name, inventory_items(name, default_purchase_price, category:category_id(name)))'
+  const SALE_SELECT = options.items
+    ? 'id, sold_at, total_amount, cash_amount, kaspi_amount, card_amount, online_amount, items:point_sale_items(quantity, total_price, universal_name, inventory_items(name, default_purchase_price, category:category_id(name)))'
+    : 'id, sold_at, total_amount, cash_amount, kaspi_amount, card_amount, online_amount'
+  // Без товаров строки лёгкие — лимит как у отчётов, а не как у чеков с позициями.
+  const currentLimit = options.items ? MAX_POS_ITEM_SALES : MAX_ROWS
 
   const salesQuery = (select: string, a: string, b: string) => () =>
     supabase
@@ -281,7 +293,7 @@ async function loadPos(
       .order('id', { ascending: true })
 
   const [current, previous] = await Promise.all([
-    fetchAllRows<OwnerPosSale>(salesQuery(SALE_SELECT, window.current.from, window.current.to), MAX_POS_ITEM_SALES),
+    fetchAllRows<OwnerPosSale>(salesQuery(SALE_SELECT, window.current.from, window.current.to), currentLimit),
     fetchAllRows<OwnerPosSale>(salesQuery('id, sold_at, total_amount', window.previous.from, window.previous.to)),
   ])
 
@@ -293,7 +305,10 @@ async function loadPos(
   const prevAmount = previous.reduce((s, r) => s + Number(r.total_amount || 0), 0)
   return {
     ...cur,
-    truncated: current.length >= MAX_POS_ITEM_SALES,
+    // Без позиций себестоимость неизвестна: «прибыль» по кассе была бы равна
+    // выручке, и это прочиталось бы как стопроцентная маржа.
+    ...(options.items ? {} : { grossProfit: null, topItems: [], byCategory: [] }),
+    truncated: current.length >= currentLimit,
     previous: {
       amount: Math.round(prevAmount),
       receipts: previous.length,

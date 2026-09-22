@@ -9,6 +9,7 @@ import {
   buildSeries,
   buildWeekdays,
   comparisonRange,
+  countShifts,
   pickGroup,
   posCompareWindow,
   weekdayIndex,
@@ -150,4 +151,14 @@ test('касса: сегодня сравнивается с тем же час�
   const past = posCompareWindow({ from: '2026-09-01', to: '2026-09-07', prevFrom: '2026-08-25', prevTo: '2026-08-31', now })
   assert.equal(past.truncated, false)
   assert.equal(past.previous.to, '2026-08-31T19:00:00.000Z')
+})
+
+test('смены: хвост ночного безнала не считается сменой', () => {
+  const rows = [
+    { id: 'a', date: '2026-09-01' },
+    { id: 'b', date: '2026-09-01' },
+    { id: 'b:kaspi-next-day', date: '2026-09-02' },
+    { id: 'c', date: '2026-08-31' },
+  ]
+  assert.equal(countShifts(rows, '2026-09-01', '2026-09-30'), 2)
 })

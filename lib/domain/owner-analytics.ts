@@ -240,6 +240,19 @@ export function buildSeries(input: {
 }
 
 /**
+ * Число смен в отчётах за период. Строка «безнал после полуночи» — хвост
+ * ночной смены, а не отдельная смена: считая её, «выручка за смену» падала на
+ * треть там, где половина смен ночные.
+ */
+export function countShifts(incomes: Pick<OwnerIncomeRow, 'id' | 'date'>[], from: string, to: string): number {
+  let n = 0
+  for (const r of incomes) {
+    if (r.date >= from && r.date <= to && !String(r.id).endsWith(':kaspi-next-day')) n++
+  }
+  return n
+}
+
+/**
  * Средняя выручка по дням недели. Делим на число таких дней в периоде, а не на
  * число дней с выручкой: закрытое воскресенье — это ноль, и оно должно тянуть
  * среднее вниз.
