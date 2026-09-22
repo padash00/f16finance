@@ -45,10 +45,7 @@ struct TeamTasksScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker("Фильтр", selection: $filter) {
-                ForEach(Filter.allCases) { Text($0.label).tag($0) }
-            }
-            .pickerStyle(.segmented)
+            PillSegment(options: Filter.allCases.map { ($0, $0.label) }, selection: $filter)
             .padding(.horizontal, Spacing.lg)
             .padding(.vertical, Spacing.md)
 
@@ -612,14 +609,17 @@ struct ScheduleWeekScreen: View {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 SectionHeader(company.name)
 
+                // Телефон: день строкой, имена целиком — в две колонки они
+                // обрезались до «Берлібек Асан Базар…». Планшет: неделя в ряд.
                 let columns = surface.isCompact
-                    ? [GridItem(.flexible()), GridItem(.flexible())]
+                    ? [GridItem(.flexible())]
                     : Array(repeating: GridItem(.flexible(), spacing: Spacing.sm), count: 7)
 
-                LazyVGrid(columns: columns, spacing: Spacing.sm) {
+                LazyVGrid(columns: columns, spacing: surface.isCompact ? 0 : Spacing.sm) {
                     ForEach(weekDays, id: \.self) { day in
                         let cell = RosterDayCell(
                             day: day,
+                            asRow: surface.isCompact,
                             shifts: schedule.shifts(
                                 on: DateParsing.dateOnlyString(from: day),
                                 companyID: company.id
@@ -650,8 +650,12 @@ struct ScheduleWeekScreen: View {
 }
 
 /// Клетка дня: дата, кто в смене, пусто — если никого.
+///
+/// На телефоне — строка выписки: кружок с числом слева, люди справа с полными
+/// именами. На планшете — клетка недели.
 private struct RosterDayCell: View {
     let day: Date
+    var asRow = false
     let shifts: [RosterShift]
 
     private var isToday: Bool {
@@ -659,6 +663,55 @@ private struct RosterDayCell: View {
     }
 
     var body: some View {
+        if asRow { row } else { cell }
+    }
+
+    private var row: some View {
+        HStack(alignment: .center, spacing: Spacing.md) {
+            VStack(spacing: 0) {
+                Text(day.formatted(.dateTime.weekday(.abbreviated)).uppercased())
+                    .font(.system(size: 10, weight: .bold))
+                Text(day.formatted(.dateTime.day()))
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+            }
+            .foregroundStyle(isToday ? Color.white : Theme.text)
+            .frame(width: 46, height: 46)
+            .background(isToday ? AnyShapeStyle(Theme.brand) : AnyShapeStyle(Theme.surfaceRaised), in: Circle())
+
+            VStack(alignment: .leading, spacing: 6) {
+                if shifts.isEmpty {
+                    Label("никого не поставили", systemImage: "exclamationmark.circle.fill")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Theme.warning)
+                } else {
+                    ForEach(shifts) { shift in
+                        HStack(spacing: Spacing.sm) {
+                            Image(systemName: shift.isNight ? "moon.fill" : "sun.max.fill")
+                                .font(.system(size: 12))
+                                .foregroundStyle(shift.isNight ? Color(hex: 0x6366F1) : Color(hex: 0xF59E0B))
+                                .frame(width: 16)
+                            Text(shift.operatorName)
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundStyle(Theme.text)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
+                        }
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Theme.textDim)
+        }
+        .padding(.vertical, Spacing.sm)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Theme.borderSoft).frame(height: 1).padding(.leading, 58)
+        }
+    }
+
+    private var cell: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             HStack(spacing: Spacing.xs) {
                 Text(day.formatted(.dateTime.weekday(.abbreviated)).uppercased())
