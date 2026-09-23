@@ -6,7 +6,7 @@ import Foundation
 /// сервере (`requireCapability`). Приложение прячет кнопки заранее, но это
 /// только удобство: отказ 403 всё равно нужно уметь показать по-человечески.
 public struct BusinessService: Sendable {
-    private let api: APIClient
+    let api: APIClient
     /// Очередь отложенных действий. Есть у оператора давно; владельцу она нужна
     /// не меньше: склад в подвале, приёмка на парковке, связь рвётся одинаково.
     private let outbox: ActionOutbox?
@@ -497,70 +497,27 @@ public struct BusinessService: Sendable {
         )
     }
 
-    /// Поправить записанный расход.
+    /// Исправить расход. Запись уходит целиком — с точкой и оператором из
+    /// исходной, иначе сервер их обнулит (см. `ExpenseEdit`).
     ///
-    /// Ошибаются в сумме чаще, чем кажется, — и до сих пор исправить это можно
-    /// было только с сайта. Требует `expenses.edit`.
-    public func updateExpense(
-        id: String,
-        date: String,
-        companyID: String,
-        category: String,
-        cashAmount: Double,
-        kaspiAmount: Double,
-        comment: String?
-    ) async throws {
-        var payload: [String: Any] = [
-            "date": date,
-            "company_id": companyID,
-            "category": category,
-            "cash_amount": cashAmount,
-            "kaspi_amount": kaspiAmount,
-        ]
-        if let comment, !comment.isEmpty { payload["comment"] = comment }
-
-        // Правка повторяема: тот же расход с той же суммой. Значит её можно
-        // отложить до связи, а не терять.
+    /// Правка повторяема: тот же расход с той же суммой. Значит её можно
+    /// отложить до связи, а не терять.
+    public func updateExpense(_ edit: ExpenseEdit) async throws {
         try await deferrable(
             path: "/api/admin/expenses",
-            body: try JSONSerialization.data(withJSONObject: [
-                "action": "updateExpense",
-                "expenseId": id,
-                "payload": payload,
-            ]),
+            body: try edit.body(),
             title: "Правка расхода",
-            mergeKey: "expense-update-\(id)"
+            mergeKey: "expense-update-\(edit.id)"
         )
     }
 
-    /// Поправить записанный доход. Требует `income.edit`.
-    public func updateIncome(
-        id: String,
-        date: String,
-        cashAmount: Double,
-        kaspiAmount: Double,
-        cardAmount: Double,
-        onlineAmount: Double,
-        comment: String?
-    ) async throws {
-        var payload: [String: Any] = [
-            "date": date,
-            "cash_amount": cashAmount,
-            "kaspi_amount": kaspiAmount,
-            "card_amount": cardAmount,
-            "online_amount": onlineAmount,
-        ]
-        if let comment, !comment.isEmpty { payload["comment"] = comment }
-
+    /// Исправить доход. Оператор и «Kaspi до полуночи» — из исходной записи.
+    public func updateIncome(_ edit: IncomeEdit) async throws {
         try await deferrable(
             path: "/api/admin/incomes",
-            body: try JSONSerialization.data(withJSONObject: [
-                "action": "updateIncome",
-                "incomeId": id,
-                "payload": payload,
-            ]),
+            body: try edit.body(),
             title: "Правка дохода",
-            mergeKey: "income-update-\(id)"
+            mergeKey: "income-update-\(edit.id)"
         )
     }
 

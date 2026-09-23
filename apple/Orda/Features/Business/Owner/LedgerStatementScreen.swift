@@ -16,6 +16,7 @@ struct LedgerStatementScreen: View {
 
     @Environment(BusinessStore.self) private var store
     @Environment(\.access) private var access
+    @Environment(\.api) private var api
 
     @State private var isAdding = false
     @State private var opened: Operation?
@@ -57,6 +58,7 @@ struct LedgerStatementScreen: View {
 
     private var canCreate: Bool { access?.can(isIncome ? "income.create" : "expenses.create") ?? false }
     private var canEdit: Bool { access?.can(isIncome ? "income.edit" : "expenses.edit") ?? false }
+    private var canDelete: Bool { access?.can(isIncome ? "income.delete" : "expenses.delete") ?? false }
 
     private var operations: [Operation] {
         if isIncome {
@@ -200,7 +202,18 @@ struct LedgerStatementScreen: View {
                 }
             }
         }
-        .task { await reload() }
+        .task {
+            await reload()
+            #if DEBUG
+            // Снимки экрана: `-ordaLedgerOpen receipt|edit` открывает первую запись.
+            switch UserDefaults.standard.string(forKey: "ordaLedgerOpen") {
+            case "receipt": opened = filtered.first
+            case "edit":
+                if isIncome { editingIncome = store.incomes.first } else { editingExpense = store.expenses.first }
+            default: break
+            }
+            #endif
+        }
         .refreshable { await reload() }
         // Новый период — фильтры сначала: статьи или точки из прошлого периода
         // в новом может не быть, и снять такой фильтр было бы нечем.
@@ -216,15 +229,27 @@ struct LedgerStatementScreen: View {
                 operation: op,
                 isIncome: isIncome,
                 companyName: store.companyName(op.companyID),
-                canEdit: canEdit
-            ) {
-                opened = nil
-                if isIncome {
-                    editingIncome = store.incomes.first { $0.id == op.id }
-                } else {
-                    editingExpense = store.expenses.first { $0.id == op.id }
+                canEdit: canEdit,
+                canDelete: canDelete,
+                onEdit: {
+                    opened = nil
+                    if isIncome {
+                        editingIncome = store.incomes.first { $0.id == op.id }
+                    } else {
+                        editingExpense = store.expenses.first { $0.id == op.id }
+                    }
+                },
+                onDelete: {
+                    let service = BusinessService(api: api)
+                    if isIncome {
+                        try await service.deleteIncome(id: op.id)
+                        await store.loadIncomes()
+                    } else {
+                        try await service.deleteExpense(id: op.id)
+                        await store.loadExpenses()
+                    }
                 }
-            }
+            )
             .presentationDetents([.medium, .large])
         }
         .sheet(item: $editingIncome) { row in
@@ -640,9 +665,15 @@ private struct OperationReceipt: View {
     let isIncome: Bool
     let companyName: String?
     let canEdit: Bool
+    let canDelete: Bool
     let onEdit: () -> Void
+    /// Удалить на сервере и перечитать список. Ошибку показываем здесь же.
+    let onDelete: () async throws -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @State private var confirmingDelete = false
+    @State private var isDeleting = false
+    @State private var deleteError: String?
 
     var body: some View {
         NavigationStack {
@@ -695,15 +726,66 @@ private struct OperationReceipt: View {
                         }
                         .buttonStyle(.pressable)
                     }
+
+                    if canDelete {
+                        Button(role: .destructive) {
+                            confirmingDelete = true
+                        } label: {
+                            Label(isDeleting ? "Удаляем…" : "Удалить", systemImage: "trash")
+                                .font(.system(size: 16, weight: .semibold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .foregroundStyle(Theme.negative)
+                                .background(Theme.negative.opacity(0.10), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        }
+                        .buttonStyle(.pressable)
+                        .disabled(isDeleting)
+                    }
+
+                    if let deleteError {
+                        Text(deleteError)
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.negative)
+                            .multilineTextAlignment(.center)
+                    }
                 }
                 .padding(Spacing.lg)
             }
             .background(Theme.background)
+            .confirmationDialog(
+                isIncome ? "Удалить доход?" : "Удалить расход?",
+                isPresented: $confirmingDelete,
+                titleVisibility: .visible
+            ) {
+                Button("Удалить \(Money.format(operation.amount))", role: .destructive) {
+                    Task { await delete() }
+                }
+                Button("Отмена", role: .cancel) {}
+            } message: {
+                Text("Запись исчезнет из отчётов и ОПиУ. Удаление попадёт в журнал событий.")
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Закрыть") { dismiss() }
                 }
             }
+        }
+    }
+
+    private func delete() async {
+        isDeleting = true
+        defer { isDeleting = false }
+        deleteError = nil
+        do {
+            try await onDelete()
+            Haptics.success()
+            dismiss()
+        } catch let error as APIError {
+            deleteError = error.userMessage
+            Haptics.error()
+        } catch {
+            deleteError = error.localizedDescription
+            Haptics.error()
         }
     }
 

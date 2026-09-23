@@ -74,6 +74,10 @@ extension TimePoint {
 /// Ошибаются в сумме чаще, чем кажется: смена закрылась, цифру записали не ту,
 /// а исправить можно было только с сайта — то есть завтра. К утру расхождение
 /// уже разошлось по отчётам.
+///
+/// Форма правит сумму по способам, дату и комментарий. Оператор и «Kaspi до
+/// полуночи» уходят из исходной записи (`IncomeEdit`): раньше форма их не
+/// отправляла, и сервер обнулял их при каждом исправлении.
 struct EditIncomeSheet: View {
     let row: IncomeRow
     let onSaved: () async -> Void
@@ -81,39 +85,59 @@ struct EditIncomeSheet: View {
     @Environment(\.api) private var api
     @Environment(\.dismiss) private var dismiss
 
+    @State private var edit: IncomeEdit
     @State private var cash = ""
     @State private var kaspi = ""
     @State private var card = ""
     @State private var online = ""
-    @State private var comment = ""
+    @State private var date = Date()
     @State private var isSaving = false
     @State private var error: String?
+
+    init(row: IncomeRow, onSaved: @escaping () async -> Void) {
+        self.row = row
+        self.onSaved = onSaved
+        _edit = State(initialValue: IncomeEdit(row: row))
+        _cash = State(initialValue: LedgerEditForm.text(row.cashAmount))
+        _kaspi = State(initialValue: LedgerEditForm.text(row.kaspiAmount))
+        _card = State(initialValue: LedgerEditForm.text(row.cardAmount))
+        _online = State(initialValue: LedgerEditForm.text(row.onlineAmount))
+        _date = State(initialValue: DateParsing.parseDateOnly(row.date) ?? Date())
+    }
+
+    private var draft: IncomeEdit {
+        var value = edit
+        value.cash = AmountParsing.value(cash)
+        value.kaspi = AmountParsing.value(kaspi)
+        value.card = AmountParsing.value(card)
+        value.online = AmountParsing.value(online)
+        value.date = DateParsing.dateOnlyString(from: date)
+        return value
+    }
 
     var body: some View {
         NavigationStack {
             ScreenScroll {
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        SectionHeader(DateFormatting.dayMonth(row.date), subtitle: row.shift.map { $0 == "night" ? "Ночь" : "День" })
+                LedgerEditForm.total(draft.total, caption: row.shift.map { $0 == "night" ? "Ночная смена" : "Дневная смена" }, tint: Theme.positive)
 
-                        amountField("Наличные", text: $cash)
-                        amountField("Kaspi", text: $kaspi)
-                        amountField("Карта", text: $card)
-                        amountField("Онлайн", text: $online)
+                LedgerEditForm.section("Сумма") {
+                    LedgerEditForm.amountRow("Наличные", icon: "banknote.fill", text: $cash)
+                    LedgerEditForm.divider
+                    LedgerEditForm.amountRow("Kaspi", icon: "qrcode", text: $kaspi)
+                    LedgerEditForm.divider
+                    LedgerEditForm.amountRow("Карта", icon: "creditcard.fill", text: $card)
+                    LedgerEditForm.divider
+                    LedgerEditForm.amountRow("Онлайн", icon: "globe", text: $online)
+                }
 
-                        FieldLabel("Комментарий")
-                        TextField("необязательно", text: $comment)
-                            .textFieldStyle(.plain)
-                            .font(Typography.callout)
+                LedgerEditForm.section("Подробности") {
+                    LedgerEditForm.dateRow($date)
+                    LedgerEditForm.divider
+                    LedgerEditForm.commentRow($edit.comment)
+                }
 
-                        if let error {
-                            Text(error).font(Typography.caption).foregroundStyle(Theme.negative)
-                        }
-
-                        Button(isSaving ? "Сохраняем…" : "Сохранить") { Task { await save() } }
-                            .buttonStyle(PrimaryButtonStyle())
-                            .disabled(isSaving)
-                    }
+                LedgerEditForm.saveButton(isSaving: isSaving, problem: draft.problem, error: error) {
+                    Task { await save() }
                 }
             }
             .background(Theme.background)
@@ -122,47 +146,15 @@ struct EditIncomeSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Отмена") { dismiss() } } }
-            .task {
-                cash = amountText(row.cashAmount)
-                kaspi = amountText(row.kaspiAmount)
-                card = amountText(row.cardAmount)
-                online = amountText(row.onlineAmount)
-                comment = row.comment ?? ""
-            }
-        }
-    }
-
-    /// Ноль показываем пустым полем: «0» в поле суммы читается как введённое
-    /// значение, и человек не понимает, надо ли его стирать.
-    private func amountText(_ value: Double) -> String {
-        value == 0 ? "" : Quantity.format(value)
-    }
-
-    private func amountField(_ label: String, text: Binding<String>) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            FieldLabel(label)
-            TextField("0", text: text)
-                .textFieldStyle(.plain)
-                .font(Typography.callout)
-                #if os(iOS)
-                .keyboardType(.decimalPad)
-                #endif
         }
     }
 
     private func save() async {
+        guard draft.problem == nil else { return }
         isSaving = true
         defer { isSaving = false }
         do {
-            try await BusinessService(api: api).updateIncome(
-                id: row.id,
-                date: row.date,
-                cashAmount: AmountParsing.value(cash),
-                kaspiAmount: AmountParsing.value(kaspi),
-                cardAmount: AmountParsing.value(card),
-                onlineAmount: AmountParsing.value(online),
-                comment: comment.trimmingCharacters(in: .whitespaces)
-            )
+            try await BusinessService(api: api).updateIncome(draft)
             Haptics.success()
             await onSaved()
             dismiss()
@@ -179,8 +171,8 @@ struct EditIncomeSheet: View {
 /// Поправить расход.
 ///
 /// Точка и категория обязательны — так проверяет сервер. Они уже заполнены
-/// тем, что было записано, и менять их обычно не нужно; поле оставлено для
-/// случая, когда расход записали не на ту точку.
+/// тем, что было записано; точку можно сменить, если расход записали не туда.
+/// Оператор уходит из исходной записи.
 struct EditExpenseSheet: View {
     let row: ExpenseRow
     let onSaved: () async -> Void
@@ -189,62 +181,83 @@ struct EditExpenseSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(BusinessStore.self) private var store
 
+    @State private var edit: ExpenseEdit?
     @State private var cash = ""
     @State private var kaspi = ""
-    @State private var category = ""
-    @State private var companyID = ""
-    @State private var comment = ""
+    @State private var date = Date()
     @State private var isSaving = false
     @State private var error: String?
 
+    init(row: ExpenseRow, onSaved: @escaping () async -> Void) {
+        self.row = row
+        self.onSaved = onSaved
+        _edit = State(initialValue: ExpenseEdit(row: row))
+        _cash = State(initialValue: LedgerEditForm.text(row.cashAmount))
+        _kaspi = State(initialValue: LedgerEditForm.text(row.kaspiAmount))
+        _date = State(initialValue: DateParsing.parseDateOnly(row.date) ?? Date())
+    }
+
+    private var draft: ExpenseEdit? {
+        guard var value = edit else { return nil }
+        value.cash = AmountParsing.value(cash)
+        value.kaspi = AmountParsing.value(kaspi)
+        value.date = DateParsing.dateOnlyString(from: date)
+        return value
+    }
+
+    /// Категории справочника; записанная, если её там уже нет, — тоже в списке.
+    private var categoryNames: [String] {
+        var names = store.expenseCategories.map(\.name)
+        if let current = edit?.category, !current.isEmpty, !names.contains(current) {
+            names.insert(current, at: 0)
+        }
+        return names
+    }
+
     var body: some View {
         NavigationStack {
-            ScreenScroll {
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        SectionHeader(DateFormatting.dayMonth(row.date), subtitle: row.category)
+            Group {
+                if let draft {
+                    ScreenScroll {
+                        LedgerEditForm.total(draft.total, caption: draft.category, tint: Theme.negative)
 
-                        FieldLabel("Точка")
-                        Picker("Точка", selection: $companyID) {
-                            ForEach(store.companies) { company in Text(company.name).tag(company.id) }
-                        }
-                        .pickerStyle(.menu)
-
-                        FieldLabel("Категория")
-                        TextField("Категория", text: $category)
-                            .textFieldStyle(.plain)
-                            .font(Typography.callout)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            FieldLabel("Наличные")
-                            TextField("0", text: $cash)
-                                .textFieldStyle(.plain)
-                                #if os(iOS)
-                                .keyboardType(.decimalPad)
-                                #endif
-                        }
-                        VStack(alignment: .leading, spacing: 2) {
-                            FieldLabel("Kaspi")
-                            TextField("0", text: $kaspi)
-                                .textFieldStyle(.plain)
-                                #if os(iOS)
-                                .keyboardType(.decimalPad)
-                                #endif
+                        LedgerEditForm.section("Сумма") {
+                            LedgerEditForm.amountRow("Наличные", icon: "banknote.fill", text: $cash)
+                            LedgerEditForm.divider
+                            LedgerEditForm.amountRow("Kaspi", icon: "qrcode", text: $kaspi)
                         }
 
-                        FieldLabel("Комментарий")
-                        TextField("необязательно", text: $comment)
-                            .textFieldStyle(.plain)
-                            .font(Typography.callout)
-
-                        if let error {
-                            Text(error).font(Typography.caption).foregroundStyle(Theme.negative)
+                        LedgerEditForm.section("Подробности") {
+                            LedgerEditForm.menuRow("Категория", icon: "tag.fill", value: draft.category.isEmpty ? "Выбрать" : draft.category) {
+                                ForEach(categoryNames, id: \.self) { name in
+                                    Button(name) { edit?.category = name }
+                                }
+                            }
+                            LedgerEditForm.divider
+                            LedgerEditForm.menuRow("Точка", icon: "building.2.fill", value: store.companyName(draft.companyID) ?? "Выбрать") {
+                                ForEach(store.companies) { company in
+                                    Button(company.name) { edit?.companyID = company.id }
+                                }
+                            }
+                            LedgerEditForm.divider
+                            LedgerEditForm.dateRow($date)
+                            LedgerEditForm.divider
+                            LedgerEditForm.commentRow(Binding(
+                                get: { edit?.comment ?? "" },
+                                set: { edit?.comment = $0 }
+                            ))
                         }
 
-                        Button(isSaving ? "Сохраняем…" : "Сохранить") { Task { await save() } }
-                            .buttonStyle(PrimaryButtonStyle())
-                            .disabled(isSaving || companyID.isEmpty || category.trimmingCharacters(in: .whitespaces).isEmpty)
+                        LedgerEditForm.saveButton(isSaving: isSaving, problem: draft.problem, error: error) {
+                            Task { await save() }
+                        }
                     }
+                } else {
+                    WideEmptyState(
+                        icon: "building.2",
+                        title: "Нет точки",
+                        message: "У этого расхода не указана точка. Исправьте его на сайте."
+                    )
                 }
             }
             .background(Theme.background)
@@ -254,29 +267,18 @@ struct EditExpenseSheet: View {
             #endif
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Отмена") { dismiss() } } }
             .task {
-                cash = row.cashAmount == 0 ? "" : Quantity.format(row.cashAmount)
-                kaspi = row.kaspiAmount == 0 ? "" : Quantity.format(row.kaspiAmount)
-                category = row.category ?? ""
-                companyID = row.companyID ?? ""
-                comment = row.comment ?? ""
                 if store.companies.isEmpty { await store.loadCompanies() }
+                if store.expenseCategories.isEmpty { await store.loadCategories() }
             }
         }
     }
 
     private func save() async {
+        guard let draft, draft.problem == nil else { return }
         isSaving = true
         defer { isSaving = false }
         do {
-            try await BusinessService(api: api).updateExpense(
-                id: row.id,
-                date: row.date,
-                companyID: companyID,
-                category: category.trimmingCharacters(in: .whitespaces),
-                cashAmount: AmountParsing.value(cash),
-                kaspiAmount: AmountParsing.value(kaspi),
-                comment: comment.trimmingCharacters(in: .whitespaces)
-            )
+            try await BusinessService(api: api).updateExpense(draft)
             Haptics.success()
             await onSaved()
             dismiss()
@@ -287,5 +289,135 @@ struct EditExpenseSheet: View {
             self.error = error.localizedDescription
             Haptics.error()
         }
+    }
+}
+
+/// Общие куски форм правки — как карточка перевода в банковском приложении:
+/// итог крупно сверху, поля строками на белом.
+enum LedgerEditForm {
+    /// Ноль — пустым полем: «0» читается как введённое значение.
+    static func text(_ value: Double) -> String {
+        value == 0 ? "" : Quantity.format(value)
+    }
+
+    static func total(_ value: Double, caption: String?, tint: Color) -> some View {
+        VStack(spacing: 4) {
+            Text(Money.format(value))
+                .font(.system(size: 36, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(Theme.text)
+                .contentTransition(.numericText())
+                .animation(Motion.value, value: value)
+            if let caption, !caption.isEmpty {
+                Text(caption)
+                    .font(.system(size: 14))
+                    .foregroundStyle(Theme.textDim)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, Spacing.md)
+    }
+
+    static func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.textDim)
+                .padding(.horizontal, Spacing.xs)
+            VStack(spacing: 0) { content() }
+                .padding(.horizontal, Spacing.lg)
+                .background(Theme.surface, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+        }
+    }
+
+    static var divider: some View {
+        Rectangle().fill(Theme.borderSoft).frame(height: 1).padding(.leading, 40)
+    }
+
+    private static func label(_ title: String, icon: String) -> some View {
+        HStack(spacing: Spacing.md) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Theme.brand)
+                .frame(width: 28)
+            Text(title)
+                .font(.system(size: 16))
+                .foregroundStyle(Theme.text)
+        }
+    }
+
+    static func amountRow(_ title: String, icon: String, text: Binding<String>) -> some View {
+        HStack {
+            label(title, icon: icon)
+            Spacer(minLength: Spacing.md)
+            TextField("0", text: text)
+                .multilineTextAlignment(.trailing)
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(Theme.text)
+                #if os(iOS)
+                .keyboardType(.decimalPad)
+                #endif
+            Text("₸").foregroundStyle(Theme.textDim)
+        }
+        .padding(.vertical, 13)
+    }
+
+    static func dateRow(_ date: Binding<Date>) -> some View {
+        HStack {
+            label("Дата", icon: "calendar")
+            Spacer()
+            DatePicker("", selection: date, in: ...Date(), displayedComponents: .date)
+                .labelsHidden()
+        }
+        .padding(.vertical, 8)
+    }
+
+    static func commentRow(_ text: Binding<String>) -> some View {
+        HStack(alignment: .top) {
+            label("Комментарий", icon: "text.bubble.fill")
+            Spacer(minLength: Spacing.md)
+            TextField("необязательно", text: text, axis: .vertical)
+                .multilineTextAlignment(.trailing)
+                .lineLimit(1...4)
+                .font(.system(size: 16))
+        }
+        .padding(.vertical, 13)
+    }
+
+    static func menuRow<Items: View>(_ title: String, icon: String, value: String, @ViewBuilder items: () -> Items) -> some View {
+        Menu {
+            items()
+        } label: {
+            HStack {
+                label(title, icon: icon)
+                Spacer(minLength: Spacing.md)
+                Text(value)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Theme.brand)
+                    .lineLimit(1)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Theme.textDim)
+            }
+            .padding(.vertical, 13)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    static func saveButton(isSaving: Bool, problem: String?, error: String?, action: @escaping () -> Void) -> some View {
+        VStack(spacing: Spacing.sm) {
+            if let message = error ?? problem {
+                Text(message)
+                    .font(.system(size: 13))
+                    .foregroundStyle(error == nil ? Theme.textDim : Theme.negative)
+                    .multilineTextAlignment(.center)
+            }
+            Button(isSaving ? "Сохраняем…" : "Сохранить", action: action)
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(isSaving || problem != nil)
+        }
+        .padding(.top, Spacing.sm)
     }
 }

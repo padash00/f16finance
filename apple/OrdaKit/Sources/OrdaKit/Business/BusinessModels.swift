@@ -164,6 +164,10 @@ public struct IncomeRow: Decodable, Sendable, Identifiable, Hashable {
     public let cardAmount: Double
     public let comment: String?
     public let companyID: String?
+    /// Нужны при исправлении: сервер перезаписывает их тем, что пришло, и
+    /// без них оператор и «Kaspi до полуночи» обнулились бы.
+    public let operatorID: String?
+    public let kaspiBeforeMidnight: Double?
 
     public var total: Double { cashAmount + kaspiAmount + onlineAmount + cardAmount }
 
@@ -174,6 +178,8 @@ public struct IncomeRow: Decodable, Sendable, Identifiable, Hashable {
         case onlineAmount = "online_amount"
         case cardAmount = "card_amount"
         case companyID = "company_id"
+        case operatorID = "operator_id"
+        case kaspiBeforeMidnight = "kaspi_before_midnight"
     }
 
     public init(from decoder: any Decoder) throws {
@@ -187,6 +193,8 @@ public struct IncomeRow: Decodable, Sendable, Identifiable, Hashable {
         cardAmount = try c.decodeIfPresent(Double.self, forKey: .cardAmount) ?? 0
         companyID = try c.decodeIfPresent(String.self, forKey: .companyID)
         comment = try c.decodeIfPresent(String.self, forKey: .comment)
+        operatorID = try c.decodeIfPresent(String.self, forKey: .operatorID)
+        kaspiBeforeMidnight = try c.decodeIfPresent(Double.self, forKey: .kaspiBeforeMidnight)
     }
 }
 
@@ -200,6 +208,8 @@ public struct ExpenseRow: Decodable, Sendable, Identifiable, Hashable {
     public let comment: String?
     public let status: String?
     public let companyID: String?
+    /// Нужен при исправлении — иначе сервер снимет оператора с расхода.
+    public let operatorID: String?
 
     public var total: Double { cashAmount + kaspiAmount }
     public var isPending: Bool { status == "pending_approval" }
@@ -209,6 +219,7 @@ public struct ExpenseRow: Decodable, Sendable, Identifiable, Hashable {
         case cashAmount = "cash_amount"
         case kaspiAmount = "kaspi_amount"
         case companyID = "company_id"
+        case operatorID = "operator_id"
     }
 
     public init(from decoder: any Decoder) throws {
@@ -221,6 +232,7 @@ public struct ExpenseRow: Decodable, Sendable, Identifiable, Hashable {
         comment = try c.decodeIfPresent(String.self, forKey: .comment)
         status = try c.decodeIfPresent(String.self, forKey: .status)
         companyID = try c.decodeIfPresent(String.self, forKey: .companyID)
+        operatorID = try c.decodeIfPresent(String.self, forKey: .operatorID)
     }
 }
 
