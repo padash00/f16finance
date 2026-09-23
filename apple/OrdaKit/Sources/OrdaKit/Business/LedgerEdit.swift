@@ -8,9 +8,10 @@ import Foundation
 // `expenses.edit`, `expenses.delete`; сервер проверяет их сам и пишет
 // правку в журнал с прежними значениями.
 //
-// Важно: сервер перезаписывает запись целиком тем, что пришло. Поэтому поля,
-// которых в форме нет (оператор, «Kaspi до полуночи», точка расхода),
-// берутся из исходной записи — иначе исправление суммы молча обнулило бы их.
+// Важно: сервер перезаписывает запись целиком тем, что пришло. Поэтому
+// оператор и точка стартуют со значений исходной записи, а «Kaspi до
+// полуночи», которого в форме нет, уходит как было — иначе исправление суммы
+// молча обнулило бы их.
 
 /// Исправление дохода за смену.
 public struct IncomeEdit: Sendable, Equatable {
@@ -21,8 +22,9 @@ public struct IncomeEdit: Sendable, Equatable {
     public var online: Double
     public var card: Double
     public var comment: String
-    /// Из исходной записи, в форме не правятся.
-    public let operatorID: String?
+    /// Оператор меняется выбором, как на сайте.
+    public var operatorID: String?
+    /// Из исходной записи, в форме не правится.
     public let kaspiBeforeMidnight: Double?
 
     public init(row: IncomeRow) {
@@ -77,7 +79,7 @@ public struct ExpenseEdit: Sendable, Equatable {
     public var comment: String
     /// Точку можно поменять: расход записали не на ту.
     public var companyID: String
-    public let operatorID: String?
+    public var operatorID: String?
 
     /// `nil`, если у записи нет точки: такую сервер не примет, и лучше не
     /// предлагать правку, чем показать ошибку после ввода.

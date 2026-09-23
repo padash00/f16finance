@@ -84,6 +84,7 @@ struct EditIncomeSheet: View {
 
     @Environment(\.api) private var api
     @Environment(\.dismiss) private var dismiss
+    @Environment(BusinessStore.self) private var store
 
     @State private var edit: IncomeEdit
     @State private var cash = ""
@@ -131,6 +132,8 @@ struct EditIncomeSheet: View {
                 }
 
                 LedgerEditForm.section("Подробности") {
+                    LedgerEditForm.operatorRow(store: store, selection: $edit.operatorID)
+                    LedgerEditForm.divider
                     LedgerEditForm.dateRow($date)
                     LedgerEditForm.divider
                     LedgerEditForm.commentRow($edit.comment)
@@ -146,6 +149,7 @@ struct EditIncomeSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Отмена") { dismiss() } } }
+            .task { if store.operators.isEmpty { await store.loadTeam() } }
         }
     }
 
@@ -240,6 +244,11 @@ struct EditExpenseSheet: View {
                                 }
                             }
                             LedgerEditForm.divider
+                            LedgerEditForm.operatorRow(store: store, selection: Binding(
+                                get: { edit?.operatorID },
+                                set: { edit?.operatorID = $0 }
+                            ))
+                            LedgerEditForm.divider
                             LedgerEditForm.dateRow($date)
                             LedgerEditForm.divider
                             LedgerEditForm.commentRow(Binding(
@@ -269,6 +278,7 @@ struct EditExpenseSheet: View {
             .task {
                 if store.companies.isEmpty { await store.loadCompanies() }
                 if store.expenseCategories.isEmpty { await store.loadCategories() }
+                if store.operators.isEmpty { await store.loadTeam() }
             }
         }
     }
@@ -404,6 +414,23 @@ enum LedgerEditForm {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    /// Оператор — как на сайте: действующие по алфавиту, а записанный, даже
+    /// если уже уволен, остаётся в списке, чтобы правка его не потеряла.
+    @MainActor
+    static func operatorRow(store: BusinessStore, selection: Binding<String?>) -> some View {
+        let current = selection.wrappedValue
+        let people = store.operators
+            .filter { $0.isActive || $0.id == current }
+            .sorted { ($0.shortName ?? $0.name) < ($1.shortName ?? $1.name) }
+        let name = people.first { $0.id == current }.map { $0.shortName ?? $0.name }
+        return menuRow("Оператор", icon: "person.fill", value: name ?? (current == nil ? "Не выбран" : "…")) {
+            Button("Не выбран") { selection.wrappedValue = nil }
+            ForEach(people) { person in
+                Button(person.shortName ?? person.name) { selection.wrappedValue = person.id }
+            }
+        }
     }
 
     static func saveButton(isSaving: Bool, problem: String?, error: String?, action: @escaping () -> Void) -> some View {
