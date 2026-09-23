@@ -1060,20 +1060,6 @@ struct AccessScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if let overview = store?.overview {
-                HStack(spacing: Spacing.md) {
-                    SummaryPill(title: "Ролей", value: "\(overview.roles.count)", tint: Theme.textMuted)
-                    SummaryPill(
-                        title: "Опасных прав",
-                        value: "\(overview.totalDangerous)",
-                        tint: overview.totalDangerous > 0 ? Theme.warning : Theme.positive
-                    )
-                    SummaryPill(title: "Снято прав", value: "\(overview.totalRevoked)", tint: Theme.info)
-                }
-                .padding(.horizontal, Spacing.lg)
-                .padding(.vertical, Spacing.md)
-            }
-
             if let store {
                 if let error = store.error, store.overview == nil {
                     ErrorStateView(error: error) { Task { await store.load() } }
@@ -1092,6 +1078,8 @@ struct AccessScreen: View {
                             title: "Ролей нет",
                             message: "Выберите роль, чтобы увидеть, что ей открыто."
                         )
+                    } header: {
+                        AccessHero(overview: overview)
                     }
                 } else {
                     LoadingRows(count: 6)
@@ -1108,6 +1096,12 @@ struct AccessScreen: View {
                 let s = AccessStore(api: api)
                 store = s
                 await s.load()
+                #if DEBUG
+                // Снимки экрана: `-ordaAccessRole manager` открывает карточку роли.
+                if let wanted = UserDefaults.standard.string(forKey: "ordaAccessRole") {
+                    selected = s.overview?.roles.first { $0.role == wanted }
+                }
+                #endif
             }
         }
         .refreshable { await store?.load() }
@@ -1126,65 +1120,119 @@ struct AccessScreen: View {
     }
 }
 
+/// Сводка сверху списка ролей: одна главная цифра и две пояснения —
+/// вместо трёх плиток разной высоты.
+private struct AccessHero: View {
+    let overview: AccessOverview
+
+    var body: some View {
+        let risky = overview.editableRoles.filter { $0.dangerousCount > 0 }.count
+        HeroSummary(
+            title: "Роли и права",
+            value: "\(overview.roles.count) \(pluralize(overview.roles.count, "роль", "роли", "ролей"))",
+            caption: risky > 0
+                ? "у \(risky) \(pluralize(risky, "роли", "ролей", "ролей")) есть необратимые права"
+                : "необратимых прав никому не выдано",
+            footer: [
+                ("Необратимых выдано", "\(overview.totalDangerous)"),
+                ("Прав снято", "\(overview.totalRevoked)"),
+            ]
+        )
+    }
+}
+
 private struct RoleAccessRow: View {
     let role: RoleAccessSummary
 
     var body: some View {
         HStack(spacing: Spacing.md) {
-            TintedIcon(systemName: icon, tint: role.ignoresMatrix ? Theme.warning : Color(hex: 0x3B82F6))
+            if role.ignoresMatrix || role.grantsNothing {
+                TintedIcon(systemName: icon, tint: role.ignoresMatrix ? Theme.warning : Theme.textDim, size: 42)
+            } else {
+                LetterBadge(text: role.roleLabel, tint: Theme.brand)
+            }
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(role.roleLabel)
-                    .font(.system(size: 16, weight: .medium))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
-                Text("\(role.openPages.count) \(pluralize(role.openPages.count, "раздел", "раздела", "разделов")) открыто")
-                    .font(Typography.caption)
+                Text(subtitle)
+                    .font(.system(size: 13))
                     .monospacedDigit()
                     .foregroundStyle(Theme.textDim)
+                    .lineLimit(1)
             }
 
             Spacer(minLength: Spacing.sm)
 
-            // Статус подписью, а не плашкой — роль с длинным названием
-            // иначе обрезалась.
-            Text(status.0)
+            // Коротко — значок и число: длинная плашка съедала название роли.
+            HStack(spacing: 4) {
+                if role.dangerousCount > 0 && !role.ignoresMatrix {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 10, weight: .bold))
+                }
+                Text(status.0)
+                    .font(.system(size: 12, weight: .semibold))
+                    .monospacedDigit()
+            }
+            .foregroundStyle(status.1)
+            .lineLimit(1)
+            .fixedSize()
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(status.1.opacity(0.12), in: Capsule())
+            .accessibilityLabel(role.dangerousCount > 0 && !role.ignoresMatrix ? "\(role.dangerousCount) необратимых прав" : status.0)
+
+            Image(systemName: "chevron.right")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(status.1)
-                .lineLimit(1)
-                .fixedSize()
+                .foregroundStyle(Theme.textDim)
         }
         .padding(.vertical, 2)
+    }
+
+    private var subtitle: String {
+        if role.ignoresMatrix { return "видит всё, настройки не влияют" }
+        if role.grantsNothing { return "в админку не заходит" }
+        let n = role.openPages.count
+        return "\(n) \(pluralize(n, "раздел", "раздела", "разделов")) открыто"
     }
 
     private var status: (String, Color) {
         if role.ignoresMatrix { return ("всё", Theme.warning) }
         if role.grantsNothing { return ("нет доступа", Theme.textDim) }
-        if role.dangerousCount > 0 { return ("\(role.dangerousCount) опасных", Theme.warning) }
-        return ("без опасных", Theme.positive)
+        if role.dangerousCount > 0 { return ("\(role.dangerousCount)", Theme.warning) }
+        return ("безопасно", Theme.positive)
     }
 
     private var icon: String {
-        if role.ignoresMatrix { return "crown.fill" }
-        if role.grantsNothing { return "person.slash" }
-        return "person.badge.key.fill"
+        role.ignoresMatrix ? "crown.fill" : "person.slash"
     }
 }
 
+/// Карточка роли: что ей открыто, что опасного, что закрыто.
+///
+/// Раньше права шли сплошным текстом через точку, а выключенные страницы —
+/// сырыми адресами (`/operator/salary`). Теперь всё — строками с иконками,
+/// длинные списки свёрнуты, права раздела раскрываются по нажатию.
 private struct RoleAccessDetail: View {
     let role: RoleAccessSummary
     let catalogSize: Int
 
+    @State private var expanded: Set<String> = []
+    @State private var showsAllClosed = false
+    @State private var showsAllManual = false
+
     var body: some View {
         ScreenScroll {
+            hero
+
             if let note = specialNote {
-                OwnerSection(role.roleLabel) {
-                    SectionNote(text: "вне настроек", color: Theme.warning)
+                OwnerSection("Особая роль") {
+                    EmptyView()
                 } content: {
-                    VStack(alignment: .leading, spacing: Spacing.sm) {
-                        Text("Настройки на эту роль не влияют")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(Theme.warning)
+                    HStack(alignment: .top, spacing: Spacing.md) {
+                        TintedIcon(systemName: "info.circle.fill", tint: Theme.warning, size: 38)
                         Text(note)
                             .font(.system(size: 15))
                             .foregroundStyle(Theme.textMuted)
@@ -1193,94 +1241,67 @@ private struct RoleAccessDetail: View {
                 }
             }
 
-            // Открытые права — главная цифра роли; необратимые — то, из-за
-            // чего сюда заходят, поэтому карточка краснеет, когда они есть.
-            HeroSummary(
-                title: "\(role.roleLabel): прав открыто",
-                value: "\(role.grantedCount) из \(catalogSize)",
-                caption: "\(role.openPages.count) \(pluralize(role.openPages.count, "раздел", "раздела", "разделов")) открыто",
-                footer: [
-                    ("Необратимых", "\(role.dangerousCount)"),
-                    ("Прав снято", "\(role.revokedCount)"),
-                    ("Разделов", "\(role.openPages.count)"),
-                ],
-                colors: role.dangerousCount > 0
-                    ? Theme.heroNegative
-                    : Theme.heroGradient
-            )
-
             if !role.pagesWithDanger.isEmpty {
                 OwnerSection("Необратимые права") {
-                    SectionNote(text: "удаления, выгрузки", color: Theme.warning)
+                    Text("удаления, выплаты")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.textDim)
                 } content: {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        ForEach(Array(role.pagesWithDanger.prefix(20))) { page in
-                            HStack(alignment: .top, spacing: Spacing.md) {
-                                TintedIcon(systemName: "exclamationmark.triangle.fill", tint: Theme.warning, size: 32)
-                                VStack(alignment: .leading, spacing: Spacing.xs) {
-                                    Text(page.label)
-                                        .font(.system(size: 16, weight: .medium))
-                                        .foregroundStyle(Theme.text)
-                                    Text(page.dangerousGranted.map(\.label).joined(separator: " · "))
-                                        .font(Typography.caption)
-                                        .foregroundStyle(Theme.warning)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                    }
-                }
-            }
-
-            if !role.closedPages.isEmpty {
-                OwnerSection("Разделы закрыты") {
-                    SectionNote(text: "роль их не увидит")
-                } content: {
-                    Text(role.closedPages.map(\.label).sorted().joined(separator: " · "))
-                        .font(.system(size: 15))
-                        .foregroundStyle(Theme.textMuted)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-
-            if !role.closedPaths.isEmpty {
-                // Отдельный рубильник страниц (role_permissions) живёт рядом с
-                // матрицей и режет доступ независимо от неё.
-                OwnerSection("Страницы выключены вручную") {
-                    VStack(alignment: .leading, spacing: Spacing.sm) {
-                        Text("рубильник поверх прав")
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.textDim)
-                        Text(role.closedPageLabels.joined(separator: " · "))
-                            .font(.system(size: 15))
-                            .foregroundStyle(Theme.textMuted)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
+                    rightsList(
+                        pages: role.pagesWithDanger,
+                        rights: { $0.dangerousGranted },
+                        icon: "exclamationmark.triangle.fill",
+                        tint: Theme.warning,
+                        idPrefix: "danger"
+                    )
                 }
             }
 
             if role.revokedCount > 0 {
                 OwnerSection("Что снято") {
-                    SectionNote(text: "по разделам")
+                    Text("по разделам")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.textDim)
                 } content: {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        ForEach(Array(revokedPages.prefix(20))) { page in
-                            HStack(alignment: .top, spacing: Spacing.md) {
-                                TintedIcon(systemName: "minus.circle", tint: Color(hex: 0x3B82F6), size: 32)
-                                VStack(alignment: .leading, spacing: Spacing.xs) {
-                                    Text(page.label)
-                                        .font(.system(size: 16, weight: .medium))
-                                        .foregroundStyle(Theme.text)
-                                    Text(page.revokedCapabilities.map(\.label).joined(separator: " · "))
-                                        .font(Typography.caption)
-                                        .foregroundStyle(Theme.textDim)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                    rightsList(
+                        pages: revokedPages,
+                        rights: { $0.revokedCapabilities },
+                        icon: "minus.circle.fill",
+                        tint: Theme.brand,
+                        idPrefix: "revoked"
+                    )
+                }
+            }
+
+            if !role.closedPages.isEmpty {
+                OwnerSection("Закрытые разделы") {
+                    Text("роль их не увидит")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.textDim)
+                } content: {
+                    labelList(
+                        role.closedPages.map(\.label).sorted(),
+                        icon: "lock.fill",
+                        showsAll: $showsAllClosed
+                    )
+                }
+            }
+
+            if !role.namedClosedPages.isEmpty || role.unnamedClosedPathCount > 0 {
+                // Отдельный рубильник страниц (role_permissions) живёт рядом с
+                // матрицей и режет доступ независимо от неё.
+                OwnerSection("Выключены вручную") {
+                    Text("поверх прав")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.textDim)
+                } content: {
+                    VStack(alignment: .leading, spacing: 0) {
+                        labelList(role.namedClosedPages, icon: "hand.raised.fill", showsAll: $showsAllManual)
+                        if role.unnamedClosedPathCount > 0 {
+                            Text("и ещё \(role.unnamedClosedPathCount) \(pluralize(role.unnamedClosedPathCount, "служебная страница", "служебные страницы", "служебных страниц")) программы точки")
+                                .font(.system(size: 13))
+                                .foregroundStyle(Theme.textDim)
+                                .padding(.top, Spacing.sm)
                         }
                     }
                 }
@@ -1291,6 +1312,161 @@ private struct RoleAccessDetail: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+    }
+
+    // ── Главная карточка ─────────────────────────────────────────────────────
+
+    private var hero: some View {
+        let open = role.openPages.count
+        let total = max(role.pages.count, 1)
+        return VStack(alignment: .leading, spacing: 0) {
+            Text("Открыто разделов")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.white.opacity(0.85))
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("\(open)")
+                    .font(.system(size: 40, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                Text("из \(role.pages.count)")
+                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.7))
+            }
+            .foregroundStyle(.white)
+            .padding(.top, Spacing.xs)
+
+            // Доля открытого — полосой, как лимит карты.
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(.white.opacity(0.18))
+                    Capsule().fill(.white).frame(width: proxy.size.width * CGFloat(open) / CGFloat(total))
+                }
+            }
+            .frame(height: 6)
+            .padding(.top, Spacing.md)
+
+            HStack(spacing: Spacing.xl) {
+                heroStat("Прав выдано", "\(role.grantedCount)")
+                heroStat("Необратимых", "\(role.dangerousCount)", highlight: role.dangerousCount > 0)
+                heroStat("Снято", "\(role.revokedCount)")
+            }
+            .padding(.top, Spacing.lg)
+        }
+        .padding(Spacing.xl)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            LinearGradient(colors: Theme.heroGradient, startPoint: .topLeading, endPoint: .bottomTrailing),
+            in: RoundedRectangle(cornerRadius: Radius.xl, style: .continuous)
+        )
+    }
+
+    private func heroStat(_ label: String, _ value: String, highlight: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.system(size: 13))
+                .foregroundStyle(.white.opacity(0.65))
+            Text(value)
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(highlight ? Color(hex: 0xFBBF24) : .white)
+        }
+    }
+
+    // ── Списки ───────────────────────────────────────────────────────────────
+
+    /// Раздел строкой с числом прав; нажатие раскрывает сами права.
+    private func rightsList(
+        pages: [PageAccess],
+        rights: @escaping (PageAccess) -> [Capability],
+        icon: String,
+        tint: Color,
+        idPrefix: String
+    ) -> some View {
+        VStack(spacing: 0) {
+            ForEach(Array(pages.enumerated()), id: \.element.id) { index, page in
+                let key = "\(idPrefix).\(page.id)"
+                let list = rights(page)
+                let isOpen = expanded.contains(key)
+                if index > 0 {
+                    Rectangle().fill(Theme.borderSoft).frame(height: 1).padding(.leading, 50)
+                }
+                Button {
+                    withAnimation(Motion.tap) {
+                        if isOpen { expanded.remove(key) } else { expanded.insert(key) }
+                    }
+                } label: {
+                    HStack(spacing: Spacing.md) {
+                        TintedIcon(systemName: icon, tint: tint, size: 36, corner: 10)
+                        Text(page.label)
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(Theme.text)
+                            .lineLimit(1)
+                        Spacer(minLength: Spacing.sm)
+                        Text("\(list.count)")
+                            .font(.system(size: 14, weight: .semibold))
+                            .monospacedDigit()
+                            .foregroundStyle(tint)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Theme.textDim)
+                            .rotationEffect(.degrees(isOpen ? 180 : 0))
+                    }
+                    .padding(.vertical, 10)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                if isOpen {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(list, id: \.id) { right in
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Circle().fill(tint).frame(width: 5, height: 5)
+                                Text(right.label)
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(Theme.textMuted)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                    .padding(.leading, 50)
+                    .padding(.bottom, Spacing.sm)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .transition(.opacity)
+                }
+            }
+        }
+    }
+
+    /// Названия строками; длинный список — первые шесть и «Показать все».
+    private func labelList(_ labels: [String], icon: String, showsAll: Binding<Bool>) -> some View {
+        let limit = 6
+        let shown = showsAll.wrappedValue ? labels : Array(labels.prefix(limit))
+        return VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(shown.enumerated()), id: \.offset) { index, label in
+                if index > 0 {
+                    Rectangle().fill(Theme.borderSoft).frame(height: 1).padding(.leading, 40)
+                }
+                HStack(spacing: Spacing.md) {
+                    Image(systemName: icon)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.textDim)
+                        .frame(width: 28)
+                    Text(label)
+                        .font(.system(size: 15))
+                        .foregroundStyle(Theme.text)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                .padding(.vertical, 9)
+            }
+            if labels.count > limit {
+                Button(showsAll.wrappedValue ? "Свернуть" : "Показать все \(labels.count)") {
+                    withAnimation(Motion.tap) { showsAll.wrappedValue.toggle() }
+                }
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Theme.brand)
+                .padding(.top, Spacing.sm)
+            }
+        }
     }
 
     private var revokedPages: [PageAccess] {

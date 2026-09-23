@@ -755,10 +755,38 @@ public struct RoleAccessSummary: Sendable, Hashable, Identifiable {
         case "owner": "Владелец"
         case "manager": "Управляющий"
         case "marketer": "Маркетолог"
-        case "other": "Оператор / без роли"
+        case "other": "Операторы"
         case "super_admin": "Супер-админ"
-        default: role
+        case "accountant": "Бухгалтер"
+        case "senior_operator": "Старший оператор"
+        case "senior_cashier": "Старший кассир"
+        default: Self.humanize(role)
         }
+    }
+
+    /// Свои должности владелец заводит как хочет: «технический_директор»,
+    /// «smm». В интерфейсе — без подчёркиваний и с заглавной.
+    static func humanize(_ raw: String) -> String {
+        let spaced = raw.replacingOccurrences(of: "_", with: " ").trimmingCharacters(in: .whitespaces)
+        guard let first = spaced.first else { return raw }
+        return spaced.count <= 4 && spaced == spaced.lowercased() && spaced.allSatisfy(\.isLetter) && spaced.unicodeScalars.allSatisfy(\.isASCII)
+            ? spaced.uppercased()
+            : first.uppercased() + spaced.dropFirst()
+    }
+
+    /// Выключенные вручную страницы названиями из каталога, без повторов.
+    /// Адреса, которых в каталоге нет (служебные `/operator/*`), в список не
+    /// идут — их считает `unnamedClosedPathCount`.
+    public var namedClosedPages: [String] {
+        var seen = Set<String>()
+        return closedPaths
+            .compactMap { CapabilityCatalog.page(path: $0)?.label }
+            .filter { seen.insert($0).inserted }
+            .sorted()
+    }
+
+    public var unnamedClosedPathCount: Int {
+        closedPaths.filter { CapabilityCatalog.page(path: $0) == nil }.count
     }
 
     /// Роли, которым правка матрицы ничего не меняет: владелец всегда получает

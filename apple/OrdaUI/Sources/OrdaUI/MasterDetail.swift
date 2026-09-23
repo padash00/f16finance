@@ -70,11 +70,15 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
                 // как операции в банковском приложении. Раньше они лежали
                 // прямо на сером фоне и читались как текст, а не как список.
                 List {
-                    Section {
-                        header()
-                            .listRowInsets(EdgeInsets(top: Spacing.sm, leading: 0, bottom: Spacing.sm, trailing: 0))
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
+                    // Без заголовка — без секции: пустая секция всё равно
+                    // занимает высоту, и над списком зияла дыра.
+                    if Header.self != EmptyView.self {
+                        Section {
+                            header()
+                                .listRowInsets(EdgeInsets(top: Spacing.sm, leading: 0, bottom: Spacing.sm, trailing: 0))
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                        }
                     }
 
                     Section {
