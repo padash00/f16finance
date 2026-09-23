@@ -33,12 +33,6 @@ struct BusinessRootView: View {
     @State private var store: BusinessStore?
     @State private var selection: WorkspaceItem?
 
-    #if os(iOS)
-    /// Вкладка и путь внутри «Разделов». Нужны, чтобы открыть раздел извне:
-    /// на телефоне выбор бокового меню ни на что не влияет — там вкладки.
-    @State private var phoneTab: PhoneTab = .home
-    @State private var sectionsPath: [SectionRoute] = []
-    #endif
 
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -115,7 +109,9 @@ struct BusinessRootView: View {
             // главная, аналитика, сервисы плиткой.
             OwnerTabs(resolver: resolver, accent: accent)
         } else if sizeClass == .compact {
-            phoneTabs
+            // Остальным должностям — свой кабинет: бухгалтеру, маркетологу,
+            // старшему кассиру и другим — свои кнопки, вкладки и сервисы.
+            StaffTabs(resolver: resolver, accent: accent)
         } else {
             splitLayout
         }
@@ -123,85 +119,6 @@ struct BusinessRootView: View {
         splitLayout
         #endif
     }
-
-    #if os(iOS)
-    // ── iPhone ───────────────────────────────────────────────────────────────
-
-    /// Вкладки — то же правило, что и в боковом меню: только выданное.
-    ///
-    /// «Разделы» и «Профиль» остаются всегда: первое — навигация по тому же
-    /// выданному списку, второе — сам человек и выход. Это не бизнес-страницы,
-    /// правами они не закрываются ни на сайте, ни здесь.
-    private var phoneTabs: some View {
-        TabView(selection: $phoneTab) {
-            ForEach(contentTabs, id: \.self) { tab in
-                NavigationStack { contentTab(tab) }
-                    .tabItem { Label(tab.title, systemImage: tab.icon) }
-                    .badge(tab == .approvals ? (store?.pending.count ?? 0) : 0)
-                    .tag(tab)
-            }
-
-            NavigationStack(path: $sectionsPath) {
-                BusinessSectionsScreen(resolver: resolver)
-            }
-            .tabItem { Label("Разделы", systemImage: "list.bullet") }
-            .tag(PhoneTab.sections)
-
-            NavigationStack { BusinessProfileScreen(resolver: resolver) }
-                .tabItem { Label("Профиль", systemImage: "person.crop.circle") }
-                .tag(PhoneTab.profile)
-        }
-        .tint(accent)
-        .onAppear {
-            // Вкладка по умолчанию — «Обзор», но у сотрудника его может не
-            // быть, и приложение открывалось на пустоте до первого касания.
-            if !contentTabs.contains(phoneTab), phoneTab != .sections, phoneTab != .profile {
-                phoneTab = contentTabs.first ?? .sections
-            }
-        }
-    }
-
-    /// Рабочие вкладки — то, куда человек заходит каждый день.
-    ///
-    /// Раньше их было ровно две и обе владельческие: сводка и решения по
-    /// расходам. У сотрудника без этих прав внизу оставались «Разделы» и
-    /// «Профиль» — то есть каталог и он сам, а работы в приложении будто и нет.
-    ///
-    /// Теперь список собирается по правам: сводка, решения, поручения, чат
-    /// команды. Берём не больше трёх — с «Разделами» и «Профилем» это пять,
-    /// предел, после которого iOS прячет лишнее в «Ещё».
-    private var contentTabs: [PhoneTab] {
-        let candidates: [(PhoneTab, String)] = [
-            (.home, "dashboard.view"),
-            (.approvals, "expenses-pending.view"),
-            (.tasks, "tasks.view"),
-            (.chat, "team-chat.view"),
-            // Дальше — то, во что заходят через день, а не каждый час:
-            // график смен и база знаний. Они добираются до нижней панели
-            // только у тех, кому не выдали ничего из первых четырёх.
-            (.shifts, "shifts.view"),
-            (.knowledge, "knowledge-admin.view"),
-        ]
-        return candidates
-            .filter { resolver.can($0.1) }
-            .map(\.0)
-            .prefix(3)
-            .map { $0 }
-    }
-
-    @ViewBuilder
-    private func contentTab(_ tab: PhoneTab) -> some View {
-        switch tab {
-        case .home: homeScreen
-        case .approvals: ApprovalsScreen()
-        case .tasks: TeamTasksScreen()
-        case .chat: TeamChatScreen()
-        case .shifts: ScheduleWeekScreen()
-        case .knowledge: KnowledgeAdminScreen()
-        case .sections, .profile: EmptyView()
-        }
-    }
-    #endif
 
     // ── iPad и Mac ───────────────────────────────────────────────────────────
 
@@ -313,36 +230,11 @@ struct BusinessRootView: View {
         selection = item
 
         #if os(iOS)
-        // Новый кабинет владельца слушает свой маршрутизатор: у него другие
-        // вкладки, и старые `phoneTab`/`sectionsPath` он не видит. Только когда
-        // вкладки на экране: на iPad запрос повис бы и сработал позже, при
-        // сужении окна.
-        if sizeClass == .compact && resolver.canSeeOwnerAnalytics {
+        // Вкладки телефона — и владельца, и сотрудника — слушают свой
+        // маршрутизатор. Только когда вкладки на экране: на iPad запрос повис
+        // бы и сработал позже, при сужении окна.
+        if sizeClass == .compact {
             OwnerRouter.shared.open(item.id)
-        }
-        #endif
-
-        #if os(iOS)
-        // Раздел, у которого есть своя вкладка, открываем во вкладке: иначе
-        // уведомление о задаче уводило в стопку внутри «Разделов», а рядом
-        // внизу горела вкладка «Задачи» — два одинаковых экрана в двух местах.
-        let tabForPage: PhoneTab? = switch item.id {
-        case "home.dashboard": .home
-        case "tasks": .tasks
-        case "team-chat": .chat
-        case "shifts": .shifts
-        case "knowledge": .knowledge
-        default: nil
-        }
-        if let tabForPage, contentTabs.contains(tabForPage) || tabForPage == .home {
-            phoneTab = tabForPage
-            sectionsPath = []
-        } else if item.id == "home.dashboard" {
-            phoneTab = .home
-            sectionsPath = []
-        } else {
-            phoneTab = .sections
-            sectionsPath = [SectionRoute(pageID: item.id)]
         }
         #endif
     }
@@ -494,39 +386,6 @@ struct BusinessRootView: View {
         }
     }
 }
-
-#if os(iOS)
-/// Вкладки телефона.
-enum PhoneTab: Hashable {
-    case home, approvals, tasks, chat, shifts, knowledge, sections, profile
-
-    var title: String {
-        switch self {
-        case .home: "Обзор"
-        case .approvals: "Решения"
-        case .tasks: "Задачи"
-        case .chat: "Чат"
-        case .shifts: "Смены"
-        case .knowledge: "База"
-        case .sections: "Разделы"
-        case .profile: "Профиль"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .home: "square.grid.2x2.fill"
-        case .approvals: "checkmark.circle"
-        case .tasks: "checklist"
-        case .chat: "bubble.left.and.bubble.right"
-        case .shifts: "calendar"
-        case .knowledge: "book"
-        case .sections: "list.bullet"
-        case .profile: "person.crop.circle"
-        }
-    }
-}
-#endif
 
 /// Адрес раздела в списке «Разделы».
 struct SectionRoute: Hashable {

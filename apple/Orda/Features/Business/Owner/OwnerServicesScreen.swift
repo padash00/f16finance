@@ -37,7 +37,10 @@ enum OwnerServices {
     static func favorites(resolver: AccessResolver, count: Int = 8) -> [OwnerServiceItem] {
         let every = all(resolver: resolver).flatMap(\.items)
         let byID = Dictionary(every.map { ($0.pageID, $0) }, uniquingKeysWith: { a, _ in a })
-        var result = favoriteIDs.compactMap { byID[$0] }
+        // Управляющему или бухгалтеру с доступом к отчётам — порядок его
+        // должности, а не владельца.
+        let ids = resolver.workspace == .staff ? resolver.playbook.favoritePageIDs : favoriteIDs
+        var result = ids.compactMap { byID[$0] }
         if result.count < count {
             result += every.filter { !result.contains($0) }.prefix(count - result.count)
         }
@@ -52,8 +55,20 @@ enum OwnerServices {
             "Ожидающие расходы": "На согласовании",
             "Доверенные поставщики": "Поставщики",
             "Еженедельный отчёт": "Отчёт недели",
+            "Эффективность продавцов": "Продавцы",
+            "Аналитика склада + ABC": "Склад ABC",
+            "Достижения операторов": "Достижения",
+            "Реклама на витрине": "Реклама",
+            "Командный чат": "Чат команды",
+            "Личные сообщения": "Сообщения",
         ]
-        return replacements[label] ?? label
+        if let short = replacements[label] { return short }
+        // «Смены (расписание)», «Склад (остатки)» — уточнение в скобках для
+        // меню сайта; в плитке оно ломает подпись на третью строку.
+        if let bracket = label.firstIndex(of: "("), bracket > label.startIndex {
+            return label[..<bracket].trimmingCharacters(in: .whitespaces)
+        }
+        return label
     }
 }
 

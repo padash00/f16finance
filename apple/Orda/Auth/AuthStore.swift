@@ -313,6 +313,9 @@ final class AuthStore {
         do {
             let loaded: SessionRole = try await api.send(APIRequest(path: "/api/auth/session-role"))
             role = loaded
+            #if DEBUG
+            if let preview = Self.previewRole(for: loaded) { role = preview }
+            #endif
             roleLoadedAt = Date()
             roleError = nil
             phase = .signedIn
@@ -502,3 +505,38 @@ extension AuthStore {
         roleError = nil
     }
 }
+
+#if DEBUG
+extension AuthStore {
+    /// Интерфейс глазами должности: `Orda.app -ordaPreviewRole accountant`.
+    ///
+    /// Только в отладочной сборке и только у суперадмина — чтобы посмотреть
+    /// кабинет бухгалтера или маркетолога без их логина. Права — ровно те
+    /// разделы, что названы в наборе должности. Сервер при этом видит того же
+    /// суперадмина: меняется лишь то, что рисует приложение.
+    static func previewRole(for loaded: SessionRole) -> SessionRole? {
+        guard loaded.isSuperAdmin,
+              let staffRole = UserDefaults.standard.string(forKey: "ordaPreviewRole"),
+              !staffRole.isEmpty else { return nil }
+        let playbook = StaffRolePlaybook.forRole(staffRole)
+        var pageIDs = playbook.tabPageIDs + playbook.favoritePageIDs
+        for case let .page(id) in playbook.actions { pageIDs.append(id) }
+        var capabilities = Set(pageIDs.compactMap(CapabilityCatalog.page(id:)).flatMap { $0.capabilities.map(\.id) })
+        capabilities.formUnion(["tasks.create", "dashboard.view"])
+        return SessionRole(
+            isSuperAdmin: false,
+            isStaff: true,
+            isOperator: false,
+            isCustomer: false,
+            persona: .staff,
+            displayName: "Айгерим Сапарова",
+            roleLabel: playbook.title,
+            staffRole: staffRole,
+            capabilities: capabilities,
+            orgFeatures: loaded.orgFeatures,
+            featuresAllAccess: true,
+            rolePermissionOverrides: []
+        )
+    }
+}
+#endif
