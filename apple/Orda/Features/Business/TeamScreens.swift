@@ -597,6 +597,14 @@ struct SalaryScreen: View {
         .task {
             await store.loadSalary()
             await store.loadStaffSalary()
+            #if DEBUG
+            // Снимки экрана: `-ordaSalaryOpen operator|staff` открывает карточку.
+            switch UserDefaults.standard.string(forKey: "ordaSalaryOpen") {
+            case "operator": advanceRow = store.salary?.operators.first { $0.week.netAmount > 0 }
+            case "staff": staffRow = store.staffSalary?.rows.first
+            default: break
+            }
+            #endif
         }
         .refreshable {
             await store.loadSalary()

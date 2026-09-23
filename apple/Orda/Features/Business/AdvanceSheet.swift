@@ -2,55 +2,16 @@ import OrdaKit
 import OrdaUI
 import SwiftUI
 
-/// Деньги по оператору: аванс, премия, штраф, погашение долга.
+/// Деньги по оператору за неделю: выплата, аванс, премия, штраф, долг.
 ///
-/// Все четыре решения принимают у стойки, посреди смены, а сделать их можно
+/// Все эти решения принимают у стойки, посреди смены, а сделать их можно
 /// было только на сайте — то есть «вечером, когда дойду до компьютера».
 /// Премия, назначенная через два дня, уже не работает как премия.
 ///
-/// Один лист на все действия, а не четыре экрана: разница между ними в одном
-/// поле, и человеку проще выбрать вид сверху, чем искать нужную кнопку.
+/// Карточка как счёт в банке: сверху сколько осталось выплатить, под ним
+/// круглые кнопки действий, расчёт недели строками и история с отменой.
+/// Каждое действие — своя форма, а не общий лист с переключателем.
 struct AdvanceSheet: View {
-    /// Что делаем с деньгами оператора.
-    enum Kind: String, CaseIterable, Identifiable {
-        /// Выплата недели. Приложение умело выдать аванс и записать
-        /// корректировку, а саму выплату — нет: считали на телефоне, платили с
-        /// ноутбука. Стоит первой: за этим на экран и приходят.
-        case payment
-        case advance
-        case bonus
-        case fine
-
-        var id: String { rawValue }
-
-        var title: String {
-            switch self {
-            case .payment: "Выплата"
-            case .advance: "Аванс"
-            case .bonus: "Премия"
-            case .fine: "Штраф"
-            }
-        }
-
-        var action: String {
-            switch self {
-            case .payment: "Выплатить"
-            case .advance: "Выдать аванс"
-            case .bonus: "Начислить премию"
-            case .fine: "Удержать штраф"
-            }
-        }
-
-        var note: String {
-            switch self {
-            case .payment: "Выплата закроет неделю. Выданный аванс зачтётся в неё, а не повиснет отдельным долгом."
-            case .advance: "Аванс сразу станет расходом точки и уменьшит остаток к выплате за неделю."
-            case .bonus: "Премия прибавится к расчёту недели."
-            case .fine: "Штраф вычтется из расчёта недели."
-            }
-        }
-    }
-
     let row: SalaryRow
     let weekStart: String
     /// Конец недели: расчёт отправляется за период, а не за день.
@@ -59,225 +20,142 @@ struct AdvanceSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.api) private var api
-    @Environment(BusinessStore.self) private var store
     @Environment(AuthStore.self) private var auth
 
-    @State private var voidTarget: SalaryRow.Week.Payment?
+    @State private var opened: SalaryAction?
+    @State private var voidPaymentTarget: SalaryRow.Week.Payment?
     @State private var voidAdjustmentTarget: SalaryRow.Week.Adjustment?
-    @State private var isVoiding = false
-    @State private var voidError: String?
+    @State private var isWorking = false
+    @State private var error: String?
+    @State private var notice: String?
 
-    private var canMarkDebt: Bool { auth.resolver?.can("salary.mark_debt_paid") ?? false }
-    private var canSendTelegram: Bool { auth.resolver?.can("salary.send_telegram") ?? false }
-    private var canAdvance: Bool { auth.resolver?.can("salary.create_advance") ?? false }
-    private var canPay: Bool { auth.resolver?.can("salary.create_payment") ?? false }
-    private var canAdjust: Bool { auth.resolver?.can("salary.create_adjustment") ?? false }
+    private func can(_ capability: String) -> Bool { auth.resolver?.can(capability) ?? false }
 
-    /// Виды, доступные по правам. Пустой список означает, что человеку сюда
-    /// вообще нечего было открывать, — но строка списка это уже проверила.
-    private var kinds: [Kind] {
-        var result: [Kind] = []
-        if canPay { result.append(.payment) }
-        if canAdvance { result.append(.advance) }
-        if canAdjust { result.append(contentsOf: [.bonus, .fine]) }
+    private var week: SalaryRow.Week { row.week }
+
+    // ── Действия ─────────────────────────────────────────────────────────────
+
+    private var actions: [SalaryAction] {
+        var result: [SalaryAction] = []
+        if can("salary.create_payment") {
+            result.append(SalaryAction(
+                id: "payment", title: "Выплатить", icon: "banknote.fill",
+                action: "Выплатить",
+                note: "Выплата закроет неделю. Выданный аванс зачтётся в неё, а не повиснет отдельным долгом.",
+                money: .split, point: .none,
+                prefill: max(week.remainingAmount, 0)
+            ))
+        }
+        if can("salary.create_advance") {
+            result.append(SalaryAction(
+                id: "advance", title: "Аванс", icon: "arrow.up.forward.circle.fill",
+                action: "Выдать аванс",
+                note: "Аванс сразу станет расходом точки и уменьшит остаток к выплате за неделю.",
+                money: .split, point: .required
+            ))
+        }
+        if can("salary.create_adjustment") {
+            result.append(SalaryAction(
+                id: "bonus", title: "Премия", icon: "gift.fill",
+                action: "Начислить премию",
+                note: "Премия прибавится к расчёту недели.",
+                money: .single, point: .optional
+            ))
+            result.append(SalaryAction(
+                id: "fine", title: "Штраф", icon: "exclamationmark.octagon.fill",
+                action: "Удержать штраф",
+                note: "Штраф вычтется из расчёта недели.",
+                money: .single, point: .optional
+            ))
+        }
         return result
     }
-
-    @State private var kind: Kind = .advance
-    @State private var companyID = ""
-    @State private var amountText = ""
-    @State private var cashText = ""
-    @State private var kaspiText = ""
-    @State private var comment = ""
-    @State private var paymentDate = Date()
-    @State private var isSaving = false
-    @State private var error: String?
-
-    private var cash: Double { AdvanceSheet.parse(cashText) }
-    private var kaspi: Double { AdvanceSheet.parse(kaspiText) }
-    private var total: Double { cash + kaspi }
 
     var body: some View {
         NavigationStack {
             ScreenScroll {
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.xs) {
-                        FieldLabel("Кому")
-                        Text(row.operatorName)
-                            .font(Typography.title)
-                            .foregroundStyle(Theme.text)
-                        Text("Неделя с \(weekStart) · к выплате \(Money.format(row.week.netAmount))")
-                            .font(Typography.caption)
-                            .foregroundStyle(Theme.textMuted)
-                    }
+                SalaryPersonHeader(name: row.operatorName, subtitle: "\(weekTitle) · \(week.statusLabel.lowercased())")
+
+                SalaryBalanceCard(
+                    title: "Осталось выплатить",
+                    remaining: max(week.remainingAmount, 0),
+                    total: week.netAmount,
+                    paid: week.paidAmount,
+                    footer: [
+                        ("К выплате", Money.format(week.netAmount)),
+                        ("Смен", "\(week.shiftsCount)"),
+                    ]
+                )
+
+                if !actions.isEmpty {
+                    SalaryActionRow(actions: actions) { opened = $0 }
                 }
 
-                paymentsCard
-                adjustmentsCard
-
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        FieldLabel("Что делаем")
-                        Picker("Что делаем", selection: $kind) {
-                            ForEach(kinds) { option in
-                                Text(option.title).tag(option)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                    }
-                }
-
-                if kind != .payment {
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        FieldLabel("Точка")
-                        // Точка обязательна: аванс это расход, и он должен лечь
-                        // на ту точку, чья касса его выдала.
-                        Picker("Точка", selection: $companyID) {
-                            Text("Выберите точку").tag("")
-                            ForEach(store.companies) { company in
-                                Text(company.name).tag(company.id)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .tint(Theme.brand)
-                    }
-                }
-                }
-
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        if kind == .advance || kind == .payment {
-                            // У аванса и выплаты две кассы: часть наличными из ящика,
-                            // часть переводом. Премия и штраф — просто число.
-                            amountField("Наличными", text: $cashText)
-                            RowDivider()
-                            amountField("Kaspi", text: $kaspiText)
-                            RowDivider()
-                            HStack {
-                                Text("Итого")
-                                    .font(Typography.callout)
-                                    .foregroundStyle(Theme.textDim)
-                                Spacer()
-                                Text(Money.format(total))
-                                    .font(Typography.title)
-                                    .foregroundStyle(total > 0 ? Theme.text : Theme.textMuted)
-                            }
-                        } else {
-                            amountField("Сумма", text: $amountText)
-                        }
-                    }
-                }
-
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        DatePicker("Дата выплаты", selection: $paymentDate, displayedComponents: .date)
-                            .font(Typography.callout)
-
-                        RowDivider()
-
-                        FieldLabel("Комментарий")
-                        TextField("Необязательно", text: $comment, axis: .vertical)
-                            .textFieldStyle(.plain)
-                            .lineLimit(1...3)
-                            .padding(Spacing.md)
-                            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-                    }
-                }
-
-                if let error {
-                    Text(error)
-                        .font(Typography.callout)
-                        .foregroundStyle(Theme.negative)
+                if let notice {
+                    Label(notice, systemImage: "checkmark.circle.fill")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Theme.positive)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
 
-                if !kinds.isEmpty {
-                Button {
-                    Task { await submit() }
-                } label: {
-                    if isSaving {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Text(kind.action)
-                    }
-                }
-                .buttonStyle(PrimaryButtonStyle())
-                .disabled(isSaving)
-
-                Text(kind.note)
-                    .font(Typography.caption)
-                    .foregroundStyle(Theme.textMuted)
-                    .fixedSize(horizontal: false, vertical: true)
+                if week.debtAmount > 0, can("salary.mark_debt_paid") {
+                    debtCard
                 }
 
-                // Расчёт целиком — тоже про неделю, а не про сумму в поле.
-                if canSendTelegram {
-                    Card {
-                        VStack(alignment: .leading, spacing: Spacing.md) {
-                            SectionHeader(
-                                "Расчёт за неделю",
-                                subtitle: Money.format(row.week.netAmount)
-                            )
+                SalaryBreakdown(title: "Расчёт недели", lines: lines)
 
-                            Button {
-                                Task { await sendPayslip() }
-                            } label: {
-                                Label("Отправить в Telegram", systemImage: "paperplane")
-                            }
-                            .buttonStyle(SecondaryButtonStyle())
-                            .disabled(isSaving)
-
-                            Text("Человек увидит то же, что и вы: смены, надбавки, удержания и итог. Объяснять голосом у стойки — верный способ поспорить.")
-                                .font(Typography.caption)
-                                .foregroundStyle(Theme.textMuted)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
+                if !events.isEmpty {
+                    SalaryHistory(events: events, error: error)
+                } else if let error {
+                    Text(error)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.negative)
                 }
 
-                // Долг относится к неделе целиком, а не к сумме в поле, —
-                // поэтому отдельной кнопкой, а не ещё одним видом сверху.
-                if row.week.debtAmount > 0, canMarkDebt {
-                    Card(accent: Theme.warning) {
-                        VStack(alignment: .leading, spacing: Spacing.md) {
-                            SectionHeader(
-                                "Долг за неделю",
-                                subtitle: Money.format(row.week.debtAmount)
-                            )
-
-                            Button {
-                                Task { await markDebtPaid() }
-                            } label: {
-                                Label("Долг погашен", systemImage: "checkmark.circle")
-                            }
-                            .buttonStyle(SecondaryButtonStyle())
-                            .disabled(isSaving)
-
-                            Text("Отмечайте, только когда деньги вернули: запись снимает долг со всех точек за эту неделю.")
-                                .font(Typography.caption)
-                                .foregroundStyle(Theme.textMuted)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
+                if can("salary.send_telegram") {
+                    telegramRow
                 }
             }
             .background(Theme.background)
-            .navigationTitle(row.operatorName)
+            .navigationTitle("Зарплата")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Закрыть") { dismiss() }
+                }
+            }
+            #if DEBUG
+            .task {
+                // Снимки экрана: `-ordaSalaryAction payment|advance|bonus|fine`.
+                if let id = UserDefaults.standard.string(forKey: "ordaSalaryAction") {
+                    try? await Task.sleep(for: .milliseconds(500))
+                    opened = actions.first { $0.id == id }
+                }
+            }
+            #endif
+            .navigationDestination(item: $opened) { action in
+                SalaryActionForm(action: action, personName: row.operatorName) { values in
+                    try await submit(action, values)
+                    opened = nil
+                    await onDone()
+                    dismiss()
+                }
+            }
             // Откат выплаты — деньги уже отданы человеку. Спрашиваем прежде,
             // чем менять расчёт недели.
             .confirmationDialog(
                 "Отменить выплату?",
-                isPresented: Binding(get: { voidTarget != nil }, set: { if !$0 { voidTarget = nil } }),
+                isPresented: Binding(get: { voidPaymentTarget != nil }, set: { if !$0 { voidPaymentTarget = nil } }),
                 titleVisibility: .visible
             ) {
-                if let payment = voidTarget {
+                if let payment = voidPaymentTarget {
                     Button("Отменить \(Money.format(payment.total))", role: .destructive) {
                         Task { await voidPayment(payment) }
                     }
                 }
-                Button("Оставить", role: .cancel) { voidTarget = nil }
+                Button("Оставить", role: .cancel) { voidPaymentTarget = nil }
             } message: {
                 Text("Сумма вернётся в остаток к выплате. Деньги, отданные человеку, программа вернуть не может — это делаете вы.")
             }
@@ -295,340 +173,225 @@ struct AdvanceSheet: View {
             } message: {
                 Text("Расчёт недели пересчитается. Запись останется в истории как отменённая.")
             }
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Отмена") { dismiss() }
-                }
-            }
-            .task {
-                if companyID.isEmpty { companyID = store.companies.first?.id ?? "" }
-                // Начинаем с того вида, который человеку доступен: иначе форма
-                // открывалась на «Аванс» без права его выдавать.
-                if let first = kinds.first, !kinds.contains(kind) { kind = first }
-            }
         }
     }
 
-    private func amountField(_ title: String, text: Binding<String>) -> some View {
-        HStack {
-            Text(title)
-                .font(Typography.callout)
-                .foregroundStyle(Theme.textDim)
-            Spacer()
-            TextField("0", text: text)
-                .multilineTextAlignment(.trailing)
-                .font(Typography.callout.monospacedDigit())
-                #if os(iOS)
-                .keyboardType(.numberPad)
-                #endif
-                .frame(maxWidth: 140)
-        }
+    private var weekTitle: String {
+        "неделя \(DateFormatting.dayMonth(weekStart)) — \(DateFormatting.dayMonth(weekEnd))"
     }
 
-    private var canVoidPayment: Bool { auth.resolver?.can("salary.void_payment") ?? false }
-    private var canVoidAdjustment: Bool { auth.resolver?.can("salary.void_adjustment") ?? false }
+    // ── Расчёт ───────────────────────────────────────────────────────────────
 
-    /// Премии, штрафы и долги недели — как на сайте, с отменой ошибочной.
-    @ViewBuilder
-    private var adjustmentsCard: some View {
-        let adjustments = row.week.adjustments
-        if !adjustments.isEmpty {
-            Card {
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    SectionHeader("Корректировки недели", subtitle: "\(adjustments.filter(\.isActive).count) действующих")
-                    ForEach(adjustments) { adjustment in
-                        adjustmentRow(adjustment)
-                        if adjustment.id != adjustments.last?.id { RowDivider() }
-                    }
-                }
-            }
-        }
+    private var lines: [SalaryLine] {
+        var result = [SalaryLine(label: "Начислено за смены", value: week.grossAmount, sign: .plain)]
+        if week.bonusAmount > 0 { result.append(SalaryLine(label: "Премии", value: week.bonusAmount, sign: .plus)) }
+        if week.fineAmount > 0 { result.append(SalaryLine(label: "Штрафы", value: week.fineAmount, sign: .minus)) }
+        if week.debtAmount > 0 { result.append(SalaryLine(label: "Долги", value: week.debtAmount, sign: .minus)) }
+        if week.advanceAmount > 0 { result.append(SalaryLine(label: "Авансы", value: week.advanceAmount, sign: .minus)) }
+        result.append(SalaryLine(label: "К выплате", value: week.netAmount, sign: .total))
+        if week.paidAmount > 0 { result.append(SalaryLine(label: "Выплачено", value: week.paidAmount, sign: .minus)) }
+        return result
     }
 
-    private func adjustmentRow(_ adjustment: SalaryRow.Week.Adjustment) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
-            VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: 6) {
-                    Text(adjustment.kindLabel)
-                        .font(Typography.callout.weight(.medium))
-                        .foregroundStyle(adjustment.isActive ? (adjustment.isAddition ? Theme.positive : Theme.negative) : Theme.textDim)
-                    Text(DateFormatting.dayMonth(adjustment.date))
-                        .font(Typography.caption)
-                        .foregroundStyle(Theme.textDim)
-                }
-                if let comment = adjustment.comment, !comment.isEmpty {
-                    Text(comment)
-                        .font(Typography.caption)
-                        .foregroundStyle(Theme.textDim)
-                        .lineLimit(1)
-                }
-                if !adjustment.isActive {
-                    Text("отменена")
-                        .font(Typography.caption)
-                        .foregroundStyle(Theme.warning)
-                }
-            }
+    // ── История ──────────────────────────────────────────────────────────────
 
-            Spacer(minLength: Spacing.sm)
-
-            Text((adjustment.isAddition ? "+" : "−") + Money.format(adjustment.amount))
-                .font(Typography.callout.weight(.medium))
-                .monospacedDigit()
-                .strikethrough(!adjustment.isActive)
-                .foregroundStyle(adjustment.isActive ? Theme.text : Theme.textDim)
-
-            if adjustment.isActive && canVoidAdjustment {
-                Button {
-                    voidAdjustmentTarget = adjustment
-                } label: {
-                    Image(systemName: "arrow.uturn.backward")
-                        .foregroundStyle(Theme.warning)
-                }
-                .buttonStyle(.plain)
-                .disabled(isVoiding)
-                .accessibilityLabel("Отменить корректировку")
-            }
-        }
-        .padding(.vertical, 2)
-    }
-
-    private func voidAdjustment(_ adjustment: SalaryRow.Week.Adjustment) async {
-        isVoiding = true
-        defer { isVoiding = false }
-        do {
-            try await BusinessService(api: api).voidSalaryAdjustment(
-                adjustmentID: adjustment.id,
-                operatorID: row.operatorID,
-                weekStart: weekStart
+    private var events: [SalaryEvent] {
+        let canVoidPayment = can("salary.void_payment")
+        let canVoidAdjustment = can("salary.void_adjustment")
+        let payments = week.payments.map { payment in
+            SalaryEvent(
+                id: "p." + payment.id,
+                date: payment.date,
+                title: "Выплата",
+                detail: payment.comment,
+                amount: payment.total,
+                isAddition: false,
+                icon: "banknote.fill",
+                tint: Theme.brand,
+                isVoided: !payment.isActive,
+                onVoid: payment.isActive && canVoidPayment ? { voidPaymentTarget = payment } : nil
             )
-            voidError = nil
-            Haptics.success()
-            await onDone()
-            dismiss()
-        } catch let error as APIError {
-            voidError = error.userMessage
-            Haptics.error()
-        } catch {
-            voidError = error.localizedDescription
-            Haptics.error()
+        }
+        let adjustments = week.adjustments.map { adjustment in
+            SalaryEvent(
+                id: "a." + adjustment.id,
+                date: adjustment.date,
+                title: adjustment.kindLabel,
+                detail: adjustment.comment,
+                amount: adjustment.amount,
+                isAddition: adjustment.isAddition,
+                icon: Self.icon(for: adjustment.kind),
+                tint: adjustment.isAddition ? Theme.positive : (adjustment.kind == "advance" ? Theme.warning : Theme.negative),
+                isVoided: !adjustment.isActive,
+                onVoid: adjustment.isActive && canVoidAdjustment ? { voidAdjustmentTarget = adjustment } : nil
+            )
+        }
+        return (payments + adjustments).sorted { $0.date > $1.date }
+    }
+
+    private static func icon(for kind: String) -> String {
+        switch kind {
+        case "bonus": "gift.fill"
+        case "fine": "exclamationmark.octagon.fill"
+        case "debt": "creditcard.trianglebadge.exclamationmark"
+        case "advance": "arrow.up.forward.circle.fill"
+        default: "plusminus.circle.fill"
         }
     }
 
-    /// Выплаты недели.
-    ///
-    /// Итога «выплачено» мало, когда надо откатить ошибку: если выплат за
-    /// неделю две, без списка не видно, какую именно отменяешь. Отменённые
-    /// показываем тоже — иначе непонятно, куда делись деньги из истории.
-    @ViewBuilder
-    private var paymentsCard: some View {
-        let payments = row.week.payments
-        if !payments.isEmpty {
-            Card {
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    SectionHeader("Выплаты недели", subtitle: Money.format(row.week.paidAmount))
-                    ForEach(payments) { payment in
-                        paymentRow(payment)
-                        if payment.id != payments.last?.id { RowDivider() }
-                    }
-                    if let voidError {
-                        Text(voidError)
-                            .font(Typography.caption)
-                            .foregroundStyle(Theme.negative)
-                    }
-                }
-            }
-        }
-    }
+    // ── Долг и расчётный лист ────────────────────────────────────────────────
 
-    private func paymentRow(_ payment: SalaryRow.Week.Payment) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(DateFormatting.dayMonth(payment.date))
-                    .font(Typography.callout)
-                    .foregroundStyle(payment.isActive ? Theme.text : Theme.textDim)
-                if let comment = payment.comment, !comment.isEmpty {
-                    Text(comment)
-                        .font(Typography.caption)
-                        .foregroundStyle(Theme.textDim)
-                        .lineLimit(1)
-                }
-                if !payment.isActive {
-                    Text("отменена")
-                        .font(Typography.caption)
-                        .foregroundStyle(Theme.warning)
-                }
+    /// Долг относится к неделе целиком, а не к сумме в поле, — поэтому
+    /// отдельной карточкой, а не ещё одним действием.
+    private var debtCard: some View {
+        HStack(spacing: Spacing.md) {
+            TintedIcon(systemName: "creditcard.trianglebadge.exclamationmark", tint: Theme.warning, size: 42)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Долг \(Money.format(week.debtAmount))")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Theme.text)
+                Text("Отмечайте, только когда деньги вернули")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textDim)
             }
-
             Spacer(minLength: Spacing.sm)
-
-            Text(Money.format(payment.total))
-                .font(Typography.callout.weight(.medium))
-                .monospacedDigit()
-                .foregroundStyle(payment.isActive ? Theme.text : Theme.textDim)
-
-            if payment.isActive && canVoidPayment {
-                Button {
-                    voidTarget = payment
-                } label: {
-                    Image(systemName: "arrow.uturn.backward")
-                        .foregroundStyle(Theme.warning)
-                }
-                .buttonStyle(.plain)
-                .disabled(isVoiding)
-            }
+            Button("Погашен") { Task { await markDebtPaid() } }
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(Theme.brand, in: Capsule())
+                .disabled(isWorking)
         }
-        .padding(.vertical, 2)
+        .padding(Spacing.lg)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+    }
+
+    private var telegramRow: some View {
+        Button {
+            Task { await sendPayslip() }
+        } label: {
+            HStack(spacing: Spacing.md) {
+                TintedIcon(systemName: "paperplane.fill", tint: Color(hex: 0x0284C7), size: 42)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Отправить расчёт в Telegram")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(Theme.text)
+                    Text("смены, надбавки, удержания и итог")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.textDim)
+                }
+                Spacer(minLength: Spacing.sm)
+                if isWorking {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.textDim)
+                }
+            }
+            .padding(Spacing.lg)
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+        }
+        .buttonStyle(.pressable)
+        .disabled(isWorking)
+    }
+
+    // ── Отправка ─────────────────────────────────────────────────────────────
+
+    private func submit(_ action: SalaryAction, _ values: SalaryFormValues) async throws {
+        let service = BusinessService(api: api)
+        switch action.id {
+        case "payment":
+            try await service.paySalaryWeek(
+                operatorID: row.operatorID,
+                weekStart: weekStart,
+                paymentDate: values.date,
+                cashAmount: values.cash,
+                kaspiAmount: values.kaspi,
+                comment: values.comment,
+                // Аванс за эту неделю закрываем той же выплатой: иначе он
+                // останется висеть отдельным долгом, хотя деньги отданы.
+                withAdvance: week.advanceAmount > 0
+            )
+        case "advance":
+            try await service.createSalaryAdvance(
+                operatorID: row.operatorID,
+                companyID: values.companyID ?? "",
+                weekStart: weekStart,
+                paymentDate: values.date,
+                cashAmount: values.cash,
+                kaspiAmount: values.kaspi,
+                comment: values.comment
+            )
+        default:
+            try await service.createSalaryAdjustment(
+                operatorID: row.operatorID,
+                companyID: values.companyID,
+                date: values.date,
+                amount: values.amount,
+                kind: action.id,
+                comment: values.comment
+            )
+        }
     }
 
     private func voidPayment(_ payment: SalaryRow.Week.Payment) async {
-        isVoiding = true
-        defer { isVoiding = false }
-        do {
+        await run {
             try await BusinessService(api: api).voidSalaryPayment(
                 paymentID: payment.id,
                 operatorID: row.operatorID,
                 weekStart: weekStart
             )
-            voidError = nil
-            Haptics.success()
             await onDone()
             dismiss()
-        } catch let error as APIError {
-            voidError = error.userMessage
-            Haptics.error()
-        } catch {
-            voidError = error.localizedDescription
-            Haptics.error()
         }
     }
 
-    private func submit() async {
-        // У выплаты и аванса сумма складывается из наличных и Kaspi,
-        // у премии и штрафа — одно поле.
-        let amount = (kind == .advance || kind == .payment) ? total : AdvanceSheet.parse(amountText)
-
-        if kind == .advance, companyID.isEmpty {
-            error = "Выберите точку — аванс ложится расходом на её кассу."
-            Haptics.error()
-            return
-        }
-        guard amount > 0 else {
-            error = "Сумма должна быть больше нуля."
-            Haptics.error()
-            return
-        }
-
-        isSaving = true
-        error = nil
-        defer { isSaving = false }
-
-        do {
-            let service = BusinessService(api: api)
-            switch kind {
-            case .payment:
-                try await service.paySalaryWeek(
-                    operatorID: row.operatorID,
-                    weekStart: weekStart,
-                    paymentDate: AdvanceSheet.isoDay(paymentDate),
-                    cashAmount: cash,
-                    kaspiAmount: kaspi,
-                    comment: comment.trimmingCharacters(in: .whitespaces),
-                    // Аванс за эту неделю закрываем той же выплатой: иначе он
-                    // останется висеть отдельным долгом, хотя деньги отданы.
-                    withAdvance: row.week.advanceAmount > 0
-                )
-            case .advance:
-                try await service.createSalaryAdvance(
-                    operatorID: row.operatorID,
-                    companyID: companyID,
-                    weekStart: weekStart,
-                    paymentDate: AdvanceSheet.isoDay(paymentDate),
-                    cashAmount: cash,
-                    kaspiAmount: kaspi,
-                    comment: comment.trimmingCharacters(in: .whitespaces)
-                )
-            case .bonus, .fine:
-                try await service.createSalaryAdjustment(
-                    operatorID: row.operatorID,
-                    companyID: companyID.isEmpty ? nil : companyID,
-                    date: AdvanceSheet.isoDay(paymentDate),
-                    amount: amount,
-                    kind: kind == .bonus ? "bonus" : "fine",
-                    comment: comment.trimmingCharacters(in: .whitespaces)
-                )
-            }
-            Haptics.success()
+    private func voidAdjustment(_ adjustment: SalaryRow.Week.Adjustment) async {
+        await run {
+            try await BusinessService(api: api).voidSalaryAdjustment(
+                adjustmentID: adjustment.id,
+                operatorID: row.operatorID,
+                weekStart: weekStart
+            )
             await onDone()
             dismiss()
-        } catch let apiError as APIError {
-            Haptics.error()
-            error = apiError.userMessage
-        } catch {
-            Haptics.error()
-            self.error = error.localizedDescription
+        }
+    }
+
+    private func markDebtPaid() async {
+        await run {
+            try await BusinessService(api: api).markOperatorDebtsPaid(operatorID: row.operatorID, weekStart: weekStart)
+            await onDone()
+            dismiss()
         }
     }
 
     private func sendPayslip() async {
-        isSaving = true
-        error = nil
-        defer { isSaving = false }
-
-        do {
+        await run {
             try await BusinessService(api: api).sendSalaryToTelegram(
                 operatorID: row.operatorID,
                 weekStart: weekStart,
                 weekEnd: weekEnd
             )
-            Haptics.success()
-            dismiss()
-        } catch let apiError as APIError {
-            Haptics.error()
-            error = apiError.userMessage
-        } catch {
-            Haptics.error()
-            self.error = error.localizedDescription
+            notice = "Расчёт отправлен в Telegram"
         }
     }
 
-    private func markDebtPaid() async {
-        isSaving = true
+    private func run(_ work: () async throws -> Void) async {
+        isWorking = true
+        defer { isWorking = false }
         error = nil
-        defer { isSaving = false }
-
         do {
-            try await BusinessService(api: api).markOperatorDebtsPaid(
-                operatorID: row.operatorID,
-                weekStart: weekStart
-            )
+            try await work()
             Haptics.success()
-            await onDone()
-            dismiss()
         } catch let apiError as APIError {
-            Haptics.error()
             error = apiError.userMessage
-        } catch {
             Haptics.error()
+        } catch {
             self.error = error.localizedDescription
+            Haptics.error()
         }
-    }
-
-    /// Суммы вводят как придётся: с пробелами, с запятой вместо точки.
-    private static func parse(_ raw: String) -> Double {
-        let cleaned = raw
-            .replacingOccurrences(of: " ", with: "")
-            .replacingOccurrences(of: "\u{00A0}", with: "")
-            .replacingOccurrences(of: ",", with: ".")
-        return Double(cleaned) ?? 0
-    }
-
-    private static func isoDay(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
     }
 }

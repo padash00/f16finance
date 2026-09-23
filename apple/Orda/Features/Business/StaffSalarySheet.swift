@@ -2,360 +2,224 @@ import OrdaKit
 import OrdaUI
 import SwiftUI
 
-/// Деньги по административному сотруднику: выплата, премия, штраф, аванс.
+/// Деньги по административному сотруднику: выплата, премия, штраф, аванс,
+/// доп. выход.
 ///
 /// Оклады считаются в приложении с недавних пор, но платить всё равно надо
 /// было идти на сайт: ведомость показывала долг и молчала о том, как его
 /// закрыть. Документ, который нельзя провести с того же экрана, где его
 /// смотрят, — половина работы.
 ///
-/// Один лист на четыре действия по образцу листа оператора: разница между
-/// ними в одном-двух полях, и выбрать вид сверху проще, чем искать кнопку.
+/// Та же карточка, что у оператора: остаток к выплате крупно, круглые кнопки
+/// действий, расчёт половины месяца строками. Каждое действие — своя форма.
 struct StaffSalarySheet: View {
-    enum Kind: String, CaseIterable, Identifiable {
-        case payment
-        case bonus
-        case fine
-        case advance
-        case extraDay
-
-        var id: String { rawValue }
-
-        var title: String {
-            switch self {
-            case .payment: "Выплата"
-            case .bonus: "Премия"
-            case .fine: "Штраф"
-            case .advance: "Аванс"
-            case .extraDay: "Доп. выход"
-            }
-        }
-
-        var action: String {
-            switch self {
-            case .payment: "Выплатить"
-            case .bonus: "Начислить премию"
-            case .fine: "Удержать штраф"
-            case .advance: "Выдать аванс"
-            case .extraDay: "Записать доп. выход"
-            }
-        }
-
-        var note: String {
-            switch self {
-            case .payment: "Выплата станет расходом точки и закроет корректировки этой половины месяца."
-            case .bonus: "Премия прибавится к расчёту половины месяца."
-            case .fine: "Штраф вычтется из расчёта половины месяца."
-            case .advance: "Аванс сразу станет расходом точки и уменьшит остаток к выплате."
-            case .extraDay: "Оклад платят за месяц, а выход сверх нормы — отдельные деньги. Сумму возьмём из ставки смены на его точке; своя нужна редко."
-            }
-        }
-    }
-
     let row: StaffSalaryRow
     var onDone: () async -> Void
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.api) private var api
-    @Environment(BusinessStore.self) private var store
     @Environment(AuthStore.self) private var auth
 
-    private var canPay: Bool { auth.resolver?.can("salary.create_payment") ?? false }
-    private var canAdjust: Bool { auth.resolver?.can("salary.create_adjustment") ?? false }
-    /// Доп. выход — своё право: это не корректировка «по факту смены», а
-    /// признание отработанного дня, и владелец выдаёт его отдельно.
-    private var canExtraDay: Bool { auth.resolver?.can("staff.add_extra_day") ?? false }
+    @State private var opened: SalaryAction?
 
-    private var kinds: [Kind] {
-        var result: [Kind] = []
-        if canPay { result.append(.payment) }
-        if canAdjust { result.append(contentsOf: [.bonus, .fine, .advance]) }
-        if canExtraDay { result.append(.extraDay) }
-        return result
-    }
-
-    @State private var kind: Kind = .payment
-    @State private var companyID = ""
-    @State private var amountText = ""
-    @State private var cashText = ""
-    @State private var kaspiText = ""
-    @State private var comment = ""
-    @State private var date = Date()
-    @State private var isSaving = false
-    @State private var error: String?
-
-    private var cash: Double { StaffSalarySheet.parse(cashText) }
-    private var kaspi: Double { StaffSalarySheet.parse(kaspiText) }
-    private var total: Double { cash + kaspi }
+    private func can(_ capability: String) -> Bool { auth.resolver?.can(capability) ?? false }
 
     /// Половина месяца, которую закрывает выплата. Пусто — обе уже закрыты.
     private var slot: String? { row.openSlot }
 
+    private var actions: [SalaryAction] {
+        var result: [SalaryAction] = []
+        if can("salary.create_payment"), slot != nil {
+            result.append(SalaryAction(
+                id: "payment", title: "Выплатить", icon: "banknote.fill",
+                action: "Выплатить",
+                note: "Выплата станет расходом точки и закроет корректировки этой половины месяца.",
+                money: .split, point: .required,
+                prefill: max(row.toPay, 0),
+                overpayLimit: row.toPay
+            ))
+        }
+        if can("salary.create_adjustment") {
+            result.append(SalaryAction(
+                id: "advance", title: "Аванс", icon: "arrow.up.forward.circle.fill",
+                action: "Выдать аванс",
+                note: "Аванс сразу станет расходом точки и уменьшит остаток к выплате.",
+                money: .single, point: .required
+            ))
+            result.append(SalaryAction(
+                id: "bonus", title: "Премия", icon: "gift.fill",
+                action: "Начислить премию",
+                note: "Премия прибавится к расчёту половины месяца.",
+                money: .single, point: .none
+            ))
+            result.append(SalaryAction(
+                id: "fine", title: "Штраф", icon: "exclamationmark.octagon.fill",
+                action: "Удержать штраф",
+                note: "Штраф вычтется из расчёта половины месяца.",
+                money: .single, point: .none
+            ))
+        }
+        if can("staff.add_extra_day") {
+            result.append(SalaryAction(
+                id: "extraDay", title: "Доп. выход", icon: "calendar.badge.plus",
+                action: "Записать доп. выход",
+                note: "Оклад платят за месяц, а выход сверх нормы — отдельные деньги. Сумму возьмём из ставки смены на его точке; своя нужна редко.",
+                money: .optional, point: .none
+            ))
+        }
+        return result
+    }
+
     var body: some View {
         NavigationStack {
             ScreenScroll {
-                header
+                SalaryPersonHeader(name: row.name, subtitle: subtitle)
 
-                if kinds.count > 1 {
-                    Card {
-                        VStack(alignment: .leading, spacing: Spacing.md) {
-                            FieldLabel("Что делаем")
-                            Picker("Что делаем", selection: $kind) {
-                                ForEach(kinds) { option in
-                                    Text(option.title).tag(option)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                        }
-                    }
+                SalaryBalanceCard(
+                    title: slot == nil ? "Месяц закрыт" : "К выплате за \(slotTitle)",
+                    remaining: slot == nil ? 0 : max(row.toPay, 0),
+                    total: slot == nil ? row.paidThisMonth : row.paidThisMonth + max(row.toPay, 0),
+                    paid: row.paidThisMonth,
+                    footer: row.monthlySalary > 0
+                        ? [("Оклад", Money.format(row.monthlySalary)), ("Половина", Money.format(row.half))]
+                        : []
+                )
+
+                if !actions.isEmpty {
+                    SalaryActionRow(actions: actions) { opened = $0 }
                 }
 
-                if kind == .payment, slot == nil {
-                    Card {
-                        VStack(alignment: .leading, spacing: Spacing.xs) {
-                            Text("Месяц закрыт")
-                                .font(Typography.callout.weight(.medium))
-                                .foregroundStyle(Theme.text)
-                            Text("Обе выплаты этого месяца уже проведены. Следующая — в следующем месяце.")
-                                .font(Typography.caption)
-                                .foregroundStyle(Theme.textMuted)
-                        }
-                    }
-                } else {
-                    form
-                }
+                SalaryBreakdown(title: "Расчёт половины месяца", lines: lines)
 
-                if let error {
-                    Card {
-                        Text(error)
-                            .font(Typography.caption)
-                            .foregroundStyle(Theme.negative)
-                    }
+                if !row.extraDays.isEmpty {
+                    extraDays
                 }
             }
             .background(Theme.background)
-            .navigationTitle(kind.title)
+            .navigationTitle("Зарплата")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Отмена") { dismiss() }
+                    Button("Закрыть") { dismiss() }
                 }
             }
+            #if DEBUG
             .task {
-                if companyID.isEmpty { companyID = store.companies.first?.id ?? "" }
-                if let first = kinds.first, !kinds.contains(kind) { kind = first }
-                // Форму открываем с расчётной суммой: чаще всего платят ровно
-                // столько, и перебивать цифру руками незачем.
-                if cashText.isEmpty, row.toPay > 0 {
-                    cashText = String(Int(row.toPay.rounded()))
+                // Снимки экрана: `-ordaSalaryAction payment|advance|bonus|fine`.
+                if let id = UserDefaults.standard.string(forKey: "ordaSalaryAction") {
+                    try? await Task.sleep(for: .milliseconds(500))
+                    opened = actions.first { $0.id == id }
+                }
+            }
+            #endif
+            .navigationDestination(item: $opened) { action in
+                SalaryActionForm(action: action, personName: row.name) { values in
+                    try await submit(action, values)
+                    opened = nil
+                    await onDone()
+                    dismiss()
                 }
             }
         }
     }
 
-    // ── Куски экрана ─────────────────────────────────────────────────────────
-
-    private var header: some View {
-        Card {
-            VStack(alignment: .leading, spacing: Spacing.xs) {
-                FieldLabel("Кому")
-                Text(row.name)
-                    .font(Typography.title)
-                    .foregroundStyle(Theme.text)
-                Text(subtitle)
-                    .font(Typography.caption)
-                    .foregroundStyle(Theme.textMuted)
-            }
-        }
+    private var slotTitle: String {
+        slot == "second" ? "вторую половину" : "первую половину"
     }
 
     private var subtitle: String {
-        var parts: [String] = ["к выплате \(Money.format(row.toPay))"]
-        if row.paidThisMonth > 0.01 {
-            parts.append("выплачено за месяц \(Money.format(row.paidThisMonth))")
-        }
-        if !row.isActive, let date = row.dismissalDate {
-            parts.append("уволен \(date)")
-        }
-        return parts.joined(separator: " · ")
+        var parts: [String] = []
+        if let role = row.role, !role.isEmpty { parts.append(Self.roleTitle(role)) }
+        if !row.isActive, let date = row.dismissalDate { parts.append("уволен \(date)") }
+        return parts.isEmpty ? "оклад" : parts.joined(separator: " · ")
     }
 
-    @ViewBuilder
-    private var form: some View {
-        // Точка нужна там, где рождается расход: выплата и аванс уходят из
-        // кассы конкретной точки. Премия и штраф кассы не трогают.
-        if kind == .payment || kind == .advance {
-            Card {
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    FieldLabel("Точка")
-                    Picker("Точка", selection: $companyID) {
-                        Text("Выберите точку").tag("")
-                        ForEach(store.companies) { company in
-                            Text(company.name).tag(company.id)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                }
-            }
+    /// Должность так, как её называют на сайте; свою — как есть.
+    private static func roleTitle(_ role: String) -> String {
+        switch role {
+        case "owner": "Владелец"
+        case "manager": "Управляющий"
+        case "marketer": "Маркетолог"
+        case "accountant": "Бухгалтер"
+        case "senior_operator": "Старший оператор"
+        case "senior_cashier": "Старший кассир"
+        case "operator": "Оператор"
+        case "other": "Сотрудник"
+        default: role.replacingOccurrences(of: "_", with: " ")
         }
+    }
 
-        Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                if kind == .payment {
-                    FieldLabel("Сколько выдаём")
-                    amountField("Наличными", text: $cashText)
-                    RowDivider()
-                    amountField("Kaspi", text: $kaspiText)
-                    RowDivider()
-                    HStack {
-                        Text("Итого")
-                            .font(Typography.callout.weight(.medium))
+    private var lines: [SalaryLine] {
+        var result = [SalaryLine(label: "Половина оклада", value: row.half, sign: .plain)]
+        if row.bonuses > 0 { result.append(SalaryLine(label: "Премии", value: row.bonuses, sign: .plus)) }
+        if row.fines > 0 { result.append(SalaryLine(label: "Штрафы", value: row.fines, sign: .minus)) }
+        if row.debts > 0 { result.append(SalaryLine(label: "Долги", value: row.debts, sign: .minus)) }
+        if row.advances > 0 { result.append(SalaryLine(label: "Авансы", value: row.advances, sign: .minus)) }
+        result.append(SalaryLine(label: "К выплате", value: row.toPay, sign: .total))
+        if row.paidThisMonth > 0 { result.append(SalaryLine(label: "Выплачено за месяц", value: row.paidThisMonth, sign: .plain)) }
+        return result
+    }
+
+    private var extraDays: some View {
+        OwnerSection("Доп. выходы") {
+            Text("\(row.extraDays.count)")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.textDim)
+        } content: {
+            VStack(spacing: 0) {
+                ForEach(Array(row.extraDays.enumerated()), id: \.element.id) { index, day in
+                    if index > 0 { Rectangle().fill(Theme.borderSoft).frame(height: 1).padding(.leading, 52) }
+                    HStack(spacing: Spacing.md) {
+                        TintedIcon(systemName: "calendar.badge.plus", tint: Theme.brand, size: 40, corner: 12)
+                        Text(day.shortLabel)
+                            .font(.system(size: 15, weight: .medium))
                             .foregroundStyle(Theme.text)
                         Spacer()
-                        Text(Money.format(total))
-                            .font(Typography.callout.weight(.medium).monospacedDigit())
-                            .foregroundStyle(Theme.text)
+                        Text("+" + Money.format(day.amount))
+                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundStyle(Theme.positive)
                     }
-                    // Переплата — не ошибка ввода, а решение: сервер заведёт
-                    // разницу авансом и удержит её в следующей половине.
-                    if total > row.toPay + 0.5 {
-                        Text("Больше расчёта на \(Money.format(total - row.toPay)) — разница уйдёт авансом и вычтется из следующей выплаты.")
-                            .font(Typography.caption)
-                            .foregroundStyle(Theme.warning)
-                    }
-                } else if kind == .extraDay {
-                    FieldLabel("Сумма")
-                    amountField("По ставке смены", text: $amountText)
-                    Text("Оставьте пустым — сервер посчитает по ставке точки.")
-                        .font(Typography.caption)
-                        .foregroundStyle(Theme.textDim)
-                } else {
-                    FieldLabel("Сумма")
-                    amountField(kind.title, text: $amountText)
+                    .padding(.vertical, 10)
                 }
-
-                RowDivider()
-                DatePicker("Дата", selection: $date, displayedComponents: .date)
-                    .font(Typography.callout)
-
-                RowDivider()
-                FieldLabel("Комментарий")
-                TextField("Необязательно", text: $comment, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(Typography.callout)
-                    .lineLimit(1...3)
             }
-        }
-
-        Card {
-            Text(kind.note)
-                .font(Typography.caption)
-                .foregroundStyle(Theme.textMuted)
-        }
-
-        Button(isSaving ? "Сохраняем…" : kind.action) {
-            Task { await submit() }
-        }
-        .buttonStyle(PrimaryButtonStyle())
-        .disabled(isSaving)
-    }
-
-    private func amountField(_ title: String, text: Binding<String>) -> some View {
-        HStack {
-            Text(title)
-                .font(Typography.callout)
-                .foregroundStyle(Theme.textDim)
-            Spacer()
-            TextField("0", text: text)
-                .multilineTextAlignment(.trailing)
-                .font(Typography.callout.monospacedDigit())
-                #if os(iOS)
-                .keyboardType(.numberPad)
-                #endif
-                .frame(maxWidth: 140)
         }
     }
 
     // ── Отправка ─────────────────────────────────────────────────────────────
 
-    private func submit() async {
-        let amount = kind == .payment ? total : StaffSalarySheet.parse(amountText)
-
-        // У доп. выхода сумма необязательна: её знает сервер по ставке точки.
-        guard amount > 0 || kind == .extraDay else {
-            error = "Сумма должна быть больше нуля."
-            Haptics.error()
-            return
+    private func submit(_ action: SalaryAction, _ values: SalaryFormValues) async throws {
+        let service = BusinessService(api: api)
+        switch action.id {
+        case "payment":
+            guard let slot else { return }
+            try await service.payStaffSalary(
+                staffID: row.id,
+                companyID: values.companyID ?? "",
+                payDate: values.date,
+                slot: slot,
+                cashAmount: values.cash,
+                kaspiAmount: values.kaspi,
+                expectedAmount: row.toPay,
+                comment: values.comment
+            )
+        case "extraDay":
+            try await service.addStaffExtraDay(
+                staffID: row.id,
+                date: values.date,
+                amount: values.amount > 0 ? values.amount : nil
+            )
+        default:
+            try await service.createStaffAdjustment(
+                staffID: row.id,
+                companyID: action.id == "advance" ? values.companyID : nil,
+                kind: action.id,
+                amount: values.amount,
+                date: values.date,
+                comment: values.comment
+            )
         }
-        if kind == .payment || kind == .advance, companyID.isEmpty {
-            error = "Выберите точку — деньги уходят из её кассы."
-            Haptics.error()
-            return
-        }
-        guard kind != .payment || slot != nil else { return }
-
-        isSaving = true
-        error = nil
-        defer { isSaving = false }
-
-        do {
-            let service = BusinessService(api: api)
-            switch kind {
-            case .payment:
-                try await service.payStaffSalary(
-                    staffID: row.id,
-                    companyID: companyID,
-                    payDate: StaffSalarySheet.isoDay(date),
-                    slot: slot ?? "first",
-                    cashAmount: cash,
-                    kaspiAmount: kaspi,
-                    expectedAmount: row.toPay,
-                    comment: comment.trimmingCharacters(in: .whitespaces)
-                )
-            case .extraDay:
-                try await service.addStaffExtraDay(
-                    staffID: row.id,
-                    date: StaffSalarySheet.isoDay(date),
-                    amount: amount > 0 ? amount : nil
-                )
-            case .bonus, .fine, .advance:
-                try await service.createStaffAdjustment(
-                    staffID: row.id,
-                    companyID: kind == .advance ? companyID : nil,
-                    kind: kind.rawValue,
-                    amount: amount,
-                    date: StaffSalarySheet.isoDay(date),
-                    comment: comment.trimmingCharacters(in: .whitespaces)
-                )
-            }
-            Haptics.success()
-            await onDone()
-            dismiss()
-        } catch let apiError as APIError {
-            Haptics.error()
-            error = apiError.userMessage
-        } catch {
-            Haptics.error()
-            self.error = error.localizedDescription
-        }
-    }
-
-    /// Суммы вводят как придётся: с пробелами, с запятой вместо точки.
-    private static func parse(_ raw: String) -> Double {
-        let cleaned = raw
-            .replacingOccurrences(of: " ", with: "")
-            .replacingOccurrences(of: "\u{00A0}", with: "")
-            .replacingOccurrences(of: ",", with: ".")
-        return Double(cleaned) ?? 0
-    }
-
-    private static func isoDay(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
     }
 }

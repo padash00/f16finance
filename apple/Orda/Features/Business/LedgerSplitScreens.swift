@@ -433,7 +433,7 @@ enum LedgerEditForm {
         }
     }
 
-    static func saveButton(isSaving: Bool, problem: String?, error: String?, action: @escaping () -> Void) -> some View {
+    static func saveButton(title: String = "Сохранить", isSaving: Bool, problem: String?, error: String?, action: @escaping () -> Void) -> some View {
         VStack(spacing: Spacing.sm) {
             if let message = error ?? problem {
                 Text(message)
@@ -441,7 +441,7 @@ enum LedgerEditForm {
                     .foregroundStyle(error == nil ? Theme.textDim : Theme.negative)
                     .multilineTextAlignment(.center)
             }
-            Button(isSaving ? "Сохраняем…" : "Сохранить", action: action)
+            Button(isSaving ? "Сохраняем…" : title, action: action)
                 .buttonStyle(PrimaryButtonStyle())
                 .disabled(isSaving || problem != nil)
         }
