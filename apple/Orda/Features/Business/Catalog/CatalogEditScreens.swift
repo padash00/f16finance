@@ -277,9 +277,15 @@ struct CatalogItemSheet: View {
         .padding(.vertical, 13)
     }
 
+    /// Все категории организации, как на сайте, плюс категория самого
+    /// товара: у старых товаров она бывает без привязки к организации и в
+    /// общий список не попадает.
     private func loadCategories() async {
-        let id = companyID ?? item?.companyID
-        categories = (try? await BusinessService(api: api).inventoryCategories(companyID: id)) ?? []
+        var list = (try? await BusinessService(api: api).inventoryCategories()) ?? []
+        if let id = item?.categoryID, let name = item?.categoryName, !list.contains(where: { $0.id == id }) {
+            list.append(InventoryCategory(id: id, name: name))
+        }
+        categories = list.sorted { $0.name.localizedCompare($1.name) == .orderedAscending }
     }
 
     private func save() async {
@@ -470,7 +476,10 @@ struct CatalogCategoriesSheet: View {
     private func load() async {
         isLoading = true
         defer { isLoading = false }
-        categories = (try? await BusinessService(api: api).inventoryCategories(companyID: companyID)) ?? []
+        // Весь список организации — как на сайте. С фильтром по точке он был
+        // пуст: категории заведены на уровне организации, а не точки.
+        categories = ((try? await BusinessService(api: api).inventoryCategories()) ?? [])
+            .sorted { $0.name.localizedCompare($1.name) == .orderedAscending }
     }
 
     private func add() async {
