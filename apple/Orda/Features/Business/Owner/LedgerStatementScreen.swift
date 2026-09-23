@@ -28,6 +28,8 @@ struct LedgerStatementScreen: View {
     @State private var companyID: String?
     /// Показать все статьи, а не пять крупных.
     @State private var showsAllBuckets = false
+    @State private var exported: ExportedFile?
+    @State private var exportError: String?
 
     /// Операция выписки — общий вид дохода и расхода.
     struct Operation: Identifiable, Hashable {
@@ -114,6 +116,60 @@ struct LedgerStatementScreen: View {
         .sorted { $0.date == $1.date ? $0.amount > $1.amount : $0.date > $1.date }
     }
 
+    // ── Выгрузка ─────────────────────────────────────────────────────────────
+
+    /// Таблица ровно того, что на экране: период, точка, статья и поиск
+    /// учтены. Выгрузить «всё», когда смотришь на аренду одной точки, —
+    /// получить файл, который потом придётся фильтровать заново.
+    private func export() {
+        let shown = Set(filtered.map(\.id))
+        let operatorName: (String?) -> String = { id in
+            guard let id else { return "" }
+            return store.operators.first { $0.id == id }.map { $0.shortName ?? $0.name } ?? ""
+        }
+        var sheet: SpreadsheetExport
+        if isIncome {
+            sheet = SpreadsheetExport(header: ["Дата", "Точка", "Смена", "Оператор", "Наличные", "Kaspi", "Карта", "Онлайн", "Итого", "Комментарий"])
+            for row in store.incomes where shown.contains(row.id) {
+                sheet.append([
+                    row.date,
+                    store.companyName(row.companyID) ?? "",
+                    ShiftLabel.of(row.shift) ?? "",
+                    operatorName(row.operatorID),
+                    SpreadsheetExport.number(row.cashAmount),
+                    SpreadsheetExport.number(row.kaspiAmount),
+                    SpreadsheetExport.number(row.cardAmount),
+                    SpreadsheetExport.number(row.onlineAmount),
+                    SpreadsheetExport.number(row.total),
+                    row.comment ?? "",
+                ])
+            }
+        } else {
+            sheet = SpreadsheetExport(header: ["Дата", "Точка", "Статья", "Оператор", "Наличные", "Kaspi", "Итого", "Статус", "Комментарий"])
+            for row in store.expenses where shown.contains(row.id) {
+                sheet.append([
+                    row.date,
+                    store.companyName(row.companyID) ?? "",
+                    row.category ?? "",
+                    operatorName(row.operatorID),
+                    SpreadsheetExport.number(row.cashAmount),
+                    SpreadsheetExport.number(row.kaspiAmount),
+                    SpreadsheetExport.number(row.total),
+                    row.isPending ? "ждёт согласования" : "",
+                    row.comment ?? "",
+                ])
+            }
+        }
+        let bounds = store.range.bounds()
+        let name = SpreadsheetExport.fileName("\(title) \(bounds.from) — \(bounds.to)")
+        do {
+            exported = try ExportedFile.write(sheet.data, name: name)
+            Haptics.tap()
+        } catch {
+            exportError = error.localizedDescription
+        }
+    }
+
     /// Пузыри сверху: статьи расходов или способы оплаты доходов.
     private var buckets: [(name: String, amount: Double)] {
         let source = operations.filter { companyID == nil || $0.companyID == companyID }
@@ -190,6 +246,9 @@ struct LedgerStatementScreen: View {
         .navigationTitle(title)
         .searchable(text: $query, prompt: isIncome ? "Точка, смена, комментарий" : "Статья, точка, сумма")
         .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                ExportToolbarButton { export() }
+            }
             if canCreate {
                 ToolbarItem(placement: .primaryAction) {
                     Button { isAdding = true } label: {
@@ -202,9 +261,18 @@ struct LedgerStatementScreen: View {
                 }
             }
         }
+        .shareSheet($exported)
+        .alert("Не удалось выгрузить", isPresented: Binding(get: { exportError != nil }, set: { if !$0 { exportError = nil } })) {
+            Button("Понятно", role: .cancel) {}
+        } message: {
+            Text(exportError ?? "")
+        }
         .task {
             await reload()
+            // Имена операторов — для выгрузки и правки дохода.
+            if store.operators.isEmpty { await store.loadTeam() }
             #if DEBUG
+            if UserDefaults.standard.string(forKey: "ordaAutoExport") != nil { export() }
             // Снимки экрана: `-ordaLedgerOpen receipt|edit` открывает первую запись.
             switch UserDefaults.standard.string(forKey: "ordaLedgerOpen") {
             case "receipt": opened = filtered.first

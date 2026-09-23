@@ -36,6 +36,10 @@ struct SalesKpiScreen: View {
     @State private var planList: SalesKpiPlans?
     @State private var isLoadingPlans = false
     @State private var section: Section = .payout
+    @Environment(\.access) private var access
+    @State private var exported: ExportedFile?
+    @State private var exporting: Bool = false
+    @State private var exportError: String?
 
     private enum Section: String, CaseIterable, Identifiable {
         case payout, review, plans, people
@@ -93,7 +97,44 @@ struct SalesKpiScreen: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .task { await loadStores() }
+        .toolbar {
+            if access?.can("sales-kpi.export") == true, selectedStore != nil {
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        Button { Task { await export(excel: false) } } label: {
+                            Label("PDF — для чтения", systemImage: "doc.richtext")
+                        }
+                        Button { Task { await export(excel: true) } } label: {
+                            Label("Excel — для расчётов", systemImage: "tablecells")
+                        }
+                    } label: {
+                        if exporting {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "square.and.arrow.up")
+                        }
+                    }
+                    .disabled(exporting)
+                    .accessibilityLabel("Выгрузить отчёт")
+                }
+            }
+        }
+        .shareSheet($exported)
+        .alert("Не удалось собрать отчёт", isPresented: Binding(get: { exportError != nil }, set: { if !$0 { exportError = nil } })) {
+            Button("Понятно", role: .cancel) {}
+        } message: {
+            Text(exportError ?? "")
+        }
+        .task {
+            await loadStores()
+            #if DEBUG
+            // Проверка выгрузки: `-ordaAutoExport pdf|xlsx`.
+            if let format = UserDefaults.standard.string(forKey: "ordaAutoExport") {
+                try? await Task.sleep(for: .seconds(2))
+                await export(excel: format == "xlsx")
+            }
+            #endif
+        }
         .task(id: reloadKey) {
             planList = nil
             await loadPayout()
@@ -698,6 +739,26 @@ struct SalesKpiScreen: View {
             loadError = error
         } catch {
             loadError = .transport(message: error.localizedDescription)
+        }
+    }
+
+    /// PDF собирается на сервере несколько секунд — крутим индикатор в кнопке.
+    private func export(excel: Bool) async {
+        guard let store = selectedStore else { return }
+        exporting = true
+        defer { exporting = false }
+        do {
+            let data = try await SalesKpiService(api: api).export(companyID: store.id, month: month, excel: excel)
+            let bounds = SalesKpiService.monthBounds(month)
+            exported = try ExportedFile.write(
+                data,
+                name: SpreadsheetExport.fileName("Разбор смен \(store.name) \(bounds.from) — \(bounds.to)", ext: excel ? "xlsx" : "pdf")
+            )
+            Haptics.success()
+        } catch let error as APIError {
+            exportError = error.userMessage
+        } catch {
+            exportError = error.localizedDescription
         }
     }
 

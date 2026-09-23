@@ -555,6 +555,7 @@ struct SalaryScreen: View {
     @State private var advanceRow: SalaryRow?
     /// Кому из окладных сотрудников платим или начисляем.
     @State private var staffRow: StaffSalaryRow?
+    @State private var exported: ExportedFile?
 
     /// Деньги по оператору: аванс, премия, штраф, погашение долга. Строка
     /// открывается, если разрешено хотя бы одно из них.
@@ -570,6 +571,36 @@ struct SalaryScreen: View {
     private var canPayStaff: Bool {
         guard let resolver = auth.resolver else { return false }
         return resolver.can("salary.create_payment") || resolver.can("salary.create_adjustment")
+    }
+
+    /// Ведомость недели в Excel: операторы, потом сотрудники на окладе.
+    private func exportSalary() {
+        var sheet = SpreadsheetExport(header: ["Сотрудник", "Период", "Смен", "Начислено", "Премии", "Штрафы", "Долги", "Авансы", "К выплате", "Выплачено", "Осталось", "Статус"])
+        let weekStart = store.salary?.weekStart ?? store.salaryWeek
+        let weekEnd = store.salary?.weekEnd ?? store.salaryWeek
+        for row in store.salary?.operators ?? [] where row.hasActivity || row.week.netAmount != 0 {
+            let week = row.week
+            sheet.append([
+                row.operatorName, "\(weekStart) — \(weekEnd)", "\(week.shiftsCount)",
+                SpreadsheetExport.number(week.grossAmount), SpreadsheetExport.number(week.bonusAmount),
+                SpreadsheetExport.number(week.fineAmount), SpreadsheetExport.number(week.debtAmount),
+                SpreadsheetExport.number(week.advanceAmount), SpreadsheetExport.number(week.netAmount),
+                SpreadsheetExport.number(week.paidAmount), SpreadsheetExport.number(week.remainingAmount),
+                week.statusLabel,
+            ])
+        }
+        for row in store.staffSalary?.rows ?? [] where !row.isFromOperator {
+            sheet.append([
+                row.name, "половина месяца (оклад)", "",
+                SpreadsheetExport.number(row.half), SpreadsheetExport.number(row.bonuses),
+                SpreadsheetExport.number(row.fines), SpreadsheetExport.number(row.debts),
+                SpreadsheetExport.number(row.advances), SpreadsheetExport.number(row.toPay),
+                SpreadsheetExport.number(row.paidThisMonth), SpreadsheetExport.number(row.monthClosed ? 0 : row.toPay),
+                row.monthClosed ? "Месяц закрыт" : "",
+            ])
+        }
+        exported = try? ExportedFile.write(sheet.data, name: SpreadsheetExport.fileName("Зарплата \(weekStart) — \(weekEnd)"))
+        Haptics.tap()
     }
 
     var body: some View {
@@ -593,7 +624,15 @@ struct SalaryScreen: View {
         }
         .background(Theme.background)
         .navigationTitle("Зарплата")
-        .toolbar { LogoutToolbarItem() }
+        .toolbar {
+            if auth.resolver?.can("salary.export") == true, store.salary != nil {
+                ToolbarItem(placement: .primaryAction) {
+                    ExportToolbarButton { exportSalary() }
+                }
+            }
+            LogoutToolbarItem()
+        }
+        .shareSheet($exported)
         .task {
             await store.loadSalary()
             await store.loadStaffSalary()

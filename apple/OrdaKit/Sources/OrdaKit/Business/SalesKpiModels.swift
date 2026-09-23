@@ -402,6 +402,20 @@ public struct SalesKpiService: Sendable {
 
     public init(api: APIClient) { self.api = api }
 
+    /// Отчёт файлом — тот же, что скачивают на сайте: PDF для чтения, Excel
+    /// для пересчёта. Собирает сервер тем же кодом, что считает экран.
+    /// Требует `sales-kpi.export`.
+    public func export(companyID: String, month: String, excel: Bool) async throws -> Data {
+        let bounds = Self.monthBounds(month)
+        let body = try JSONSerialization.data(withJSONObject: [
+            "company_id": companyID,
+            "from": bounds.from,
+            "to": bounds.to,
+            "format": excel ? "xlsx" : "pdf",
+        ])
+        return try await api.send(APIRequest(path: "/api/admin/sales-kpi/export", method: .post, body: body))
+    }
+
     /// Магазины, по которым модуль вообще считается.
     public func stores(month: String) async throws -> SalesKpiStores {
         let bounds = SalesKpiService.monthBounds(month)
