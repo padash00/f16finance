@@ -315,17 +315,33 @@ final class CashflowStore {
     private(set) var report: CashflowReport?
     private(set) var isLoading = false
     private(set) var error: APIError?
+    /// Точки организации — из последнего ответа по всей организации: при
+    /// выбранной точке сервер отдаёт только её, и чипы бы пропали.
+    private(set) var companies: [CashflowCompany] = []
+    private(set) var outlook: CashflowOutlook?
+    private(set) var outlookError: APIError?
+    private(set) var isLoadingOutlook = false
+    private var outlookCompany: String??
 
     private let service: CashflowService
 
     init(api: APIClient) { service = CashflowService(api: api) }
 
-    func load(range: AnalyticsPeriod) async {
+    func load(range: AnalyticsPeriod, companyID: String?) async {
         isLoading = true
         defer { isLoading = false }
         do {
             let bounds = range.bounds()
-            report = try await service.load(from: bounds.from, to: bounds.to, includeExtra: ExtraCashPreference.shared.includeExtra)
+            let loaded = try await service.load(
+                from: bounds.from,
+                to: bounds.to,
+                includeExtra: ExtraCashPreference.shared.includeExtra,
+                companyID: companyID
+            )
+            report = loaded
+            if companyID == nil || companies.isEmpty {
+                companies = loaded.companies
+            }
             error = nil
         } catch let apiError as APIError {
             error = apiError
@@ -333,27 +349,74 @@ final class CashflowStore {
             self.error = .transport(message: error.localizedDescription)
         }
     }
+
+    /// Платежи вперёд — только когда открыли вкладку: запрос тяжёлый и
+    /// нужен не всем.
+    func loadOutlook(companyID: String?, force: Bool = false) async {
+        if !force, outlookCompany == .some(companyID), outlook != nil { return }
+        isLoadingOutlook = true
+        defer { isLoadingOutlook = false }
+        do {
+            outlook = try await service.outlook(companyID: companyID)
+            outlookCompany = .some(companyID)
+            outlookError = nil
+        } catch let apiError as APIError {
+            outlookError = apiError
+        } catch {
+            outlookError = .transport(message: error.localizedDescription)
+        }
+    }
 }
 
-/// Движение денег по дням: сколько пришло, сколько ушло, что накопилось.
+/// Движение денег: сколько пришло и ушло, наличными и безналом, по точкам и
+/// статьям, и что впереди до конца месяца — то же, что на сайте.
 ///
-/// Отличается от «Отчётов» тем, что показывает не итог периода, а его форму:
-/// в какие дни касса проседала и когда. Накопительный баланс считает сервер —
-/// на клиенте он разошёлся бы с сайтом на первой же строке без даты.
+/// Остаток показываем только когда задана отметка остатка: накопленный за
+/// период поток — не деньги в кассе, и раньше он подписывался «Баланс на
+/// конец», вводя в заблуждение.
 struct CashflowScreen: View {
     @Environment(\.api) private var api
 
+    enum Tab: String, CaseIterable, Hashable {
+        case overview, channels, points, expenses, payments
+        var title: String {
+            switch self {
+            case .overview: "Обзор"
+            case .channels: "Нал и безнал"
+            case .points: "Точки"
+            case .expenses: "Расходы"
+            case .payments: "Платежи"
+            }
+        }
+    }
+
     @State private var store: CashflowStore?
     @State private var range: AnalyticsPeriod = .thisMonth
+    @State private var companyID: String?
+    @State private var tab: Tab = .overview
 
     var body: some View {
         ScreenScroll {
             VStack(spacing: Spacing.lg) {
-                PeriodBar(selection: $range, showsExtra: true)
+                PeriodBar(
+                    selection: $range,
+                    quick: [.thisMonth, .lastMonth, .last7Days, .last30Days],
+                    // Галочка Extra — только когда такие точки есть и точка
+                    // не выбрана: у одной точки её не с чем складывать.
+                    showsExtra: companyID == nil && !(store?.report?.extraNames.isEmpty ?? true)
+                )
+
+                if let companies = store?.companies, companies.count > 1 {
+                    pointChips(companies)
+                }
+
+                PillSegment(options: Tab.allCases.map { ($0, $0.title) }, selection: $tab)
 
                 if let store {
-                    if let error = store.error, store.report == nil {
-                        ErrorStateView(error: error) { Task { await store.load(range: range) } }
+                    if tab == .payments {
+                        PaymentsTab(store: store, companyID: companyID)
+                    } else if let error = store.error, store.report == nil {
+                        ErrorStateView(error: error) { Task { await reload() } }
                     } else if let report = store.report {
                         content(report)
                     } else {
@@ -371,21 +434,64 @@ struct CashflowScreen: View {
             if store == nil {
                 let created = CashflowStore(api: api)
                 store = created
-                await created.load(range: range)
+                #if DEBUG
+                // Снимки экрана: `-ordaCashflowTab overview|channels|points|expenses|payments`.
+                if let raw = UserDefaults.standard.string(forKey: "ordaCashflowTab"), let wanted = Tab(rawValue: raw) {
+                    tab = wanted
+                }
+                #endif
+                await created.load(range: range, companyID: companyID)
             }
         }
-        .onChange(of: range) { _, new in Task { await store?.load(range: new) } }
-        .onChange(of: ExtraCashPreference.shared.includeExtra) { _, _ in Task { await store?.load(range: range) } }
-        .refreshable { await store?.load(range: range) }
+        .onChange(of: range) { _, _ in Task { await reload() } }
+        .onChange(of: companyID) { _, _ in Task { await reload() } }
+        .onChange(of: ExtraCashPreference.shared.includeExtra) { _, _ in Task { await reload() } }
+        .refreshable {
+            await reload()
+            if tab == .payments { await store?.loadOutlook(companyID: companyID, force: true) }
+        }
+    }
+
+    private func reload() async {
+        await store?.load(range: range, companyID: companyID)
     }
 
     private var loadingState: some View {
         VStack(spacing: Spacing.lg) {
-            Skeleton(height: 96, cornerRadius: Radius.lg)
+            Skeleton(height: 150, cornerRadius: Radius.xl)
             Skeleton(height: 240, cornerRadius: Radius.lg)
             Skeleton(height: 180, cornerRadius: Radius.lg)
         }
     }
+
+    // ── Точки ────────────────────────────────────────────────────────────────
+
+    private func pointChips(_ companies: [CashflowCompany]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: Spacing.sm) {
+                chip("Все точки", isOn: companyID == nil) { companyID = nil }
+                ForEach(companies) { company in
+                    chip(company.name, isOn: companyID == company.id) { companyID = company.id }
+                }
+            }
+        }
+        .scrollClipDisabled()
+    }
+
+    private func chip(_ title: String, isOn: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(isOn ? .white : Theme.text)
+                .padding(.horizontal, 14)
+                .frame(height: 34)
+                .background(isOn ? Theme.brand : Theme.surface, in: Capsule())
+                .overlay(Capsule().strokeBorder(isOn ? .clear : Theme.border, lineWidth: 1))
+        }
+        .buttonStyle(.pressable)
+    }
+
+    // ── Содержимое ───────────────────────────────────────────────────────────
 
     @ViewBuilder
     private func content(_ report: CashflowReport) -> some View {
@@ -396,46 +502,110 @@ struct CashflowScreen: View {
                 message: "За выбранный период не было ни доходов, ни расходов."
             )
         } else {
-            let totals = report.totals
-
             VStack(spacing: Spacing.lg) {
-                HeroSummary(
-                    title: totals.net >= 0 ? "Осталось денег за период" : "Ушло больше, чем пришло",
-                    value: Money.signed(totals.net),
-                    footer: [
-                        ("Пришло", Money.format(totals.income)),
-                        ("Ушло", Money.format(totals.expense)),
-                        ("Баланс на конец", Money.format(totals.endingBalance)),
-                    ],
-                    colors: totals.net >= 0
-                        ? Theme.heroGradient
-                        : Theme.heroNegative
-                )
-
-                balanceChart(report)
-
-                SplitDashboard {
-                    days(report)
-                } side: {
-                    highlights(report)
+                hero(report)
+                switch tab {
+                case .overview: overview(report)
+                case .channels: channels(report)
+                case .points: points(report)
+                case .expenses: expenses(report)
+                case .payments: EmptyView()
                 }
             }
         }
     }
 
-    private func balanceChart(_ report: CashflowReport) -> some View {
-        let points = report.days.compactMap { item -> TimePoint? in
-            guard let date = item.day else { return nil }
-            return TimePoint(label: item.label, date: date, value: item.balance)
+    /// Итог периода. Остаток — только по отметке остатка; иначе честно
+    /// «накоплено за период».
+    private func hero(_ report: CashflowReport) -> some View {
+        let flows = report.flows.total.inflow == 0 && report.flows.total.outflow == 0
+            ? CashflowFlow(inflow: report.totals.income, outflow: report.totals.expense, net: report.totals.net)
+            : report.flows.total
+        var footer: [(String, String)] = [
+            ("Пришло", Money.format(flows.inflow)),
+            ("Ушло", Money.format(flows.outflow)),
+        ]
+        if let end = report.balance?.end {
+            footer.append(("Остаток на конец", Money.format(end.total)))
+        } else {
+            footer.append(("Накоплено", Money.format(report.totals.endingBalance)))
+        }
+        var caption: String?
+        if let change = Percent.change(current: flows.net, previous: report.previous.total.net), report.previous.total.inflow > 0 {
+            caption = "\(change >= 0 ? "+" : "")\(Percent.format(change)) к прошлому периоду"
+        }
+        if report.pendingCount > 0 {
+            let pending = "ещё \(Money.format(report.pendingTotal)) ждут согласования"
+            caption = caption.map { "\($0) · \(pending)" } ?? pending
+        }
+        return HeroSummary(
+            title: flows.net >= 0 ? "Чистый поток за период" : "Ушло больше, чем пришло",
+            value: Money.signed(flows.net),
+            caption: caption,
+            footer: footer,
+            colors: flows.net >= 0 ? Theme.heroGradient : Theme.heroNegative
+        )
+    }
+
+    // ── Обзор ────────────────────────────────────────────────────────────────
+
+    @ViewBuilder
+    private func overview(_ report: CashflowReport) -> some View {
+        dailyChart(report)
+
+        let activities = report.activities.filter { $0.amount > 0 || $0.previous > 0 }
+        if !activities.isEmpty {
+            let total = max(activities.reduce(0) { $0 + $1.amount }, 1)
+            OwnerSection("Куда ушли деньги") {
+                Text("к прошлому периоду")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textDim)
+            } content: {
+                VStack(spacing: Spacing.md) {
+                    ForEach(Array(activities.enumerated()), id: \.element.id) { index, activity in
+                        AmountRow(
+                            leading: { TintedIcon(systemName: Self.activityIcon(activity.key), tint: OwnerTint.point(index), size: 40) },
+                            title: activity.label,
+                            subtitle: "нал \(Money.format(activity.cash)) · безнал \(Money.format(activity.cashless))",
+                            amount: Money.format(activity.amount),
+                            change: Percent.change(current: activity.amount, previous: activity.previous),
+                            higherIsBetter: false,
+                            share: activity.amount / total,
+                            tint: OwnerTint.point(index)
+                        )
+                    }
+                }
+            }
         }
 
+        highlights(report)
+    }
+
+    private static func activityIcon(_ key: String) -> String {
+        switch key {
+        case "operating": "cart.fill"
+        case "investing": "hammer.fill"
+        case "owners": "person.2.fill"
+        case "taxes": "building.columns.fill"
+        default: "ellipsis.circle.fill"
+        }
+    }
+
+    /// Остаток по дням, если есть отметка, иначе накопленный поток.
+    private func dailyChart(_ report: CashflowReport) -> some View {
+        let hasOnHand = report.days.contains { $0.onHand != nil }
+        let points = report.days.compactMap { item -> TimePoint? in
+            guard let date = item.day else { return nil }
+            let value = hasOnHand ? (item.onHand?.total ?? item.balance) : item.balance
+            return TimePoint(label: item.label, date: date, value: value)
+        }
         return Group {
             if points.count > 1 {
                 TrendChart(
-                    title: "Накопительный баланс",
-                    subtitle: "нарастающим итогом с начала периода",
+                    title: hasOnHand ? "Остаток по дням" : "Накоплено с начала периода",
+                    subtitle: hasOnHand ? "деньги на конец каждого дня" : "нарастающим итогом, не остаток кассы",
                     points: points,
-                    color: ChartPalette.series2
+                    color: ChartPalette.series1
                 )
             } else {
                 Card {
@@ -446,98 +616,421 @@ struct CashflowScreen: View {
     }
 
     private func highlights(_ report: CashflowReport) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Чем запомнился период")
-
-                StatRow(
-                    "Маржа",
-                    value: Percent.format(report.totals.margin),
-                    valueColor: report.totals.margin >= 0 ? Theme.text : Theme.negative,
-                    icon: "percent"
-                )
-                StatRow(
-                    "Дней в минусе",
-                    value: "\(report.totals.negativeDays) из \(report.totals.daysCount)",
-                    valueColor: report.totals.negativeDays > 0 ? Theme.warning : Theme.text,
-                    icon: "exclamationmark.triangle"
-                )
-
+        OwnerSection("Чем запомнился период") {
+            EmptyView()
+        } content: {
+            VStack(spacing: 0) {
+                statLine("Маржа", Percent.format(report.totals.margin), color: report.totals.margin >= 0 ? Theme.text : Theme.negative)
+                divider
+                statLine("Дней в минусе", "\(report.totals.negativeDays) из \(report.totals.daysCount)", color: report.totals.negativeDays > 0 ? Theme.warning : Theme.text)
                 if let best = report.bestDay, best.net > 0 {
-                    RowDivider()
-                    StatRow(
-                        "Лучший день · \(best.label)",
-                        value: Money.signed(best.net),
-                        valueColor: Theme.positive,
-                        icon: "arrow.up.forward"
-                    )
+                    divider
+                    statLine("Лучший день · \(best.label)", Money.signed(best.net), color: Theme.positive)
                 }
                 if let worst = report.worstDay {
-                    StatRow(
-                        "Худший день · \(worst.label)",
-                        value: Money.signed(worst.net),
-                        valueColor: Theme.negative,
-                        icon: "arrow.down.forward"
-                    )
+                    divider
+                    statLine("Худший день · \(worst.label)", Money.signed(worst.net), color: Theme.negative)
+                }
+                if let lowest = report.balance?.lowest {
+                    divider
+                    statLine("Меньше всего денег · \(Self.dayLabel(lowest.date))", Money.format(lowest.total), color: lowest.total < 0 ? Theme.negative : Theme.text)
+                }
+                if let anchor = report.balance?.anchor {
+                    divider
+                    statLine("Отметка остатка", Self.dayLabel(anchor.asOfDate), color: Theme.textMuted)
                 }
             }
         }
     }
 
-    private func days(_ report: CashflowReport) -> some View {
-        // Свежие дни сверху: к старым владелец возвращается редко, а листать
-        // весь квартал ради вчерашнего дня — работа.
-        let rows = report.days.reversed().prefix(30)
+    // ── Нал и безнал ─────────────────────────────────────────────────────────
 
-        return Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("По дням", subtitle: "последние сверху")
+    @ViewBuilder
+    private func channels(_ report: CashflowReport) -> some View {
+        HStack(alignment: .top, spacing: Spacing.md) {
+            channelCard("Наличные", icon: "banknote.fill", tint: Theme.positive, flow: report.flows.cash, previous: report.previous.cash, start: report.balance?.start?.cash, end: report.balance?.end?.cash)
+            channelCard("Безналичный", icon: "creditcard.fill", tint: Theme.brand, flow: report.flows.cashless, previous: report.previous.cashless, start: report.balance?.start?.cashless, end: report.balance?.end?.cashless)
+        }
 
-                ForEach(Array(rows.enumerated()), id: \.element.id) { index, day in
-                    if index > 0 { RowDivider() }
-                    DayCashRow(day: day)
+        if !report.cashDeficitDays.isEmpty {
+            OwnerSection("Наличных ушло больше, чем пришло") {
+                Text("\(report.cashDeficitDays.count) \(pluralize(report.cashDeficitDays.count, "день", "дня", "дней"))")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textDim)
+            } content: {
+                VStack(spacing: 0) {
+                    ForEach(Array(report.cashDeficitDays.enumerated()), id: \.element.id) { index, day in
+                        if index > 0 { divider }
+                        statLine(Self.dayLabel(day.date), Money.signed(day.net), color: Theme.negative)
+                    }
                 }
             }
         }
+
+        OwnerSection("По дням") {
+            Text("нал · безнал")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.textDim)
+        } content: {
+            VStack(spacing: 0) {
+                ForEach(Array(report.days.reversed().prefix(31).enumerated()), id: \.element.id) { index, day in
+                    if index > 0 { divider }
+                    HStack(spacing: Spacing.md) {
+                        Text(day.label)
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(Theme.text)
+                            .frame(width: 64, alignment: .leading)
+                        channelDelta("нал", day.cashIn, day.cashOut)
+                        Spacer(minLength: Spacing.sm)
+                        channelDelta("безнал", day.cashlessIn, day.cashlessOut)
+                    }
+                    .padding(.vertical, 10)
+                }
+            }
+        }
+    }
+
+    private func channelDelta(_ label: String, _ inflow: Double, _ outflow: Double) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(Money.signed(inflow - outflow))
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(inflow - outflow >= 0 ? Theme.text : Theme.negative)
+            Text("\(label): +\(Money.format(inflow)) −\(Money.format(outflow))")
+                .font(.system(size: 11))
+                .monospacedDigit()
+                .foregroundStyle(Theme.textDim)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+    }
+
+    private func channelCard(_ title: String, icon: String, tint: Color, flow: CashflowFlow, previous: CashflowFlow, start: Double?, end: Double?) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack(spacing: Spacing.sm) {
+                TintedIcon(systemName: icon, tint: tint, size: 32, corner: 9)
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            Text(Money.signed(flow.net))
+                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(flow.net >= 0 ? Theme.text : Theme.negative)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            if let change = Percent.change(current: flow.net, previous: previous.net), previous.inflow > 0 {
+                ChangeText(change: change)
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                miniLine("Пришло", flow.inflow)
+                miniLine("Ушло", flow.outflow)
+                if let start { miniLine("На начало", start) }
+                if let end { miniLine("На конец", end) }
+            }
+            .padding(.top, 2)
+        }
+        .padding(Spacing.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+    }
+
+    private func miniLine(_ label: String, _ value: Double) -> some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.textDim)
+            Spacer(minLength: 4)
+            Text(Money.format(value))
+                .font(.system(size: 12, weight: .medium))
+                .monospacedDigit()
+                .foregroundStyle(Theme.textMuted)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+    }
+
+    // ── Точки ────────────────────────────────────────────────────────────────
+
+    @ViewBuilder
+    private func points(_ report: CashflowReport) -> some View {
+        let rows = report.companies
+            .filter { $0.flows.total.inflow != 0 || $0.flows.total.outflow != 0 }
+            .sorted { $0.flows.total.inflow > $1.flows.total.inflow }
+        if rows.isEmpty {
+            WideEmptyState(icon: "building.2", title: "По точкам пусто", message: "За период у точек не было движений.")
+        } else {
+            let top = max(rows.map(\.flows.total.inflow).max() ?? 1, 1)
+            OwnerSection("Точки") {
+                Text("пришло · ушло")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textDim)
+            } content: {
+                VStack(spacing: Spacing.md) {
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, company in
+                        Button {
+                            companyID = company.id
+                            tab = .overview
+                        } label: {
+                            AmountRow(
+                                leading: { LetterBadge(text: company.name, tint: OwnerTint.point(index)) },
+                                title: company.name + (company.inTotals ? "" : " · вне итогов"),
+                                subtitle: "пришло \(Money.format(company.flows.total.inflow)) · ушло \(Money.format(company.flows.total.outflow))",
+                                amount: Money.signed(company.flows.total.net),
+                                change: Percent.change(current: company.flows.total.net, previous: company.previousNet),
+                                share: company.flows.total.inflow / top,
+                                tint: OwnerTint.point(index),
+                                showsChevron: true
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Расходы ──────────────────────────────────────────────────────────────
+
+    @ViewBuilder
+    private func expenses(_ report: CashflowReport) -> some View {
+        if report.pendingCount > 0 {
+            HStack(spacing: Spacing.md) {
+                TintedIcon(systemName: "clock.badge.exclamationmark.fill", tint: Theme.warning, size: 42)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(report.pendingCount) \(pluralize(report.pendingCount, "расход ждёт", "расхода ждут", "расходов ждут")) согласования")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Theme.text)
+                    Text("\(Money.format(report.pendingTotal)) — в «ушло» пока не входят")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.textDim)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(Spacing.lg)
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+        }
+
+        let categories = report.categories.filter { $0.amount > 0 }.sorted { $0.amount > $1.amount }
+        if !categories.isEmpty {
+            let total = max(categories.reduce(0) { $0 + $1.amount }, 1)
+            OwnerSection("Статьи") {
+                Text("\(categories.count)")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textDim)
+            } content: {
+                VStack(spacing: Spacing.md) {
+                    ForEach(Array(categories.enumerated()), id: \.element.id) { index, category in
+                        AmountRow(
+                            leading: { TintedIcon(systemName: OwnerAnalyticsScreen.expenseIcon(category.name), tint: OwnerTint.point(index), size: 40) },
+                            title: category.name,
+                            subtitle: "нал \(Money.format(category.cash)) · безнал \(Money.format(category.cashless))" + (category.previous > 0 ? " · было \(Money.format(category.previous))" : ""),
+                            amount: Money.format(category.amount),
+                            change: Percent.change(current: category.amount, previous: category.previous),
+                            higherIsBetter: false,
+                            share: category.amount / total,
+                            tint: OwnerTint.point(index)
+                        )
+                    }
+                }
+            }
+        }
+
+        if !report.largestExpenses.isEmpty {
+            OwnerSection("Крупные расходы") {
+                EmptyView()
+            } content: {
+                VStack(spacing: 0) {
+                    ForEach(Array(report.largestExpenses.enumerated()), id: \.element.id) { index, item in
+                        if index > 0 { divider }
+                        HStack(spacing: Spacing.md) {
+                            TintedIcon(systemName: OwnerAnalyticsScreen.expenseIcon(item.category), tint: item.pending ? Theme.warning : Theme.negative, size: 40, corner: 12)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(item.payee.isEmpty ? item.category : item.payee)
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundStyle(Theme.text)
+                                    .lineLimit(1)
+                                Text([Self.dayLabel(item.date), item.company, item.payee.isEmpty ? nil : item.category, item.pending ? "ждёт согласования" : nil].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(Theme.textDim)
+                                    .lineLimit(1)
+                            }
+                            Spacer(minLength: Spacing.sm)
+                            Text("−" + Money.format(item.amount))
+                                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                .monospacedDigit()
+                                .foregroundStyle(Theme.text)
+                        }
+                        .padding(.vertical, 10)
+                    }
+                }
+            }
+        }
+
+        if categories.isEmpty && report.largestExpenses.isEmpty && report.pendingCount == 0 {
+            WideEmptyState(icon: "cart", title: "Расходов нет", message: "За период ничего не потратили.")
+        }
+    }
+
+    // ── Мелочи ───────────────────────────────────────────────────────────────
+
+    private var divider: some View {
+        Rectangle().fill(Theme.borderSoft).frame(height: 1)
+    }
+
+    private func statLine(_ label: String, _ value: String, color: Color) -> some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 15))
+                .foregroundStyle(Theme.textMuted)
+                .lineLimit(1)
+            Spacer(minLength: Spacing.md)
+            Text(value)
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(color)
+        }
+        .padding(.vertical, 11)
+    }
+
+    static func dayLabel(_ iso: String) -> String {
+        guard let date = DateParsing.parseDateOnly(iso) else { return iso }
+        return date.formatted(.dateTime.day().month(.abbreviated))
     }
 }
 
-/// Строка дня: приход, расход и итог.
-private struct DayCashRow: View {
-    let day: CashflowDay
+/// Вкладка «Платежи»: регулярные платежи на месяц вперёд и деньги до конца
+/// месяца. Грузится при открытии вкладки.
+private struct PaymentsTab: View {
+    let store: CashflowStore
+    let companyID: String?
 
     var body: some View {
-        HStack(spacing: Spacing.md) {
-            Text(day.label)
-                .font(Typography.callout)
-                .foregroundStyle(Theme.text)
-                .frame(width: 72, alignment: .leading)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text("\(Money.format(day.income)) · \(Money.format(day.expense))")
-                    .font(Typography.caption)
-                    .monospacedDigit()
-                    .foregroundStyle(Theme.textDim)
-                ProportionBar(
-                    ratio: day.income > 0 ? min(1, day.expense / day.income) : 1,
-                    color: day.net >= 0 ? Theme.brand : Theme.negative
-                )
-            }
-
-            Spacer(minLength: Spacing.sm)
-
-            VStack(alignment: .trailing, spacing: 1) {
-                Text(Money.signed(day.net))
-                    .font(Typography.callout.weight(.medium))
-                    .monospacedDigit()
-                    .foregroundStyle(day.net >= 0 ? Theme.text : Theme.negative)
-                Text(Money.format(day.balance))
-                    .font(Typography.caption)
-                    .monospacedDigit()
-                    .foregroundStyle(Theme.textDim)
+        VStack(spacing: Spacing.lg) {
+            if let outlook = store.outlook {
+                projection(outlook)
+                payments(outlook)
+            } else if let error = store.outlookError {
+                ErrorStateView(error: error) { Task { await store.loadOutlook(companyID: companyID, force: true) } }
+            } else {
+                Skeleton(height: 150, cornerRadius: Radius.xl)
+                Skeleton(height: 220, cornerRadius: Radius.lg)
             }
         }
-        .padding(.vertical, Spacing.xs)
+        .task(id: companyID ?? "") { await store.loadOutlook(companyID: companyID) }
+    }
+
+    @ViewBuilder
+    private func projection(_ outlook: CashflowOutlook) -> some View {
+        if let projection = outlook.projection {
+            let end = projection.balanceEnd
+            HeroSummary(
+                title: end != nil ? "Останется к \(CashflowScreen.dayLabel(projection.monthEnd))" : "Поток до \(CashflowScreen.dayLabel(projection.monthEnd))",
+                value: Money.signed(end ?? projection.netLeft),
+                caption: projection.source == "model" ? "по модели прогноза выручки" : "по среднему дню",
+                footer: [
+                    ("Придёт", Money.format(projection.incomeLeft)),
+                    ("Платежи", Money.format(projection.paymentsLeft)),
+                    ("Прочее", Money.format(projection.otherSpendLeft)),
+                ],
+                colors: (end ?? projection.netLeft) >= 0 ? Theme.heroGradient : Theme.heroNegative
+            )
+
+            if let lowest = projection.lowestBalance, let date = projection.lowestDate, lowest < 0 {
+                HStack(spacing: Spacing.md) {
+                    TintedIcon(systemName: "exclamationmark.triangle.fill", tint: Theme.negative, size: 42)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(CashflowScreen.dayLabel(date)) денег не хватит")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Theme.text)
+                        Text("минимум \(Money.format(lowest)) — перенесите платёж или отложите заранее")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.textDim)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(Spacing.lg)
+                .background(Theme.negative.opacity(0.08), in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+            }
+
+            let points = projection.days.compactMap { day -> TimePoint? in
+                guard let date = DateParsing.parseDateOnly(day.date), let balance = day.balance else { return nil }
+                return TimePoint(label: CashflowScreen.dayLabel(day.date), date: date, value: balance)
+            }
+            if points.count > 1 {
+                TrendChart(
+                    title: "Деньги до конца месяца",
+                    subtitle: "остаток по дням с учётом платежей",
+                    points: points,
+                    color: ChartPalette.series2
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func payments(_ outlook: CashflowOutlook) -> some View {
+        if outlook.payments.isEmpty {
+            WideEmptyState(
+                icon: "calendar.badge.clock",
+                title: "Регулярных платежей нет",
+                message: "Они появятся, когда в шаблонах расходов будет день месяца."
+            )
+        } else {
+            let total = outlook.payments.reduce(0) { $0 + $1.amount }
+            OwnerSection("Регулярные платежи") {
+                Text("на 31 день · \(Money.format(total))")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textDim)
+            } content: {
+                VStack(spacing: 0) {
+                    ForEach(Array(outlook.payments.enumerated()), id: \.element.id) { index, payment in
+                        if index > 0 {
+                            Rectangle().fill(Theme.borderSoft).frame(height: 1).padding(.leading, 52)
+                        }
+                        HStack(spacing: Spacing.md) {
+                            VStack(spacing: 0) {
+                                Text(Self.dayNumber(payment.date))
+                                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                                    .foregroundStyle(Theme.text)
+                                Text(Self.monthShort(payment.date))
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(Theme.textDim)
+                            }
+                            .frame(width: 40, height: 40)
+                            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(payment.name)
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundStyle(Theme.text)
+                                    .lineLimit(1)
+                                Text("\(payment.company) · \(payment.cashless ? "безнал" : "наличные")")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(Theme.textDim)
+                                    .lineLimit(1)
+                            }
+                            Spacer(minLength: Spacing.sm)
+                            Text(Money.format(payment.amount))
+                                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                .monospacedDigit()
+                                .foregroundStyle(Theme.text)
+                        }
+                        .padding(.vertical, 10)
+                    }
+                }
+            }
+        }
+    }
+
+    private static func dayNumber(_ iso: String) -> String {
+        Int(iso.suffix(2)).map(String.init) ?? iso
+    }
+
+    private static func monthShort(_ iso: String) -> String {
+        guard let date = DateParsing.parseDateOnly(iso) else { return "" }
+        return date.formatted(.dateTime.month(.abbreviated))
     }
 }
 

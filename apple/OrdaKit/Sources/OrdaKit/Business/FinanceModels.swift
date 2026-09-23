@@ -269,8 +269,18 @@ public struct CashflowDay: Decodable, Sendable, Identifiable, Hashable {
     public let net: Double
     /// Накопленный итог с начала периода — не остаток кассы.
     public let balance: Double
+    /// Наличные и безнал по отдельности. Ночной безнал после полуночи сервер
+    /// уже отнёс на следующий день.
+    public let cashIn: Double
+    public let cashOut: Double
+    public let cashlessIn: Double
+    public let cashlessOut: Double
+    /// Остаток на конец дня — только если задана отметка остатка.
+    public let onHand: CashflowMoney?
 
     public var id: String { date }
+    public var cashNet: Double { cashIn - cashOut }
+    public var cashlessNet: Double { cashlessIn - cashlessOut }
 
     public var day: Date? { DateParsing.parseDateOnly(date) }
 
@@ -286,9 +296,255 @@ public struct CashflowDay: Decodable, Sendable, Identifiable, Hashable {
         expense = try c.decodeFlexibleDouble(forKey: .expense) ?? 0
         net = try c.decodeFlexibleDouble(forKey: .net) ?? 0
         balance = try c.decodeFlexibleDouble(forKey: .balance) ?? 0
+        cashIn = try c.decodeFlexibleDouble(forKey: .cashIn) ?? 0
+        cashOut = try c.decodeFlexibleDouble(forKey: .cashOut) ?? 0
+        cashlessIn = try c.decodeFlexibleDouble(forKey: .cashlessIn) ?? 0
+        cashlessOut = try c.decodeFlexibleDouble(forKey: .cashlessOut) ?? 0
+        onHand = try? c.decodeIfPresent(CashflowMoney.self, forKey: .onHand)
     }
 
-    private enum CodingKeys: String, CodingKey { case date, income, expense, net, balance }
+    private enum CodingKeys: String, CodingKey {
+        case date, income, expense, net, balance, cashIn, cashOut, cashlessIn, cashlessOut, onHand
+    }
+}
+
+extension CashflowDay {
+    /// День, когда наличных ушло больше, чем пришло.
+    public struct Deficit: Decodable, Sendable, Hashable, Identifiable {
+        public let date: String
+        public let net: Double
+        public var id: String { date }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            date = try c.decodeFlexibleString(forKey: .date) ?? ""
+            net = try c.decodeFlexibleDouble(forKey: .net) ?? 0
+        }
+
+        private enum CodingKeys: String, CodingKey { case date, net }
+    }
+}
+
+/// Деньги по каналам: наличные, безнал, всего.
+public struct CashflowMoney: Decodable, Sendable, Hashable {
+    public let cash: Double
+    public let cashless: Double
+    public let total: Double
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        cash = try c.decodeFlexibleDouble(forKey: .cash) ?? 0
+        cashless = try c.decodeFlexibleDouble(forKey: .cashless) ?? 0
+        total = try c.decodeFlexibleDouble(forKey: .total) ?? (cash + cashless)
+    }
+
+    private enum CodingKeys: String, CodingKey { case cash, cashless, total }
+}
+
+/// Пришло, ушло, осталось.
+public struct CashflowFlow: Decodable, Sendable, Hashable {
+    public let inflow: Double
+    public let outflow: Double
+    public let net: Double
+
+    public static let zero = CashflowFlow(inflow: 0, outflow: 0, net: 0)
+
+    public init(inflow: Double, outflow: Double, net: Double) {
+        self.inflow = inflow; self.outflow = outflow; self.net = net
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        inflow = try c.decodeFlexibleDouble(forKey: .inflow) ?? 0
+        outflow = try c.decodeFlexibleDouble(forKey: .outflow) ?? 0
+        net = try c.decodeFlexibleDouble(forKey: .net) ?? (inflow - outflow)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case inflow = "in", outflow = "out", net
+    }
+}
+
+/// Поток по каналам.
+public struct CashflowChannels: Decodable, Sendable, Hashable {
+    public let cash: CashflowFlow
+    public let cashless: CashflowFlow
+    public let total: CashflowFlow
+
+    public static let zero = CashflowChannels(cash: .zero, cashless: .zero, total: .zero)
+
+    public init(cash: CashflowFlow, cashless: CashflowFlow, total: CashflowFlow) {
+        self.cash = cash; self.cashless = cashless; self.total = total
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        cash = (try? c.decodeIfPresent(CashflowFlow.self, forKey: .cash)) ?? .zero
+        cashless = (try? c.decodeIfPresent(CashflowFlow.self, forKey: .cashless)) ?? .zero
+        total = (try? c.decodeIfPresent(CashflowFlow.self, forKey: .total)) ?? .zero
+    }
+
+    private enum CodingKeys: String, CodingKey { case cash, cashless, total }
+}
+
+/// Назначение расходов: текущие, вложения, партнёрам, налоги, прочие.
+public struct CashflowActivity: Decodable, Sendable, Hashable, Identifiable {
+    public let key: String
+    public let label: String
+    public let amount: Double
+    public let cash: Double
+    public let cashless: Double
+    public let previous: Double
+    public var id: String { key }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        key = try c.decodeFlexibleString(forKey: .key) ?? ""
+        label = try c.decodeFlexibleString(forKey: .label) ?? key
+        amount = try c.decodeFlexibleDouble(forKey: .amount) ?? 0
+        cash = try c.decodeFlexibleDouble(forKey: .cash) ?? 0
+        cashless = try c.decodeFlexibleDouble(forKey: .cashless) ?? 0
+        previous = try c.decodeFlexibleDouble(forKey: .previous) ?? 0
+    }
+
+    private enum CodingKeys: String, CodingKey { case key, label, amount, cash, cashless, previous }
+}
+
+/// Статья расходов периода.
+public struct CashflowCategory: Decodable, Sendable, Hashable, Identifiable {
+    public let name: String
+    public let group: String?
+    public let activity: String?
+    public let amount: Double
+    public let cash: Double
+    public let cashless: Double
+    public let previous: Double
+    public var id: String { name }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        name = try c.decodeFlexibleString(forKey: .name) ?? "Без статьи"
+        group = try c.decodeFlexibleString(forKey: .group)
+        activity = try c.decodeFlexibleString(forKey: .activity)
+        amount = try c.decodeFlexibleDouble(forKey: .amount) ?? 0
+        cash = try c.decodeFlexibleDouble(forKey: .cash) ?? 0
+        cashless = try c.decodeFlexibleDouble(forKey: .cashless) ?? 0
+        previous = try c.decodeFlexibleDouble(forKey: .previous) ?? 0
+    }
+
+    private enum CodingKeys: String, CodingKey { case name, group, activity, amount, cash, cashless, previous }
+}
+
+/// Точка в движении денег.
+public struct CashflowCompany: Decodable, Sendable, Hashable, Identifiable {
+    public let id: String
+    public let name: String
+    public let isExtra: Bool
+    public let inTotals: Bool
+    public let flows: CashflowChannels
+    public let previousNet: Double
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeFlexibleString(forKey: .id) ?? ""
+        name = try c.decodeFlexibleString(forKey: .name) ?? "—"
+        isExtra = (try? c.decodeIfPresent(Bool.self, forKey: .isExtra)) ?? false
+        inTotals = (try? c.decodeIfPresent(Bool.self, forKey: .inTotals)) ?? true
+        flows = (try? c.decodeIfPresent(CashflowChannels.self, forKey: .flows)) ?? .zero
+        previousNet = try c.decodeFlexibleDouble(forKey: .previousNet) ?? 0
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, name, isExtra, inTotals, flows, previousNet }
+}
+
+/// Крупный расход периода.
+public struct CashflowLargeExpense: Decodable, Sendable, Hashable, Identifiable {
+    public let date: String
+    public let company: String
+    public let category: String
+    public let payee: String
+    public let amount: Double
+    public let cash: Double
+    public let cashless: Double
+    public let pending: Bool
+    public var id: String { "\(date)|\(company)|\(category)|\(payee)|\(amount)" }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        date = try c.decodeFlexibleString(forKey: .date) ?? ""
+        company = try c.decodeFlexibleString(forKey: .company) ?? ""
+        category = try c.decodeFlexibleString(forKey: .category) ?? ""
+        payee = try c.decodeFlexibleString(forKey: .payee) ?? ""
+        amount = try c.decodeFlexibleDouble(forKey: .amount) ?? 0
+        cash = try c.decodeFlexibleDouble(forKey: .cash) ?? 0
+        cashless = try c.decodeFlexibleDouble(forKey: .cashless) ?? 0
+        pending = (try? c.decodeIfPresent(Bool.self, forKey: .pending)) ?? false
+    }
+
+    private enum CodingKeys: String, CodingKey { case date, company, category, payee, amount, cash, cashless, pending }
+}
+
+/// Отметка остатка: сколько денег было на утро даты.
+public struct CashflowAnchor: Decodable, Sendable, Hashable {
+    public let id: String
+    public let companyID: String?
+    public let asOfDate: String
+    public let cash: Double
+    public let cashless: Double
+    public let note: String?
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeFlexibleString(forKey: .id) ?? ""
+        companyID = try c.decodeFlexibleString(forKey: .companyID)
+        asOfDate = try c.decodeFlexibleString(forKey: .asOfDate) ?? ""
+        cash = try c.decodeFlexibleDouble(forKey: .cash) ?? 0
+        cashless = try c.decodeFlexibleDouble(forKey: .cashless) ?? 0
+        note = try c.decodeFlexibleString(forKey: .note)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, note
+        case companyID = "company_id"
+        case asOfDate = "as_of_date"
+        case cash = "cash_amount"
+        case cashless = "cashless_amount"
+    }
+}
+
+/// Остаток денег по отметке: на начало и конец периода, самая низкая точка.
+public struct CashflowBalance: Decodable, Sendable, Hashable {
+    public struct Lowest: Decodable, Sendable, Hashable {
+        public let date: String
+        public let total: Double
+        public let cash: Double
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            date = try c.decodeFlexibleString(forKey: .date) ?? ""
+            total = try c.decodeFlexibleDouble(forKey: .total) ?? 0
+            cash = try c.decodeFlexibleDouble(forKey: .cash) ?? 0
+        }
+
+        private enum CodingKeys: String, CodingKey { case date, total, cash }
+    }
+
+    public let scope: String
+    public let anchor: CashflowAnchor?
+    public let start: CashflowMoney?
+    public let end: CashflowMoney?
+    public let lowest: Lowest?
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        scope = try c.decodeFlexibleString(forKey: .scope) ?? "organization"
+        anchor = try? c.decodeIfPresent(CashflowAnchor.self, forKey: .anchor)
+        start = try? c.decodeIfPresent(CashflowMoney.self, forKey: .start)
+        end = try? c.decodeIfPresent(CashflowMoney.self, forKey: .end)
+        lowest = try? c.decodeIfPresent(Lowest.self, forKey: .lowest)
+    }
+
+    private enum CodingKeys: String, CodingKey { case scope, anchor, start, end, lowest }
 }
 
 public struct CashflowTotals: Decodable, Sendable, Hashable {
@@ -330,6 +586,27 @@ public struct CashflowReport: Decodable, Sendable {
     public let days: [CashflowDay]
     public let totals: CashflowTotals
 
+    /// Прошлый период той же длины — с ним сравниваются потоки и статьи.
+    public let prevFrom: String?
+    public let prevTo: String?
+    public let flows: CashflowChannels
+    public let previous: CashflowChannels
+    public let activities: [CashflowActivity]
+    public let categories: [CashflowCategory]
+    public let companies: [CashflowCompany]
+    public let largestExpenses: [CashflowLargeExpense]
+    /// Расходы, ждущие согласования: в «ушло» их нет, но деньги скоро уйдут.
+    public let pendingCount: Int
+    public let pendingTotal: Double
+    /// Дни, когда наличных ушло больше, чем пришло.
+    public let cashDeficitDays: [CashflowDay.Deficit]
+    /// Остаток по отметке. `nil` — отметки нет, и «остаток» показывать нельзя:
+    /// накопленный поток — не деньги в кассе.
+    public let balance: CashflowBalance?
+    /// Точки F16 Extra в организации и учтены ли они в итогах.
+    public let extraNames: [String]
+    public let extraIncluded: Bool
+
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         dateFrom = try c.decodeFlexibleString(forKey: .from) ?? ""
@@ -337,9 +614,38 @@ public struct CashflowReport: Decodable, Sendable {
         days = (try? c.decodeIfPresent([CashflowDay].self, forKey: .days)) as? [CashflowDay] ?? []
         // Сервер отдаёт `null`, когда движений за период не было вовсе.
         totals = (try? c.decodeIfPresent(CashflowTotals.self, forKey: .totals)) as? CashflowTotals ?? .zero
+        prevFrom = try c.decodeFlexibleString(forKey: .prevFrom)
+        prevTo = try c.decodeFlexibleString(forKey: .prevTo)
+        flows = (try? c.decodeIfPresent(CashflowChannels.self, forKey: .flows)) as? CashflowChannels ?? .zero
+        previous = (try? c.decodeIfPresent(CashflowChannels.self, forKey: .previous)) as? CashflowChannels ?? .zero
+        activities = (try? c.decodeIfPresent([CashflowActivity].self, forKey: .activities)) as? [CashflowActivity] ?? []
+        categories = (try? c.decodeIfPresent([CashflowCategory].self, forKey: .categories)) as? [CashflowCategory] ?? []
+        companies = (try? c.decodeIfPresent([CashflowCompany].self, forKey: .companies)) as? [CashflowCompany] ?? []
+        largestExpenses = (try? c.decodeIfPresent([CashflowLargeExpense].self, forKey: .largestExpenses)) as? [CashflowLargeExpense] ?? []
+        cashDeficitDays = (try? c.decodeIfPresent([CashflowDay.Deficit].self, forKey: .cashDeficitDays)) as? [CashflowDay.Deficit] ?? []
+        balance = try? c.decodeIfPresent(CashflowBalance.self, forKey: .balance)
+        if let pending = try? c.nestedContainer(keyedBy: PendingKeys.self, forKey: .pending) {
+            pendingCount = Int(try pending.decodeFlexibleDouble(forKey: .count) ?? 0)
+            pendingTotal = try pending.decodeFlexibleDouble(forKey: .total) ?? 0
+        } else {
+            pendingCount = 0
+            pendingTotal = 0
+        }
+        if let extra = try? c.nestedContainer(keyedBy: ExtraKeys.self, forKey: .extra) {
+            extraNames = (try? extra.decodeIfPresent([String].self, forKey: .names)) as? [String] ?? []
+            extraIncluded = (try? extra.decodeIfPresent(Bool.self, forKey: .included)) as? Bool ?? false
+        } else {
+            extraNames = []
+            extraIncluded = false
+        }
     }
 
-    private enum CodingKeys: String, CodingKey { case from, to, days, totals }
+    private enum CodingKeys: String, CodingKey {
+        case from, to, days, totals, prevFrom, prevTo, flows, previous, activities, categories
+        case companies, largestExpenses, pending, cashDeficitDays, balance, extra
+    }
+    private enum PendingKeys: String, CodingKey { case count, total }
+    private enum ExtraKeys: String, CodingKey { case names, included }
 
     /// Самый прибыльный день периода.
     public var bestDay: CashflowDay? { days.max { $0.net < $1.net } }
@@ -352,15 +658,142 @@ public struct CashflowReport: Decodable, Sendable {
     }
 }
 
+// ── Платежи вперёд: /api/admin/cashflow/outlook ─────────────────────────────
+
+/// Регулярный платёж из шаблонов расходов на ближайший месяц.
+public struct CashflowUpcomingPayment: Decodable, Sendable, Hashable, Identifiable {
+    public let date: String
+    public let templateID: String
+    public let name: String
+    public let category: String
+    public let amount: Double
+    public let cashless: Bool
+    public let companyID: String
+    public let company: String
+    public var id: String { "\(templateID)|\(date)" }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        date = try c.decodeFlexibleString(forKey: .date) ?? ""
+        templateID = try c.decodeFlexibleString(forKey: .templateID) ?? ""
+        name = try c.decodeFlexibleString(forKey: .name) ?? ""
+        category = try c.decodeFlexibleString(forKey: .category) ?? ""
+        amount = try c.decodeFlexibleDouble(forKey: .amount) ?? 0
+        cashless = (try? c.decodeIfPresent(Bool.self, forKey: .cashless)) ?? false
+        companyID = try c.decodeFlexibleString(forKey: .companyID) ?? ""
+        company = try c.decodeFlexibleString(forKey: .company) ?? "—"
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case date, name, category, amount, cashless, company
+        case templateID = "templateId"
+        case companyID = "companyId"
+    }
+}
+
+/// Деньги до конца месяца: ожидаемая выручка, платежи и остаток по дням.
+public struct CashflowProjection: Decodable, Sendable, Hashable {
+    public struct Day: Decodable, Sendable, Hashable, Identifiable {
+        public let date: String
+        public let income: Double
+        public let payments: Double
+        public let other: Double
+        public let balance: Double?
+        public var id: String { date }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            date = try c.decodeFlexibleString(forKey: .date) ?? ""
+            income = try c.decodeFlexibleDouble(forKey: .income) ?? 0
+            payments = try c.decodeFlexibleDouble(forKey: .payments) ?? 0
+            other = try c.decodeFlexibleDouble(forKey: .other) ?? 0
+            balance = try c.decodeFlexibleDouble(forKey: .balance)
+        }
+
+        private enum CodingKeys: String, CodingKey { case date, income, payments, other, balance }
+    }
+
+    public let monthEnd: String
+    /// `model` — по модели прогноза, `average` — по среднему дню.
+    public let source: String
+    public let incomeLeft: Double
+    public let paymentsLeft: Double
+    public let otherSpendLeft: Double
+    public let netLeft: Double
+    public let balanceStart: Double?
+    public let balanceEnd: Double?
+    public let lowestDate: String?
+    public let lowestBalance: Double?
+    public let days: [Day]
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        monthEnd = try c.decodeFlexibleString(forKey: .monthEnd) ?? ""
+        source = try c.decodeFlexibleString(forKey: .source) ?? "average"
+        incomeLeft = try c.decodeFlexibleDouble(forKey: .incomeLeft) ?? 0
+        paymentsLeft = try c.decodeFlexibleDouble(forKey: .paymentsLeft) ?? 0
+        otherSpendLeft = try c.decodeFlexibleDouble(forKey: .otherSpendLeft) ?? 0
+        netLeft = try c.decodeFlexibleDouble(forKey: .netLeft) ?? 0
+        balanceStart = try c.decodeFlexibleDouble(forKey: .balanceStart)
+        balanceEnd = try c.decodeFlexibleDouble(forKey: .balanceEnd)
+        if let lowest = try? c.nestedContainer(keyedBy: LowestKeys.self, forKey: .lowest) {
+            lowestDate = try lowest.decodeFlexibleString(forKey: .date)
+            lowestBalance = try lowest.decodeFlexibleDouble(forKey: .balance)
+        } else {
+            lowestDate = nil
+            lowestBalance = nil
+        }
+        days = (try? c.decodeIfPresent([Day].self, forKey: .days)) as? [Day] ?? []
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case monthEnd, source, incomeLeft, paymentsLeft, otherSpendLeft, netLeft
+        case balanceStart, balanceEnd, lowest, days
+    }
+    private enum LowestKeys: String, CodingKey { case date, balance }
+}
+
+/// Ответ `GET /api/admin/cashflow/outlook`.
+public struct CashflowOutlook: Decodable, Sendable {
+    public let today: String
+    public let payments: [CashflowUpcomingPayment]
+    public let projection: CashflowProjection?
+    public let balanceToday: CashflowMoney?
+    public let anchor: CashflowAnchor?
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        today = try c.decodeFlexibleString(forKey: .today) ?? ""
+        payments = (try? c.decodeIfPresent([CashflowUpcomingPayment].self, forKey: .payments)) as? [CashflowUpcomingPayment] ?? []
+        projection = try? c.decodeIfPresent(CashflowProjection.self, forKey: .projection)
+        balanceToday = try? c.decodeIfPresent(CashflowMoney.self, forKey: .balanceToday)
+        anchor = try? c.decodeIfPresent(CashflowAnchor.self, forKey: .anchor)
+    }
+
+    private enum CodingKeys: String, CodingKey { case today, payments, projection, balanceToday, anchor }
+}
+
 public struct CashflowService: Sendable {
     private let api: APIClient
     public init(api: APIClient) { self.api = api }
 
-    public func load(from: String, to: String, includeExtra: Bool = false) async throws -> CashflowReport {
+    /// `companyID` — одна точка; `nil` — вся организация.
+    public func load(from: String, to: String, includeExtra: Bool = false, companyID: String? = nil) async throws -> CashflowReport {
         var query = ["from": from, "to": to]
         if includeExtra { query["include_extra"] = "1" }
+        if let companyID, !companyID.isEmpty { query["company_id"] = companyID }
         let response: Envelope<CashflowReport> = try await api.send(
             APIRequest(path: "/api/admin/cashflow/summary", query: query)
+        )
+        return response.data
+    }
+
+    /// Регулярные платежи на месяц вперёд и деньги до конца месяца.
+    public func outlook(companyID: String? = nil) async throws -> CashflowOutlook {
+        var query: [String: String] = [:]
+        if let companyID, !companyID.isEmpty { query["company_id"] = companyID }
+        let response: Envelope<CashflowOutlook> = try await api.send(
+            APIRequest(path: "/api/admin/cashflow/outlook", query: query)
         )
         return response.data
     }
