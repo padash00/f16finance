@@ -282,28 +282,29 @@ struct ScheduleScreen: View {
 
     @ViewBuilder
     private var summaryCards: some View {
-        DashboardGrid {
-            MetricTile(
-                label: "Смен на неделе",
-                value: "\(workingCount)",
-                icon: "calendar",
-                accent: Theme.accent(for: .operator)
-            )
-            MetricTile(
-                label: "Ночных",
-                value: "\(nightCount)",
-                icon: "moon.stars",
-                accent: ChartPalette.series2
-            )
-            if let next = nextWorkingDay {
-                MetricTile(
-                    label: "Ближайшая",
-                    value: next.formatted(.dateTime.day().month(.abbreviated)),
-                    icon: "arrow.right.circle",
-                    accent: Theme.positive
-                )
+        // Неделя одной синей карточкой: сколько смен, из них ночных и когда
+        // ближайшая — вместо трёх одинаковых плиток.
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Смен на неделе")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.white.opacity(0.85))
+            Text("\(workingCount)")
+                .font(.system(size: 40, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .padding(.top, Spacing.xs)
+            HStack(spacing: Spacing.xl) {
+                scheduleStat("Ночных", "\(nightCount)")
+                scheduleStat("Ближайшая", nextWorkingDay.map { $0.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)) } ?? "—")
             }
+            .padding(.top, Spacing.md)
         }
+        .padding(Spacing.xl)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            LinearGradient(colors: Theme.heroGradient, startPoint: .topLeading, endPoint: .bottomTrailing),
+            in: RoundedRectangle(cornerRadius: Radius.xl, style: .continuous)
+        )
 
         // Точки перечисляем отдельно: оператор может работать на нескольких,
         // и по одной сетке этого не понять.
@@ -322,6 +323,18 @@ struct ScheduleScreen: View {
                     }
                 }
             }
+        }
+    }
+
+    private func scheduleStat(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.system(size: 13))
+                .foregroundStyle(.white.opacity(0.65))
+            Text(value)
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white)
         }
     }
 

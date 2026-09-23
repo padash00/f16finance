@@ -59,38 +59,24 @@ struct MoneyScreen: View {
         }
     }
 
+    /// Главная цифра — на синей карточке, как баланс в банке: сколько
+    /// получу за неделю, полоса «сколько уже выплачено» и статус.
     private func heroCard(_ week: SalaryWeek) -> some View {
-        Card(accent: Theme.brand) {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                HStack {
-                    Text("К выплате за неделю")
-                        .font(Typography.label)
-                        .foregroundStyle(Theme.textDim)
-                    Spacer()
-                    StatusChip(week.statusLabel, kind: week.status == "paid" ? .good : .neutral)
-                }
+        SalaryBalanceCard(
+            title: week.paidAmount > 0 ? "Осталось получить" : "К выплате за неделю",
+            remaining: week.paidAmount > 0 ? max(week.remainingAmount, 0) : week.netAmount,
+            total: week.netAmount,
+            paid: week.paidAmount,
+            footer: [
+                ("Неделя", weekRange(week)),
+                ("Статус", week.statusLabel),
+            ]
+        )
+    }
 
-                Text(Money.format(week.netAmount))
-                    .font(Typography.monospacedDigits(Typography.hero))
-                    .foregroundStyle(Theme.text)
-                    .contentTransition(.numericText())
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.5)
-
-                if let start = week.weekStart, let end = week.weekEnd {
-                    Text("\(shortDate(start)) — \(shortDate(end))")
-                        .font(Typography.caption)
-                        .foregroundStyle(Theme.textDim)
-                }
-
-                if week.paidAmount > 0 {
-                    SplitBar(segments: [
-                        .init(label: "Выплачено", value: week.paidAmount, color: ChartPalette.series1),
-                        .init(label: "Остаток", value: max(week.remainingAmount, 0), color: ChartPalette.series2),
-                    ])
-                }
-            }
-        }
+    private func weekRange(_ week: SalaryWeek) -> String {
+        guard let start = week.weekStart, let end = week.weekEnd else { return "—" }
+        return "\(shortDate(start)) — \(shortDate(end))"
     }
 
     private func breakdownCard(_ week: SalaryWeek) -> some View {
@@ -438,6 +424,9 @@ struct OperatorProfileScreen: View {
     @State private var changingPassword = false
     @State private var lockEnabled = false
     @State private var didLoadLock = false
+    #if DEBUG
+    @State private var debugRoute: OperatorProfileRoute?
+    #endif
 
     /// Торгует ли точка: от этого зависит, показывать ли ревизию.
     private var sellsGoods: Bool { cabinet.overview?.points?.sellsGoods ?? true }
@@ -497,6 +486,31 @@ struct OperatorProfileScreen: View {
         } message: {
             Text("Неотправленные чеки останутся на устройстве.")
         }
+        #if DEBUG
+        // Снимки экрана: `-ordaOperatorRoute schedule|money|…` открывает раздел.
+        .navigationDestination(item: $debugRoute) { route in
+            switch route {
+            case .schedule: ScheduleScreen()
+            case .money: MoneyScreen()
+            case .knowledge: KnowledgeScreen()
+            case .salesQuality: SalesQualityScreen()
+            case .audit: AuditScreen()
+            case .checklists: ChecklistsScreen()
+            case .exams: ExamsScreen()
+            case .chat: TeamChatScreen()
+            case .messages: MessagesScreen()
+            case .pointQR: PointQRLoginScreen()
+            case .lead: LeadDeskScreen()
+            case .arena: ArenaScreen()
+            }
+        }
+        .task {
+            if let raw = UserDefaults.standard.string(forKey: "ordaOperatorRoute") {
+                try? await Task.sleep(for: .milliseconds(600))
+                debugRoute = OperatorProfileRoute(debugName: raw)
+            }
+        }
+        #endif
         .task { await cabinet.refreshUnreadMessages() }
         .task {
             await cabinet.refreshUndeliveredChecklists()
@@ -938,3 +952,23 @@ struct AllDebtsSheet: View {
         }
     }
 }
+
+#if DEBUG
+extension OperatorProfileRoute {
+    init?(debugName: String) {
+        switch debugName {
+        case "schedule": self = .schedule
+        case "money": self = .money
+        case "knowledge": self = .knowledge
+        case "salesQuality": self = .salesQuality
+        case "audit": self = .audit
+        case "checklists": self = .checklists
+        case "exams": self = .exams
+        case "messages": self = .messages
+        case "pointQR": self = .pointQR
+        case "lead": self = .lead
+        default: return nil
+        }
+    }
+}
+#endif

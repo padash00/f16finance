@@ -86,56 +86,50 @@ private struct KnowledgeSummary: View {
     let pending: Int
     let total: Int
 
+    /// Одна синяя карточка: сколько осталось подтвердить и полоса
+    /// прогресса. Раньше полоса вылезала отдельным блоком под карточкой.
     var body: some View {
-        Card(accent: pending > 0 ? Theme.info : nil) {
-            HStack(spacing: Spacing.md) {
-                Image(systemName: pending > 0 ? "book.pages" : "checkmark.seal.fill")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(pending > 0 ? Theme.info : Theme.positive)
-                    .frame(width: 34, height: 34)
-                    .background(
-                        (pending > 0 ? Theme.info : Theme.positive).opacity(0.12),
-                        in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                    )
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(pending > 0
-                        ? "\(pending) \(pluralize(pending, "статья ждёт", "статьи ждут", "статей ждут")) подтверждения"
-                        : "Всё прочитано")
-                        .font(Typography.callout.weight(.semibold))
-                        .foregroundStyle(Theme.text)
-                    Text(pending > 0
-                        ? "Они наверху списка. Откройте и подтвердите — это фиксируется по версии правила."
-                        : "В базе \(total) \(pluralize(total, "статья", "статьи", "статей")). Пригодится, когда что-то пойдёт не так.")
-                        .font(Typography.caption)
-                        .foregroundStyle(Theme.textDim)
-                }
-
-                Spacer(minLength: 0)
-            }
+        VStack(alignment: .leading, spacing: 0) {
+            Text(pending > 0 ? "Ждут подтверждения" : "Всё прочитано")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.white.opacity(0.85))
+            Text(pending > 0 ? "\(pending) \(pluralize(pending, "статья", "статьи", "статей"))" : "\(total) \(pluralize(total, "статья", "статьи", "статей"))")
+                .font(.system(size: 34, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .padding(.top, Spacing.xs)
 
             // Полоса прогресса, а не только число: «осталось 27» звучит как
             // приговор, «14 из 27 подтверждено» — как работа, которая идёт.
-            if total > 0, pending > 0 {
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    GeometryReader { proxy in
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(Theme.info.opacity(0.15))
-                            Capsule()
-                                .fill(Theme.info)
-                                .frame(width: max(4, proxy.size.width * ratio))
-                        }
+            if total > 0 {
+                GeometryReader { proxy in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(.white.opacity(0.18))
+                        Capsule().fill(.white).frame(width: max(4, proxy.size.width * ratio))
                     }
-                    .frame(height: 6)
-
-                    Text("\(total - pending) из \(total) подтверждено")
-                        .font(Typography.caption)
-                        .foregroundStyle(Theme.textMuted)
                 }
-                .padding(.top, Spacing.sm)
+                .frame(height: 6)
+                .padding(.top, Spacing.md)
+                Text("\(total - pending) из \(total) подтверждено")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .padding(.top, Spacing.sm)
             }
+
+            Text(pending > 0
+                ? "Они наверху списка. Откройте и подтвердите — это фиксируется по версии правила."
+                : "Пригодится, когда что-то пойдёт не так.")
+                .font(.system(size: 13))
+                .foregroundStyle(.white.opacity(0.6))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, Spacing.md)
         }
+        .padding(Spacing.xl)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            LinearGradient(colors: Theme.heroGradient, startPoint: .topLeading, endPoint: .bottomTrailing),
+            in: RoundedRectangle(cornerRadius: Radius.xl, style: .continuous)
+        )
     }
 
     /// Доля подтверждённого. Ноль статей — делить не на что.
