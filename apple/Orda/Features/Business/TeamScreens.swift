@@ -182,6 +182,8 @@ private struct OperatorDetail: View {
     /// перед сменой, а повышение — когда оператор уже месяц работает старшим.
     @State private var loginOpen = false
     @State private var promoteOpen = false
+    /// Правка данных — как «Редактировать» на сайте.
+    @State private var editOpen = false
 
     private var canLink: Bool { access?.can("operators.edit") ?? false }
     private var canEditLogin: Bool { access?.can("operators.edit_login") ?? false }
@@ -222,6 +224,15 @@ private struct OperatorDetail: View {
         .navigationTitle(person.displayName)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
+        .sheet(isPresented: $editOpen) {
+            EditOperatorSheet(operatorID: person.id) { await store.loadTeam() }
+        }
+        #if DEBUG
+        .task {
+            // Снимки экрана: `-ordaEditOperator 1` открывает правку первой карточки.
+            if UserDefaults.standard.bool(forKey: "ordaEditOperator") { editOpen = true }
+        }
         #endif
     }
 
@@ -466,6 +477,12 @@ private struct OperatorDetail: View {
 
     private var contacts: some View {
         OwnerSection("Данные") {
+            if canLink {
+                Button("Изменить") { editOpen = true }
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Theme.brand)
+            }
+        } content: {
             VStack(spacing: Spacing.sm) {
                 if let phone = person.phone, !phone.isEmpty {
                     OperatorInfoRow(icon: "phone", tint: Color(hex: 0x10B981), label: "Телефон", value: phone)

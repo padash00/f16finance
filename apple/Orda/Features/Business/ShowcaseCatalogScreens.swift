@@ -195,9 +195,15 @@ struct CatalogScreen: View {
     @State private var store: CatalogStore?
     @State private var search = ""
     @State private var onlyMissing = false
+    @State private var showsArchive = false
     @State private var isAdding = false
+    @State private var editing: CatalogItem?
+    @State private var showsCategories = false
 
     private var canCreate: Bool { access?.can("store-catalog.create") ?? false }
+    private var canManageCategories: Bool {
+        access.map { $0.can("store-catalog.create") || $0.can("store-catalog.edit") || $0.can("store-catalog.delete") } ?? false
+    }
 
     var body: some View {
         Group {
@@ -214,8 +220,16 @@ struct CatalogScreen: View {
             }
         }
         .background(Theme.background)
+        // Новый товар — полной карточкой и с точкой-магазином: без точки
+        // сервер товар не заводит (прежний короткий лист точку не спрашивал).
         .sheet(isPresented: $isAdding) {
-            AddItemSheet(isConsumable: false) { await store?.load() }
+            CatalogItemSheet(item: nil) { await store?.load() }
+        }
+        .sheet(item: $editing) { item in
+            CatalogItemSheet(item: item) { await store?.load() }
+        }
+        .sheet(isPresented: $showsCategories) {
+            CatalogCategoriesSheet { await store?.load() }
         }
         .navigationTitle("Каталог товаров")
         .searchable(text: $search, prompt: "Название или штрихкод")
@@ -226,10 +240,22 @@ struct CatalogScreen: View {
                 }
             }
             ToolbarItem(placement: .primaryAction) {
-                Toggle(isOn: $onlyMissing) {
-                    Label("Только отсутствующие", systemImage: "tray")
+                Menu {
+                    Toggle(isOn: $onlyMissing) {
+                        Label("Только отсутствующие", systemImage: "tray")
+                    }
+                    Toggle(isOn: $showsArchive) {
+                        Label("Архив", systemImage: "archivebox")
+                    }
+                    if canManageCategories {
+                        Divider()
+                        Button { showsCategories = true } label: {
+                            Label("Категории", systemImage: "folder")
+                        }
+                    }
+                } label: {
+                    Image(systemName: onlyMissing || showsArchive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
                 }
-                .toggleStyle(.button)
             }
             LogoutToolbarItem()
         }
@@ -238,6 +264,15 @@ struct CatalogScreen: View {
                 let created = CatalogStore(api: api)
                 store = created
                 await created.load()
+                #if DEBUG
+                // Снимки экрана: `-ordaCatalogOpen new|first|categories`.
+                switch UserDefaults.standard.string(forKey: "ordaCatalogOpen") {
+                case "new": isAdding = true
+                case "first": editing = created.items?.first
+                case "categories": showsCategories = true
+                default: break
+                }
+                #endif
             }
         }
         .refreshable { await store?.load() }
@@ -258,13 +293,17 @@ struct CatalogScreen: View {
         } else {
             ScrollView {
                 VStack(spacing: Spacing.lg) {
-                    summary(items)
+                    summary(items.filter(\.isActive))
 
                     LazyVStack(spacing: 0) {
                         ForEach(Array(rows.enumerated()), id: \.element.id) { index, item in
                             if index > 0 { PlainRowDivider(inset: 56) }
-                            CatalogRowView(item: item)
-                                .padding(.vertical, Spacing.sm)
+                            Button { editing = item } label: {
+                                CatalogRowView(item: item)
+                                    .padding(.vertical, Spacing.sm)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.pressable)
                         }
                     }
                     .padding(.horizontal, Spacing.md)
@@ -295,7 +334,9 @@ struct CatalogScreen: View {
     }
 
     private func filtered(_ items: [CatalogItem]) -> [CatalogItem] {
-        var result = items
+        // Архив — отдельно: скрытые товары не мешают в основном списке,
+        // но их можно найти и вернуть.
+        var result = items.filter { $0.isActive != showsArchive }
         if onlyMissing { result = result.filter(\.isOutOfStock) }
         guard !search.isEmpty else { return result }
         return result.filter {

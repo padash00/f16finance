@@ -80,17 +80,34 @@ public struct CatalogItem: Decodable, Sendable, Identifiable, Hashable {
     public let warehouseQuantity: Double
     public let showcaseQuantity: Double
     public let isActive: Bool
+    // Поля карточки для правки. Правка на сервере — полная замена, поэтому
+    // всё, чего нет в форме, уходит обратно как было.
+    public let categoryID: String?
+    public let companyID: String?
+    public let purchasePrice: Double?
+    public let notes: String?
+    public let itemType: String
+    public let lowStockThreshold: Double?
+    public let requiresExpiry: Bool
+    public let imageURL: String?
 
     /// Заведена, но нигде не лежит. На складе такие позиции копятся годами.
     public var isOutOfStock: Bool { catalogQuantity <= 0 }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, unit, barcode, category
+        case id, name, unit, barcode, category, notes
         case salePrice = "sale_price"
         case catalogQuantity = "catalog_qty"
         case warehouseQuantity = "warehouse_qty"
         case showcaseQuantity = "showcase_qty"
         case isActive = "is_active"
+        case categoryID = "category_id"
+        case companyID = "company_id"
+        case purchasePrice = "default_purchase_price"
+        case itemType = "item_type"
+        case lowStockThreshold = "low_stock_threshold"
+        case requiresExpiry = "requires_expiry"
+        case imageURL = "image_url"
     }
 
     private struct CategoryRef: Decodable { let name: String? }
@@ -107,5 +124,13 @@ public struct CatalogItem: Decodable, Sendable, Identifiable, Hashable {
         warehouseQuantity = try c.decodeIfPresent(Double.self, forKey: .warehouseQuantity) ?? 0
         showcaseQuantity = try c.decodeIfPresent(Double.self, forKey: .showcaseQuantity) ?? 0
         isActive = try c.decodeIfPresent(Bool.self, forKey: .isActive) ?? true
+        categoryID = try c.decodeFlexibleString(forKey: .categoryID)
+        companyID = try c.decodeFlexibleString(forKey: .companyID)
+        purchasePrice = try? c.decodeIfPresent(Double.self, forKey: .purchasePrice)
+        notes = try c.decodeFlexibleString(forKey: .notes)
+        itemType = try c.decodeFlexibleString(forKey: .itemType) ?? "product"
+        lowStockThreshold = try? c.decodeIfPresent(Double.self, forKey: .lowStockThreshold)
+        requiresExpiry = (try? c.decodeIfPresent(Bool.self, forKey: .requiresExpiry)) ?? false
+        imageURL = try c.decodeFlexibleString(forKey: .imageURL)
     }
 }
