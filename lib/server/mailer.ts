@@ -125,18 +125,39 @@ export async function sendLeadRequestEmail(payload: LeadRequestPayload) {
   })
 }
 
+/**
+ * Адрес из SMTP_FROM, который бывает и «x@y.kz», и «Имя <x@y.kz>».
+ * Нужен, чтобы подставить своё отображаемое имя, не меняя сам адрес:
+ * Gmail и большинство SMTP переписывают From на авторизованный ящик,
+ * а вот имя оставляют.
+ */
+function senderAddress(from: string): string {
+  const match = /<([^>]+)>/.exec(from)
+  return (match ? match[1] : from).trim()
+}
+
+/** Имя в заголовке From: без кавычек и переводов строк — иначе ломается заголовок. */
+function safeDisplayName(name: string): string {
+  return name.replace(/["\r\n<>]/g, '').trim().slice(0, 80)
+}
+
 export async function sendSystemEmail(params: {
   to: string
   subject: string
   text: string
   html?: string
   replyTo?: string | null
+  /** Отображаемое имя отправителя, например название магазина в чеке. Адрес — из SMTP_FROM. */
+  fromName?: string | null
 }) {
   const transporter = getTransporter()
-  const { from } = getMailerConfig()
-  if (!from) {
+  const { from: configuredFrom } = getMailerConfig()
+  if (!configuredFrom) {
     throw new Error('SMTP sender is not configured')
   }
+
+  const name = params.fromName ? safeDisplayName(params.fromName) : ''
+  const from = name ? `"${name}" <${senderAddress(configuredFrom)}>` : configuredFrom
 
   await transporter.sendMail({
     from,

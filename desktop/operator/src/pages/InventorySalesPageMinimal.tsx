@@ -60,6 +60,7 @@ import { resolveRuntimeShift } from '@/lib/shift-runtime'
 import { getSalesLayout, type SalesLayout } from '@/lib/preferences'
 import { toastError, toastSuccess } from '@/lib/toast'
 import { formatMoney, localRef, parseMoney } from '@/lib/utils'
+import { ReceiptEmailBox } from '@/components/ReceiptEmailBox'
 import {
   deleteParkedCart,
   loadParkedCarts,
@@ -1938,6 +1939,17 @@ export default function InventorySalesPageMinimal({
                   className="h-[60vh] w-full border-0"
                 />
               </div>
+            </div>
+
+            {/* Чек на почту. Касса показывает чек сразу, с локальным id, а
+                настоящий id и onlineUrl подставляет, когда сервер ответил.
+                Офлайн их не будет до синхронизации — поле подождёт. */}
+            <div className="border-t border-border px-4 pt-4 sm:px-5">
+              <ReceiptEmailBox
+                config={config}
+                saleId={lastReceipt.saleId}
+                ready={Boolean(lastReceipt.onlineUrl)}
+              />
             </div>
 
             {/* Действия */}

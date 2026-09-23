@@ -242,6 +242,20 @@ export async function pollPointQrLogin(config: AppConfig, nonce: string): Promis
   throw new Error('Неизвестный ответ сервера при проверке QR-входа.')
 }
 
+/**
+ * Отправить чек продажи на почту покупателя.
+ * Сервер сам проверит адрес и повторит отправку, если SMTP в эту минуту
+ * отказал — поэтому status бывает 'sent' (ушло) или 'queued' (уйдёт позже).
+ * Работает только для проведённой онлайн-продажи: у офлайн-чека ещё нет id.
+ */
+export async function sendSaleReceiptEmail(
+  config: AppConfig,
+  saleId: string,
+  email: string,
+): Promise<{ ok: true; status: 'sent' | 'queued'; email: string; message: string }> {
+  return request(config, 'POST', '/api/point/sale-receipt-email', { saleId, email })
+}
+
 export async function changeOperatorPassword(
   config: AppConfig,
   username: string,

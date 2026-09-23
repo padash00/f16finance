@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { SendReceiptEmail } from '@/components/store/send-receipt-email'
 import {
   ArrowLeft,
   ClipboardCheck,
@@ -1060,6 +1061,17 @@ export default function OperatorPos({
               )}
               <div className="mt-2 flex justify-between border-t border-white/10 pt-2 text-base font-bold text-emerald-400"><span>Итого</span><span>{fmt(lastReceipt.total)} ₸</span></div>
             </div>
+            {/* Чек на почту. Касса нарисована тёмной вручную, а общий инпут
+                светлый — класс dark переключает его токены на тёмные. */}
+            {lastReceipt.saleId ? (
+              <div className="dark border-t border-white/10 px-3 pt-3">
+                <SendReceiptEmail
+                  saleId={lastReceipt.saleId}
+                  compact
+                  endpoint={isOwner ? '/api/pos/receipt-email' : '/api/operator/receipt-email'}
+                />
+              </div>
+            ) : null}
             <div className="flex gap-2 border-t border-white/10 p-3">
               <button onClick={() => printReceipt(lastReceipt)} className="flex-1 rounded-xl border border-white/20 py-3 text-sm font-medium text-gray-200 hover:bg-white/10">🖨 Печать</button>
               <button onClick={() => setLastReceipt(null)} className="flex-1 rounded-xl bg-emerald-600 py-3 text-sm font-semibold hover:bg-emerald-700">Новая продажа</button>

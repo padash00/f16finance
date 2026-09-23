@@ -8,6 +8,9 @@ export type SaleReceiptItem = { name: string; quantity: number; unitPrice: numbe
 
 export type SaleReceipt = {
   saleId: string
+  /** Компания продажи — чтобы роуты проверяли, что чек из своего скоупа. */
+  companyId: string
+  organizationId: string | null
   saleNumber: number
   shiftNumber: number
   cashier: string
@@ -81,6 +84,8 @@ export async function computeSaleReceipt(supabase: any, saleId: string): Promise
 
   return {
     saleId: String(sale.id),
+    companyId,
+    organizationId: (company as any)?.organization_id ? String((company as any).organization_id) : null,
     saleNumber,
     shiftNumber,
     cashier,

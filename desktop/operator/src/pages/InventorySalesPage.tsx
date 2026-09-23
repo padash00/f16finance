@@ -31,6 +31,7 @@ import { useCashlessLabels } from '@/lib/use-cashless-labels'
 import { toastError, toastSuccess } from '@/lib/toast'
 import { beep, buildShiftReportHtml } from '@/lib/receipt-html'
 import { formatDate, formatMoney, localRef, parseMoney } from '@/lib/utils'
+import { ReceiptEmailBox } from '@/components/ReceiptEmailBox'
 import type {
   AppConfig,
   BootstrapData,
@@ -1820,6 +1821,10 @@ export default function InventorySalesPage({
                   <p className="mt-2 text-xs text-muted-foreground">Комментарий: {receiptPreview.comment}</p>
                 ) : null}
               </div>
+
+              {/* Чек на почту. Здесь превью появляется только после ответа
+                  сервера, поэтому saleId уже настоящий. */}
+              <ReceiptEmailBox config={config} saleId={receiptPreview.saleId} ready={Boolean(receiptPreview.saleId)} />
 
               <div className="flex flex-wrap gap-3">
                 <Button className="flex-1 min-w-[180px]" onClick={() => printReceipt(receiptPreview, cashLabels.providerName)}>

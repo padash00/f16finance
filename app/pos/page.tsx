@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
+import { SendReceiptEmail } from '@/components/store/send-receipt-email'
 import OperatorPos from './OperatorPos'
 import {
   ArrowLeft,
@@ -249,6 +250,13 @@ function ReceiptModal({
             </div>
           </div>
         </div>
+
+        {/* Чек на почту — вне #receipt-print, чтобы поле не попало на бумагу */}
+        {receiptData.sale_id ? (
+          <div className="shrink-0 border-t border-gray-100 px-4 pt-3">
+            <SendReceiptEmail saleId={String(receiptData.sale_id)} compact />
+          </div>
+        ) : null}
 
         {/* Actions */}
         <div className="shrink-0 flex gap-3 p-4 border-t border-gray-100">

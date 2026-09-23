@@ -13,6 +13,7 @@ import { usePersistentState } from '@/lib/client/use-persistent-state'
 import { useApiCache } from '@/lib/client/use-api-cache'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { SendReceiptEmail } from '@/components/store/send-receipt-email'
 import { TableSkeleton } from '@/components/skeleton'
 import { SortableTh } from '@/components/ui/sortable-th'
 import { useTableSort } from '@/lib/client/use-table-sort'
@@ -281,15 +282,21 @@ function ReceiptDetailModal({ sale, onClose }: { sale: Sale; onClose: () => void
           </div>
         </div>
 
-        {/* Print button */}
-        {can('pos-receipts.print') && (
-          <div className="mt-4 flex justify-end">
-            <Button size="sm" onClick={printCheque} className="gap-2">
-              <Printer className="h-4 w-4" />
-              Печать
-            </Button>
+        {/* Копия чека покупателю: на почту и на печать */}
+        <div className="mt-4 space-y-3 border-t border-border pt-4">
+          <div>
+            <div className="mb-1.5 text-xs font-medium text-muted-foreground">Отправить покупателю</div>
+            <SendReceiptEmail saleId={sale.id} />
           </div>
-        )}
+          {can('pos-receipts.print') && (
+            <div className="flex justify-end">
+              <Button size="sm" onClick={printCheque} className="gap-2">
+                <Printer className="h-4 w-4" />
+                Печать
+              </Button>
+            </div>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   )
