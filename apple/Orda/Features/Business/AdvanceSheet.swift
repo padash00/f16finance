@@ -63,6 +63,7 @@ struct AdvanceSheet: View {
     @Environment(AuthStore.self) private var auth
 
     @State private var voidTarget: SalaryRow.Week.Payment?
+    @State private var voidAdjustmentTarget: SalaryRow.Week.Adjustment?
     @State private var isVoiding = false
     @State private var voidError: String?
 
@@ -112,6 +113,7 @@ struct AdvanceSheet: View {
                 }
 
                 paymentsCard
+                adjustmentsCard
 
                 Card {
                     VStack(alignment: .leading, spacing: Spacing.md) {
@@ -279,6 +281,20 @@ struct AdvanceSheet: View {
             } message: {
                 Text("Сумма вернётся в остаток к выплате. Деньги, отданные человеку, программа вернуть не может — это делаете вы.")
             }
+            .confirmationDialog(
+                "Отменить корректировку?",
+                isPresented: Binding(get: { voidAdjustmentTarget != nil }, set: { if !$0 { voidAdjustmentTarget = nil } }),
+                titleVisibility: .visible
+            ) {
+                if let adjustment = voidAdjustmentTarget {
+                    Button("Отменить: \(adjustment.kindLabel.lowercased()) \(Money.format(adjustment.amount))", role: .destructive) {
+                        Task { await voidAdjustment(adjustment) }
+                    }
+                }
+                Button("Оставить", role: .cancel) { voidAdjustmentTarget = nil }
+            } message: {
+                Text("Расчёт недели пересчитается. Запись останется в истории как отменённая.")
+            }
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -313,6 +329,93 @@ struct AdvanceSheet: View {
     }
 
     private var canVoidPayment: Bool { auth.resolver?.can("salary.void_payment") ?? false }
+    private var canVoidAdjustment: Bool { auth.resolver?.can("salary.void_adjustment") ?? false }
+
+    /// Премии, штрафы и долги недели — как на сайте, с отменой ошибочной.
+    @ViewBuilder
+    private var adjustmentsCard: some View {
+        let adjustments = row.week.adjustments
+        if !adjustments.isEmpty {
+            Card {
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    SectionHeader("Корректировки недели", subtitle: "\(adjustments.filter(\.isActive).count) действующих")
+                    ForEach(adjustments) { adjustment in
+                        adjustmentRow(adjustment)
+                        if adjustment.id != adjustments.last?.id { RowDivider() }
+                    }
+                }
+            }
+        }
+    }
+
+    private func adjustmentRow(_ adjustment: SalaryRow.Week.Adjustment) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 6) {
+                    Text(adjustment.kindLabel)
+                        .font(Typography.callout.weight(.medium))
+                        .foregroundStyle(adjustment.isActive ? (adjustment.isAddition ? Theme.positive : Theme.negative) : Theme.textDim)
+                    Text(DateFormatting.dayMonth(adjustment.date))
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.textDim)
+                }
+                if let comment = adjustment.comment, !comment.isEmpty {
+                    Text(comment)
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.textDim)
+                        .lineLimit(1)
+                }
+                if !adjustment.isActive {
+                    Text("отменена")
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.warning)
+                }
+            }
+
+            Spacer(minLength: Spacing.sm)
+
+            Text((adjustment.isAddition ? "+" : "−") + Money.format(adjustment.amount))
+                .font(Typography.callout.weight(.medium))
+                .monospacedDigit()
+                .strikethrough(!adjustment.isActive)
+                .foregroundStyle(adjustment.isActive ? Theme.text : Theme.textDim)
+
+            if adjustment.isActive && canVoidAdjustment {
+                Button {
+                    voidAdjustmentTarget = adjustment
+                } label: {
+                    Image(systemName: "arrow.uturn.backward")
+                        .foregroundStyle(Theme.warning)
+                }
+                .buttonStyle(.plain)
+                .disabled(isVoiding)
+                .accessibilityLabel("Отменить корректировку")
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func voidAdjustment(_ adjustment: SalaryRow.Week.Adjustment) async {
+        isVoiding = true
+        defer { isVoiding = false }
+        do {
+            try await BusinessService(api: api).voidSalaryAdjustment(
+                adjustmentID: adjustment.id,
+                operatorID: row.operatorID,
+                weekStart: weekStart
+            )
+            voidError = nil
+            Haptics.success()
+            await onDone()
+            dismiss()
+        } catch let error as APIError {
+            voidError = error.userMessage
+            Haptics.error()
+        } catch {
+            voidError = error.localizedDescription
+            Haptics.error()
+        }
+    }
 
     /// Выплаты недели.
     ///

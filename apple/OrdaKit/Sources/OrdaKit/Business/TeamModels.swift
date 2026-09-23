@@ -214,6 +214,50 @@ public struct SalaryRow: Decodable, Sendable, Identifiable, Hashable {
             }
         }
 
+        /// Корректировки недели поштучно: премии, штрафы, долги, авансы.
+        /// Нужны, чтобы отменить ошибочную — итог недели не говорит, какую.
+        public let adjustments: [Adjustment]
+
+        public struct Adjustment: Decodable, Sendable, Hashable, Identifiable {
+            public let id: String
+            public let date: String
+            public let amount: Double
+            public let kind: String
+            public let comment: String?
+            public let companyID: String?
+            public let status: String
+
+            public var isActive: Bool { status != "voided" }
+
+            public var kindLabel: String {
+                switch kind {
+                case "bonus": "Премия"
+                case "fine": "Штраф"
+                case "debt": "Долг"
+                case "advance": "Аванс"
+                default: "Корректировка"
+                }
+            }
+
+            /// Премия прибавляет к зарплате, остальное вычитается.
+            public var isAddition: Bool { kind == "bonus" }
+
+            private enum CodingKeys: String, CodingKey {
+                case id, date, amount, kind, comment, status, companyId
+            }
+
+            public init(from decoder: any Decoder) throws {
+                let c = try decoder.container(keyedBy: CodingKeys.self)
+                id = try c.decodeFlexibleString(forKey: .id) ?? ""
+                date = try c.decodeFlexibleString(forKey: .date) ?? ""
+                amount = try c.decodeFlexibleDouble(forKey: .amount) ?? 0
+                kind = try c.decodeFlexibleString(forKey: .kind) ?? ""
+                comment = try c.decodeFlexibleString(forKey: .comment)
+                companyID = try c.decodeFlexibleString(forKey: .companyId)
+                status = try c.decodeFlexibleString(forKey: .status) ?? "active"
+            }
+        }
+
         public var statusLabel: String {
             switch status {
             case "paid": "Выплачено"
@@ -232,6 +276,7 @@ public struct SalaryRow: Decodable, Sendable, Identifiable, Hashable {
             netAmount = try c.decodeFlexibleDouble(forKey: .netAmount) ?? 0
             paidAmount = try c.decodeFlexibleDouble(forKey: .paidAmount) ?? 0
             payments = (try? c.decode([Payment].self, forKey: .payments)) ?? []
+            adjustments = (try? c.decode([Adjustment].self, forKey: .adjustments)) ?? []
             remainingAmount = try c.decodeFlexibleDouble(forKey: .remainingAmount) ?? 0
             status = try c.decodeFlexibleString(forKey: .status) ?? "draft"
             shiftsCount = Int(try c.decodeFlexibleDouble(forKey: .shiftsCount) ?? 0)
@@ -239,7 +284,7 @@ public struct SalaryRow: Decodable, Sendable, Identifiable, Hashable {
 
         private enum CodingKeys: String, CodingKey {
             case grossAmount, bonusAmount, fineAmount, debtAmount, advanceAmount
-            case netAmount, paidAmount, remainingAmount, status, shiftsCount, payments
+            case netAmount, paidAmount, remainingAmount, status, shiftsCount, payments, adjustments
         }
     }
 

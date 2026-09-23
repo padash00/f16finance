@@ -52,3 +52,17 @@ struct LedgerEditTests {
         #expect(ExpenseEdit(row: try expense(#"{"id":"e2","date":"2026-09-20","cash_amount":10}"#)) == nil)
     }
 }
+
+@Suite("Корректировки зарплаты")
+struct SalaryAdjustmentDecodingTests {
+    @Test("Неделя отдаёт корректировки поштучно — с id для отмены")
+    func decodesAdjustments() throws {
+        let json = #"{"grossAmount":1000,"netAmount":900,"status":"draft","payments":[],"adjustments":[{"id":"a1","date":"2026-09-20","amount":500,"kind":"fine","comment":"опоздал","companyId":"c1","status":"active"},{"id":"a2","date":"2026-09-21","amount":300,"kind":"bonus","status":"voided"}]}"#
+        let week = try JSONDecoder().decode(SalaryRow.Week.self, from: Data(json.utf8))
+        #expect(week.adjustments.count == 2)
+        #expect(week.adjustments[0].kindLabel == "Штраф")
+        #expect(week.adjustments[0].companyID == "c1")
+        #expect(!week.adjustments[1].isActive)
+        #expect(week.adjustments[1].isAddition)
+    }
+}
