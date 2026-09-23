@@ -5,6 +5,7 @@ import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { renderReportHTML, PDF_OPTIONS } from '@/lib/reports/orda-report-template'
 import { buildProfitabilityContract, type BranchData } from '@/lib/reports/build-profitability-contract'
+import { forwardAuthHeaders } from '@/lib/server/forward-auth'
 
 // Vercel: PDF-генерация может занять 10-20 секунд (cold start chromium).
 export const maxDuration = 60
@@ -48,8 +49,7 @@ export async function GET(req: Request) {
       return json({ error: 'company_id, from, to обязательны' }, 400)
     }
 
-    // Данные точки строго из журнала (branch-report). Тянем server-side, пробрасывая cookies для авторизации.
-    const cookieHeader = req.headers.get('cookie') || ''
+    // Данные точки строго из журнала (branch-report). Тянем server-side, пробрасывая авторизацию (cookies сайта или Bearer приложения).
     const brUrl = new URL('/api/admin/profitability/branch-report', url.origin)
     brUrl.searchParams.set('company_id', companyId)
     brUrl.searchParams.set('from', monthFrom)
@@ -58,7 +58,7 @@ export async function GET(req: Request) {
     const includeExtra = url.searchParams.get('include_extra')
     if (includeExtra) brUrl.searchParams.set('include_extra', includeExtra)
     const brRes = await fetch(brUrl.toString(), {
-      headers: cookieHeader ? { cookie: cookieHeader } : {},
+      headers: forwardAuthHeaders(req),
       cache: 'no-store',
     })
     const brJson = await brRes.json().catch(() => null)

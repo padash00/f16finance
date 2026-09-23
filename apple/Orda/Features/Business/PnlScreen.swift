@@ -68,6 +68,7 @@ final class PnlStore {
 /// доходов и расходов, те же цифры, что на сайте и в PDF.
 struct PnlScreen: View {
     @Environment(\.api) private var api
+    @Environment(\.access) private var access
     @State private var store: PnlStore?
     /// Точка отчёта; пусто — все точки.
     @State private var companyID: String?
@@ -97,7 +98,12 @@ struct PnlScreen: View {
         }
         .background(Theme.background)
         .navigationTitle("ОПиУ")
-        .toolbar { LogoutToolbarItem() }
+        .toolbar {
+            if access?.can("profitability.export_pdf") == true, let store {
+                ToolbarItem(placement: .primaryAction) { pdfMenu(store) }
+            }
+            LogoutToolbarItem()
+        }
         .task {
             if store == nil {
                 let created = PnlStore(api: api)
@@ -107,6 +113,42 @@ struct PnlScreen: View {
         }
         .refreshable { await store?.load() }
         .onChange(of: ExtraCashPreference.shared.includeExtra) { _, _ in store?.reload() }
+    }
+
+    /// PDF — по одной точке, как на сайте: отчёт для партнёра точки, а не
+    /// сводка сети. Выбрана точка — сразу её PDF; иначе меню точек.
+    @ViewBuilder
+    private func pdfMenu(_ store: PnlStore) -> some View {
+        let companies = store.report?.companies ?? []
+        if let companyID, let company = companies.first(where: { $0.id == companyID }) {
+            pdfButton(store, company: company) { Image(systemName: "doc.richtext") }
+        } else if !companies.isEmpty {
+            Menu {
+                Section("PDF по точке") {
+                    ForEach(companies) { company in
+                        pdfButton(store, company: company) { Text(company.name) }
+                    }
+                }
+            } label: {
+                Image(systemName: "doc.richtext")
+            }
+            .accessibilityLabel("PDF отчёта по точке")
+        }
+    }
+
+    private func pdfButton<L: View>(_ store: PnlStore, company: PnlCompany, @ViewBuilder label: @escaping () -> L) -> some View {
+        ServerPdfButton(
+            fileName: "ОПиУ \(company.name) \(store.month)",
+            load: {
+                try await BusinessService(api: api).pnlPDF(PnlPdfQuery(
+                    companyID: company.id,
+                    fromMonth: store.month,
+                    toMonth: store.month,
+                    includeExtra: ExtraCashPreference.shared.includeExtra
+                ))
+            },
+            label: label
+        )
     }
 
     private var loading: some View {

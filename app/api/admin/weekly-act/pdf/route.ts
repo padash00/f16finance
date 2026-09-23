@@ -7,6 +7,7 @@ import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { renderWeeklyHTML, PDF_OPTIONS } from '@/lib/reports/orda-weekly-template'
 import { buildWeeklyContract, type WeeklyActData } from '@/lib/reports/build-weekly-contract'
+import { forwardAuthHeaders } from '@/lib/server/forward-auth'
 
 // Vercel: PDF-генерация может занять 10-20 секунд (cold start chromium).
 export const maxDuration = 60
@@ -44,13 +45,12 @@ export async function GET(req: Request) {
     const to = (url.searchParams.get('to') || '').trim()
     if (!from || !to) return json({ error: 'from, to обязательны' }, 400)
 
-    // Данные акта из журнала (weekly-act). Server-side с пробросом cookies для авторизации.
-    const cookieHeader = req.headers.get('cookie') || ''
+    // Данные акта из журнала (weekly-act). Server-side с пробросом авторизации (cookies сайта или Bearer приложения).
     const actUrl = new URL('/api/admin/weekly-act', url.origin)
     actUrl.searchParams.set('from', from)
     actUrl.searchParams.set('to', to)
     const actRes = await fetch(actUrl.toString(), {
-      headers: cookieHeader ? { cookie: cookieHeader } : {},
+      headers: forwardAuthHeaders(req),
       cache: 'no-store',
     })
     const actJson = await actRes.json().catch(() => null)
