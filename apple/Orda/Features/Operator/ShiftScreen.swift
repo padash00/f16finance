@@ -263,59 +263,58 @@ struct OpenShiftSheet: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: Spacing.lg) {
+            ScreenScroll {
+                // Сумма — крупно по центру, как ввод перевода в банке: это
+                // единственное, что здесь надо ввести.
+                VStack(spacing: Spacing.sm) {
+                    TintedIcon(systemName: "tray.full.fill", tint: Theme.brand, size: 56)
                     Text("Сколько денег в кассе на старте?")
-                        .font(Typography.title)
+                        .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(Theme.text)
-
-                    Text("Эта сумма — точка отсчёта. По ней при закрытии сойдётся касса.")
-                        .font(Typography.callout)
-                        .foregroundStyle(Theme.textMuted)
-
-                    HStack(spacing: Spacing.md) {
+                        .multilineTextAlignment(.center)
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
                         TextField("0", text: $cashText)
-                            .font(Typography.monospacedDigits(Typography.metric))
-                            .textFieldStyle(.plain)
+                            .font(.system(size: 44, weight: .bold, design: .rounded))
+                            .monospacedDigit()
+                            .multilineTextAlignment(.center)
+                            .fixedSize()
                             .focused($cashFocused)
                             #if os(iOS)
                             .keyboardType(.numberPad)
                             #endif
                         Text(Money.currencySymbol)
-                            .font(Typography.metric)
+                            .font(.system(size: 32, weight: .bold, design: .rounded))
                             .foregroundStyle(Theme.textDim)
                     }
-                    .padding(Spacing.lg)
-                    .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-
-                    Picker("Тип смены", selection: $kind) {
-                        Text("Дневная").tag(ShiftKind.day)
-                        Text("Ночная").tag(ShiftKind.night)
-                    }
-                    .pickerStyle(.segmented)
-
-                    if let error {
-                        Text(error)
-                            .font(Typography.callout)
-                            .foregroundStyle(Theme.negative)
-                    }
-
-                    Button {
-                        submit()
-                    } label: {
-                        if isSubmitting {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Text("Открыть смену")
-                        }
-                    }
-                    .buttonStyle(PrimaryButtonStyle(tint: Theme.accent(for: .operator)))
-                    .disabled(isSubmitting || parsedCash == nil)
+                    .padding(.vertical, Spacing.sm)
+                    Text("Эта сумма — точка отсчёта. По ней при закрытии сойдётся касса.")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Theme.textDim)
+                        .multilineTextAlignment(.center)
                 }
-                .padding(Spacing.lg)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, Spacing.lg)
+
+                LedgerEditForm.section("Смена") {
+                    PillSegment(
+                        options: [(ShiftKind.day, "Дневная"), (ShiftKind.night, "Ночная")],
+                        selection: $kind
+                    )
+                    .padding(.vertical, Spacing.md)
+                }
+
+                LedgerEditForm.saveButton(
+                    title: "Открыть смену",
+                    isSaving: isSubmitting,
+                    problem: parsedCash == nil ? "Введите сумму в кассе — даже если там ноль" : nil,
+                    error: error
+                ) { submit() }
             }
             .background(Theme.background)
             .navigationTitle("Открытие смены")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Отмена") { dismiss() }
@@ -379,119 +378,87 @@ struct CloseShiftSheet: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: Spacing.lg) {
-                    // Ожидаемые суммы показываем рядом с полями: расхождение
-                    // должно быть видно до отправки, а не в отчёте наутро.
-                    Card {
-                        VStack(alignment: .leading, spacing: Spacing.sm) {
-                            Text("Ожидается по системе")
-                                .font(Typography.label)
-                                .foregroundStyle(Theme.textDim)
-                            row("Наличные", Money.format(store.totals.expectedCash))
-                            row("Kaspi", Money.format(store.totals.expectedKaspi))
-                        }
-                    }
+            ScreenScroll {
+                summary
 
-                    // Купюры и мелочь врозь — как в программе на точке.
-                    // Слитая сумма мешает: мелочь остаётся в кассе на размен,
-                    // а в отчёт по-хорошему идут купюры.
-                    amountField("Купюры в кассе", text: $cashText)
-                    amountField("Мелочь", text: $coinsText)
-
-                    amountField(isNight ? "Kaspi всего за смену" : "Kaspi за смену", text: $kaspiText)
-
-                    if isNight {
-                        amountField("Из них до 00:00", text: $kaspiBeforeText)
-                        // Ночная выручка делится между двумя календарными
-                        // днями: без разделения весь Kaspi ложится на дату
-                        // закрытия, и день по отчёту не сходится с кассой.
-                        Text("Остальное — после полуночи: \(Money.format(kaspiAfter)). Так же считает программа на точке и дневной отчёт Kaspi.")
-                            .font(Typography.caption)
-                            .foregroundStyle(Theme.textDim)
-                    }
-
-                    amountField("Kaspi онлайн", text: $kaspiOnlineText)
-
-                    // Долги, старт кассы и wipon — то же, что спрашивает
-                    // программа на точке. Без них «итог» не сходится с тем,
-                    // что реально в ящике.
-                    amountField("Долги за смену", text: $debtsText)
-                    amountField("Старт кассы", text: $startCashText)
-                    amountField("Wipon", text: $wiponText)
-
-                    Card {
-                        VStack(spacing: Spacing.sm) {
-                            row("Наличными в кассе", Money.format(parse(cashText) + parse(coinsText)))
-                            row("Безналично", Money.format(parse(kaspiText) + parse(kaspiOnlineText)))
-                            if parse(debtsText) > 0 {
-                                row("Долги", Money.format(parse(debtsText)))
-                            }
-                            if parse(startCashText) > 0 {
-                                row("Минус старт кассы", Money.format(-parse(startCashText)))
-                            }
-                            if parse(wiponText) > 0 {
-                                row("Минус wipon", Money.format(-parse(wiponText)))
-                            }
-                            RowDivider()
-                            StatRow("Итог по факту", value: Money.format(reportTotal), emphasized: true)
-                        }
-                    }
-
-                    if let difference = cashDifference, abs(difference) >= 1 {
-                        Label(
-                            difference > 0
-                                ? "Излишек \(Money.format(difference))"
-                                : "Недостача \(Money.format(abs(difference)))",
-                            systemImage: difference > 0 ? "arrow.up.circle" : "arrow.down.circle"
-                        )
-                        .font(Typography.callout.weight(.semibold))
-                        .foregroundStyle(difference > 0 ? Theme.warning : Theme.negative)
-                    }
-
-                    TextField("Комментарий (необязательно)", text: $notes, axis: .vertical)
-                        .textFieldStyle(.plain)
-                        .lineLimit(2...4)
-                        .padding(Spacing.md)
-                        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-
-                    if !store.blockingChecklists.isEmpty {
-                        Card(accent: Theme.warning) {
-                            VStack(alignment: .leading, spacing: Spacing.sm) {
-                                Text("Сначала завершите чек-листы")
-                                    .font(Typography.callout.weight(.semibold))
-                                    .foregroundStyle(Theme.warning)
-                                ForEach(store.blockingChecklists) { template in
-                                    Text("• \(template.title)")
-                                        .font(Typography.caption)
-                                        .foregroundStyle(Theme.textMuted)
-                                }
-                            }
-                        }
-                    }
-
-                    if let error {
-                        Text(error)
-                            .font(Typography.callout)
-                            .foregroundStyle(Theme.negative)
-                    }
-
-                    Button {
-                        submit()
-                    } label: {
-                        if isSubmitting {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Text("Закрыть смену")
-                        }
-                    }
-                    .buttonStyle(PrimaryButtonStyle(tint: Theme.accent(for: .operator)))
-                    .disabled(isSubmitting || !store.blockingChecklists.isEmpty)
+                LedgerEditForm.section("Наличные") {
+                    // Купюры и мелочь врозь — как в программе на точке:
+                    // мелочь остаётся в кассе на размен.
+                    LedgerEditForm.amountRow("Купюры", icon: "banknote.fill", text: $cashText)
+                    LedgerEditForm.divider
+                    LedgerEditForm.amountRow("Мелочь", icon: "centsign.circle.fill", text: $coinsText)
+                    LedgerEditForm.divider
+                    expectedRow("По системе", store.totals.expectedCash)
                 }
-                .padding(Spacing.lg)
+
+                LedgerEditForm.section("Kaspi") {
+                    LedgerEditForm.amountRow(isNight ? "Всего за смену" : "За смену", icon: "qrcode", text: $kaspiText)
+                    if isNight {
+                        LedgerEditForm.divider
+                        LedgerEditForm.amountRow("Из них до 00:00", icon: "moon.fill", text: $kaspiBeforeText)
+                    }
+                    LedgerEditForm.divider
+                    LedgerEditForm.amountRow("Онлайн", icon: "globe", text: $kaspiOnlineText)
+                    LedgerEditForm.divider
+                    expectedRow("По системе", store.totals.expectedKaspi)
+                }
+                if isNight {
+                    // Ночная выручка делится между двумя календарными днями:
+                    // без разделения весь Kaspi ложится на дату закрытия.
+                    Text("После полуночи: \(Money.format(kaspiAfter)). Так же считает программа на точке и дневной отчёт Kaspi.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.textDim)
+                        .padding(.horizontal, Spacing.xs)
+                }
+
+                // Долги, старт кассы и wipon — то же, что спрашивает программа
+                // на точке. Без них итог не сходится с тем, что в ящике.
+                LedgerEditForm.section("Поправки") {
+                    LedgerEditForm.amountRow("Долги за смену", icon: "person.crop.circle.badge.exclamationmark", text: $debtsText)
+                    LedgerEditForm.divider
+                    LedgerEditForm.amountRow("Старт кассы", icon: "tray.full.fill", text: $startCashText)
+                    LedgerEditForm.divider
+                    LedgerEditForm.amountRow("Wipon", icon: "percent", text: $wiponText)
+                }
+
+                LedgerEditForm.section("Комментарий") {
+                    TextField("необязательно", text: $notes, axis: .vertical)
+                        .lineLimit(2...4)
+                        .font(.system(size: 16))
+                        .padding(.vertical, 13)
+                }
+
+                if !store.blockingChecklists.isEmpty {
+                    HStack(alignment: .top, spacing: Spacing.md) {
+                        TintedIcon(systemName: "checklist.unchecked", tint: Theme.warning, size: 42)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Сначала завершите чек-листы")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(Theme.text)
+                            ForEach(store.blockingChecklists) { template in
+                                Text(template.title)
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(Theme.textDim)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(Spacing.lg)
+                    .background(Theme.warning.opacity(0.10), in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+                }
+
+                LedgerEditForm.saveButton(
+                    title: "Закрыть смену",
+                    isSaving: isSubmitting,
+                    problem: store.blockingChecklists.isEmpty ? nil : "Смену закроете после чек-листов",
+                    error: error
+                ) { submit() }
             }
             .background(Theme.background)
             .navigationTitle("Закрытие смены")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Отмена") { dismiss() }
@@ -505,6 +472,76 @@ struct CloseShiftSheet: View {
                 }
             }
         }
+    }
+
+    /// Итог крупно сверху и расхождение по наличным — видно до отправки, а
+    /// не в отчёте наутро.
+    private var summary: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Итог по факту")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.white.opacity(0.85))
+            Text(Money.format(reportTotal))
+                .font(.system(size: 38, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .contentTransition(.numericText())
+                .animation(Motion.value, value: reportTotal)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .padding(.top, Spacing.xs)
+            HStack(spacing: Spacing.xl) {
+                summaryStat("Наличными", Money.format(parse(cashText) + parse(coinsText)))
+                summaryStat("Безналично", Money.format(parse(kaspiText) + parse(kaspiOnlineText)))
+            }
+            .padding(.top, Spacing.md)
+            if let difference = cashDifference, abs(difference) >= 1 {
+                Label(
+                    difference > 0 ? "Излишек \(Money.format(difference))" : "Недостача \(Money.format(abs(difference)))",
+                    systemImage: difference > 0 ? "arrow.up.circle.fill" : "arrow.down.circle.fill"
+                )
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(difference > 0 ? Color(hex: 0xFBBF24) : Color(hex: 0xFCA5A5))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(.white.opacity(0.12), in: Capsule())
+                .padding(.top, Spacing.md)
+            }
+        }
+        .padding(Spacing.xl)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            LinearGradient(colors: Theme.heroGradient, startPoint: .topLeading, endPoint: .bottomTrailing),
+            in: RoundedRectangle(cornerRadius: Radius.xl, style: .continuous)
+        )
+    }
+
+    private func summaryStat(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.system(size: 13))
+                .foregroundStyle(.white.opacity(0.65))
+            Text(value)
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+        }
+    }
+
+    /// Сколько ждёт система — серой строкой под полями.
+    private func expectedRow(_ label: String, _ value: Double) -> some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 14))
+                .foregroundStyle(Theme.textDim)
+                .padding(.leading, 40)
+            Spacer()
+            Text(Money.format(value))
+                .font(.system(size: 14, weight: .medium))
+                .monospacedDigit()
+                .foregroundStyle(Theme.textDim)
+        }
+        .padding(.vertical, 11)
     }
 
     private func row(_ label: String, _ value: String) -> some View {

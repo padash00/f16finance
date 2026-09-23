@@ -353,6 +353,8 @@ enum LedgerEditForm {
             Text(title)
                 .font(.system(size: 16))
                 .foregroundStyle(Theme.text)
+                .lineLimit(1)
+                .fixedSize()
         }
     }
 

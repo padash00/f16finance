@@ -16,72 +16,85 @@ struct CheckoutSheet: View {
     @State private var customer: PointCustomer?
     @State private var isPickingCustomer = false
 
+    @State private var showsLines = false
+
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: Spacing.lg) {
-                    lines
-
-                    Card(accent: Theme.accent(for: .operator)) {
-                        HStack {
-                            Text("Итого")
-                                .font(Typography.title)
-                                .foregroundStyle(Theme.text)
-                            Spacer()
-                            Text(Money.format(store.cartTotal))
-                                .font(Typography.monospacedDigits(Typography.metric))
-                                .foregroundStyle(Theme.text)
+            ScreenScroll {
+                // Сумма к оплате — крупно, как в банке перед переводом.
+                VStack(spacing: 4) {
+                    Text("К оплате")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Theme.textDim)
+                    Text(Money.format(store.cartTotal))
+                        .font(.system(size: 44, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.text)
+                    Button {
+                        withAnimation(Motion.tap) { showsLines.toggle() }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text("\(store.cartCount) \(pluralize(store.cartCount, "позиция", "позиции", "позиций"))")
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 11, weight: .bold))
+                                .rotationEffect(.degrees(showsLines ? 180 : 0))
                         }
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Theme.brand)
                     }
+                    .buttonStyle(.plain)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, Spacing.md)
 
-                    customerCard
+                if showsLines { lines }
 
-                    Picker("Оплата", selection: $method) {
+                LedgerEditForm.section("Чем платят") {
+                    HStack(spacing: Spacing.sm) {
                         ForEach(PaymentMethod.allCases, id: \.self) { option in
-                            Text(option.label).tag(option)
+                            methodTile(option)
                         }
                     }
-                    .pickerStyle(.segmented)
-                    .onChange(of: method) { _, _ in prefillAmounts() }
+                    .padding(.vertical, Spacing.md)
 
                     if method == .mixed {
-                        amountField("Наличными", text: $cashText)
-                        amountField("Kaspi", text: $kaspiText)
-
-                        let entered = parse(cashText) + parse(kaspiText)
-                        if abs(entered - store.cartTotal) >= 1 {
-                            Text(
-                                entered < store.cartTotal
-                                    ? "Не хватает \(Money.format(store.cartTotal - entered))"
-                                    : "Введено больше суммы чека на \(Money.format(entered - store.cartTotal))"
-                            )
-                            .font(Typography.callout)
-                            .foregroundStyle(Theme.warning)
-                        }
+                        LedgerEditForm.divider
+                        LedgerEditForm.amountRow("Наличными", icon: "banknote.fill", text: $cashText)
+                        LedgerEditForm.divider
+                        LedgerEditForm.amountRow("Kaspi", icon: "qrcode", text: $kaspiText)
                     }
-
-                    if let error {
-                        Text(error)
-                            .font(Typography.callout)
-                            .foregroundStyle(Theme.negative)
-                    }
-
-                    Button {
-                        submit()
-                    } label: {
-                        if isSubmitting {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Text("Провести продажу")
-                        }
-                    }
-                    .buttonStyle(PrimaryButtonStyle(tint: Theme.accent(for: .operator)))
-                    .disabled(isSubmitting)
                 }
-                .padding(Spacing.lg)
+                .onChange(of: method) { _, _ in prefillAmounts() }
+
+                if method == .mixed {
+                    let entered = parse(cashText) + parse(kaspiText)
+                    if abs(entered - store.cartTotal) >= 1 {
+                        Label(
+                            entered < store.cartTotal
+                                ? "Не хватает \(Money.format(store.cartTotal - entered))"
+                                : "Больше суммы чека на \(Money.format(entered - store.cartTotal))",
+                            systemImage: "exclamationmark.circle.fill"
+                        )
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Theme.warning)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+
+                customerCard
+
+                LedgerEditForm.saveButton(
+                    title: "Провести продажу",
+                    isSaving: isSubmitting,
+                    problem: nil,
+                    error: error
+                ) { submit() }
             }
             .background(Theme.background)
             .navigationTitle("Оплата")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Назад") { dismiss() }
@@ -91,46 +104,62 @@ struct CheckoutSheet: View {
         .onAppear(perform: prefillAmounts)
     }
 
+    /// Способ оплаты — крупной плиткой: у стойки жмут не глядя, и мелкий
+    /// переключатель промахивали.
+    private func methodTile(_ option: PaymentMethod) -> some View {
+        let isOn = method == option
+        let icon = switch option {
+        case .cash: "banknote.fill"
+        case .kaspi: "qrcode"
+        case .mixed: "square.split.2x1.fill"
+        }
+        return Button {
+            method = option
+            Haptics.tap()
+        } label: {
+            VStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 20, weight: .semibold))
+                Text(option.label)
+                    .font(.system(size: 14, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .foregroundStyle(isOn ? .white : Theme.text)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(isOn ? Theme.brand : Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.pressable)
+    }
+
+    /// Состав чека — строками, для сверки. Править его — в самом чеке.
     private var lines: some View {
-        Card {
-            VStack(spacing: Spacing.md) {
-                ForEach(store.cart) { line in
-                    HStack(spacing: Spacing.md) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(line.name)
-                                .font(Typography.body)
-                                .foregroundStyle(Theme.text)
-                                .lineLimit(1)
-                            Text("\(Quantity.format(line.quantity)) × \(Money.format(line.unitPrice))")
-                                .font(Typography.caption)
-                                .foregroundStyle(Theme.textDim)
-                        }
-
-                        Spacer()
-
-                        Stepper(
-                            value: Binding(
-                                get: { line.quantity },
-                                set: { store.setQuantity($0, for: line.itemID) }
-                            ),
-                            in: 0...9999,
-                            step: 1
-                        ) {
-                            Text(Money.format(line.total))
-                                .font(Typography.callout.weight(.semibold))
-                                .monospacedDigit()
-                                .foregroundStyle(Theme.text)
-                        }
-                        .labelsHidden()
-
-                        Text(Money.format(line.total))
-                            .font(Typography.callout.weight(.semibold))
-                            .monospacedDigit()
-                            .foregroundStyle(Theme.text)
-                    }
+        VStack(spacing: 0) {
+            ForEach(Array(store.cart.enumerated()), id: \.element.id) { index, line in
+                if index > 0 { Rectangle().fill(Theme.borderSoft).frame(height: 1) }
+                HStack {
+                    Text(line.name)
+                        .font(.system(size: 15))
+                        .foregroundStyle(Theme.text)
+                        .lineLimit(1)
+                    Spacer(minLength: Spacing.sm)
+                    Text("\(Quantity.format(line.quantity)) × \(Money.format(line.unitPrice))")
+                        .font(.system(size: 13))
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.textDim)
+                    Text(Money.format(line.total))
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.text)
+                        .frame(minWidth: 70, alignment: .trailing)
                 }
+                .padding(.vertical, 10)
             }
         }
+        .padding(.horizontal, Spacing.lg)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+        .transition(.opacity)
     }
 
     private func amountField(_ title: String, text: Binding<String>) -> some View {
@@ -180,7 +209,7 @@ struct CheckoutSheet: View {
     /// приложение о клиентах не знало вовсе. Бонусы за такую продажу не
     /// начислялись — и человек про них спрашивал уже у стойки.
     private var customerCard: some View {
-        Card {
+        LedgerEditForm.section("Клиент") {
             VStack(alignment: .leading, spacing: Spacing.sm) {
                 if let customer {
                     HStack(spacing: Spacing.md) {
@@ -225,6 +254,7 @@ struct CheckoutSheet: View {
                     .buttonStyle(.pressable)
                 }
             }
+            .padding(.vertical, 13)
         }
         .sheet(isPresented: $isPickingCustomer) {
             CustomerPickerSheet { picked in

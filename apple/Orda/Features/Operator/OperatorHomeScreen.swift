@@ -28,6 +28,9 @@ struct OperatorHomeScreen: View {
     /// Куда ушли с главной. Значением, а не стопкой адресов: стек вкладки
     /// принадлежит корню, и своя стопка здесь его бы не видела.
     @State private var route: OperatorHomeRoute?
+    #if DEBUG
+    @State private var debugSheet: DebugSheet?
+    #endif
 
     var body: some View {
         ScrollView {
@@ -73,6 +76,24 @@ struct OperatorHomeScreen: View {
         }
         .sheet(isPresented: $showOpenSheet) { OpenShiftSheet() }
         .sheet(isPresented: $showCloseSheet) { CloseShiftSheet() }
+        #if DEBUG
+        .sheet(item: $debugSheet) { kind in
+            if kind.id == "checkout" { CheckoutSheet() } else { CartSheet {} }
+        }
+        .task {
+            // Снимки экрана: `-ordaOperatorSheet open|close|checkout|cart`.
+            guard let kind = UserDefaults.standard.string(forKey: "ordaOperatorSheet") else { return }
+            try? await Task.sleep(for: .seconds(1))
+            switch kind {
+            case "open": showOpenSheet = true
+            case "close": showCloseSheet = true
+            default:
+                if store.catalog.isEmpty { await store.loadCatalog() }
+                for item in store.catalog.filter(\.isInStock).prefix(3) { store.add(item) }
+                debugSheet = DebugSheet(id: kind)
+            }
+        }
+        #endif
         .task {
             if store.hasOpenShift, sellsGoods, store.recentSales.isEmpty { await store.loadCatalog() }
         }
@@ -592,3 +613,7 @@ func pluralize(_ count: Int, _ one: String, _ few: String, _ many: String) -> St
     default: return many
     }
 }
+
+#if DEBUG
+struct DebugSheet: Identifiable { let id: String }
+#endif
