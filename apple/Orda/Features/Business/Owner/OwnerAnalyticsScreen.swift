@@ -93,6 +93,18 @@ struct OwnerAnalyticsScreen: View {
                     .background(analytics.filter.isAllCompanies ? AnyShapeStyle(Theme.surface) : AnyShapeStyle(Theme.brand), in: Capsule())
                 }
                 .buttonStyle(.pressable)
+                if !analytics.filter.isAllCompanies {
+                    Button {
+                        analytics.filter.companyIDs = []
+                        Haptics.tap()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 22))
+                            .foregroundStyle(Theme.textDim)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Показать все точки")
+                }
             }
         }
         .padding(.top, Spacing.md)

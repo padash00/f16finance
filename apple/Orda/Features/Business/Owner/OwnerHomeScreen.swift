@@ -173,28 +173,47 @@ struct OwnerHomeScreen: View {
                 ProgressView().controlSize(.small)
             }
 
-            Button {
-                showsCompanies = true
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "building.2.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Theme.brand)
-                    Text(analytics.companiesTitle)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Theme.text)
-                        .lineLimit(1)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(Theme.textDim)
+            // Выбрана не вся сеть — капсула синяя и с крестиком: цифры на
+            // экране не за всё, и это должно бросаться в глаза.
+            let filtered = !analytics.filter.companyIDs.isEmpty
+            HStack(spacing: 6) {
+                Button {
+                    showsCompanies = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "building.2.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(filtered ? .white : Theme.brand)
+                        Text(analytics.companiesTitle)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(filtered ? .white : Theme.text)
+                            .lineLimit(1)
+                        if !filtered {
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(Theme.textDim)
+                        }
+                    }
                 }
-                .padding(.horizontal, 12)
-                .frame(height: 36)
-                .background(Theme.surface, in: Capsule())
-                .overlay(Capsule().strokeBorder(Theme.border, lineWidth: 1))
+                .buttonStyle(.plain)
+                .accessibilityLabel("Точки: \(analytics.companiesTitle)")
+                if filtered {
+                    Button {
+                        analytics.filter.companyIDs = []
+                        Haptics.tap()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 15))
+                            .foregroundStyle(.white.opacity(0.85))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Показать все точки")
+                }
             }
-            .buttonStyle(.pressable)
-            .accessibilityLabel("Точки: \(analytics.companiesTitle)")
+            .padding(.horizontal, 12)
+            .frame(height: 36)
+            .background(filtered ? Theme.brand : Theme.surface, in: Capsule())
+            .overlay(Capsule().strokeBorder(filtered ? .clear : Theme.border, lineWidth: 1))
         }
         .padding(.top, Spacing.md)
     }

@@ -35,7 +35,12 @@ final class AnalyticsStore {
     init(api: APIClient, organizationID: String?) {
         self.service = OwnerAnalyticsService(api: api)
         self.storageKey = "ownerAnalytics.filter.\(organizationID ?? "none")"
-        self.filter = Self.restore(key: storageKey) ?? AnalyticsFilter()
+        // Период переживает перезапуск, выбор точек — нет. Один раз нажали на
+        // строку точки на главной — и приложение неделями открывалось «по
+        // одной Арене», а итоги расходились с сайтом без видимой причины.
+        var restored = Self.restore(key: storageKey) ?? AnalyticsFilter()
+        restored.companyIDs = []
+        self.filter = restored
     }
 
     var bounds: (from: String, to: String) { filter.period.bounds() }
