@@ -1064,11 +1064,11 @@ struct AccessScreen: View {
                 HStack(spacing: Spacing.md) {
                     SummaryPill(title: "Ролей", value: "\(overview.roles.count)", tint: Theme.textMuted)
                     SummaryPill(
-                        title: "Опасных прав выдано",
+                        title: "Опасных прав",
                         value: "\(overview.totalDangerous)",
                         tint: overview.totalDangerous > 0 ? Theme.warning : Theme.positive
                     )
-                    SummaryPill(title: "Прав снято", value: "\(overview.totalRevoked)", tint: Theme.info)
+                    SummaryPill(title: "Снято прав", value: "\(overview.totalRevoked)", tint: Theme.info)
                 }
                 .padding(.horizontal, Spacing.lg)
                 .padding(.vertical, Spacing.md)

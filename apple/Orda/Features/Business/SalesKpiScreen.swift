@@ -21,6 +21,10 @@ struct SalesKpiScreen: View {
     @State private var loadError: APIError?
     @State private var isLoading = false
     @State private var noStore = false
+    /// Список магазинов пришёл. До этого экран не пустой, а грузится: раньше
+    /// между открытием и ответом под названием месяца было пусто, а если
+    /// магазинов не оказалось вовсе — пусто навсегда.
+    @State private var storesLoaded = false
     @State private var expanded: Set<String> = []
     /// Разбор по продавцам — вторая половина раздела. На сайте это отдельная
     /// вкладка, и данные приходят тем же запросом, что и список магазинов:
@@ -52,13 +56,13 @@ struct SalesKpiScreen: View {
 
             if let loadError {
                 ErrorStateView(error: loadError) { Task { await reload() } }
-            } else if noStore {
+            } else if noStore || (storesLoaded && selectedStore == nil) {
                 WideEmptyState(
                     icon: "storefront",
                     title: "Магазина нет",
                     message: "Модуль считает работу за прилавком. Отметьте точку как магазин в настройках — и оценка появится."
                 )
-            } else if isLoading && payout == nil {
+            } else if payout == nil {
                 LoadingRows(count: 4)
             } else if let payout {
                 PillSegment(options: Section.allCases.map { ($0, $0.label) }, selection: $section)
@@ -646,6 +650,7 @@ struct SalesKpiScreen: View {
             stores = response.stores
             noStore = response.noStore
             if selectedStore == nil { selectedStore = response.stores.first }
+            storesLoaded = true
         } catch let error as APIError {
             loadError = error
         } catch {
@@ -698,6 +703,7 @@ struct SalesKpiScreen: View {
 
     private func reload() async {
         stores = []
+        storesLoaded = false
         await loadStores()
         await loadPayout()
     }

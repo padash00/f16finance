@@ -254,6 +254,21 @@ struct PillSegment<Value: Hashable>: View {
     @Binding var selection: Value
 
     var body: some View {
+        // Влезают все подписи целиком — делим ширину поровну. Не влезают —
+        // пилюли по размеру подписи и прокрутка вбок. Раньше длинные подписи
+        // ужимались каждая по-своему: «Кому доплат…» рядом с крупным «Цели».
+        ViewThatFits(in: .horizontal) {
+            row(fill: true)
+            ScrollView(.horizontal, showsIndicators: false) {
+                row(fill: false)
+            }
+            .scrollClipDisabled()
+        }
+        .padding(4)
+        .background(Theme.surfaceRaised, in: Capsule())
+    }
+
+    private func row(fill: Bool) -> some View {
         HStack(spacing: 4) {
             ForEach(options, id: \.value) { option in
                 let isOn = option.value == selection
@@ -263,12 +278,10 @@ struct PillSegment<Value: Hashable>: View {
                     Text(option.title)
                         .font(.system(size: 14, weight: isOn ? .semibold : .medium))
                         .foregroundStyle(isOn ? Theme.text : Theme.textMuted)
-                        // Длинные подписи («Подтверждённые») не переносим по
-                        // буквам — ужимаем шрифт.
                         .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                        .padding(.horizontal, 4)
-                        .frame(maxWidth: .infinity)
+                        .fixedSize()
+                        .padding(.horizontal, fill ? 6 : 14)
+                        .frame(maxWidth: fill ? .infinity : nil)
                         .padding(.vertical, 9)
                         .background {
                             if isOn {
@@ -282,8 +295,6 @@ struct PillSegment<Value: Hashable>: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(4)
-        .background(Theme.surfaceRaised, in: Capsule())
     }
 }
 
