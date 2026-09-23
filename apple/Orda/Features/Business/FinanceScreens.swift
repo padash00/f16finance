@@ -1684,7 +1684,7 @@ final class WeeklyReportStore {
     ///
     /// `PayWeek` умеет шагать только неделями — отдельного «плюс шесть дней»
     /// там нет и заводить его ради одного места незачем.
-    private static func weekEnd(of weekStart: String) -> String {
+    static func weekEnd(of weekStart: String) -> String {
         guard let start = DateParsing.parseDateOnly(weekStart) else { return weekStart }
         let calendar = Calendar(identifier: .iso8601)
         let end = calendar.date(byAdding: .day, value: 6, to: start) ?? start
@@ -1737,6 +1737,7 @@ struct WeeklyReportScreen: View {
         .background(Theme.background)
         .navigationTitle("Недельный отчёт")
         .toolbar { LogoutToolbarItem() }
+        .weeklyActPdfExport(week: week, weekEnd: WeeklyReportStore.weekEnd(of: week))
         .task {
             if store == nil {
                 let created = WeeklyReportStore(api: api)

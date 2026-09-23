@@ -812,7 +812,7 @@ struct ReportsScreen: View {
             HStack(spacing: 0) {
                 pointStat("Расходы", Money.format(stat.expense), Theme.text)
                 pointStat("Прибыль", Money.format(stat.profit), stat.profit >= 0 ? Theme.positive : Theme.negative)
-                pointStat("Маржа", stat.margin.map { Percent.format($0) } ?? "—", Theme.text)
+                pointStat("Маржа", stat.margin.map { Percent.format($0 * 100) } ?? "—", Theme.text)
             }
             .padding(.leading, 52)
         }
