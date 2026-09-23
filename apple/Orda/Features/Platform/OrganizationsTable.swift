@@ -152,18 +152,48 @@ struct OrganizationsScreen: View {
         .refreshable { await store.load() }
     }
 
-    /// Телефон: карточки с переходом — таблица в 375 точек нечитаема.
+    /// Телефон: строки с переходом — таблица в 375 точек нечитаема.
+    /// Сначала те, кому нужен взгляд суперадмина (заморозка, просрочка), потом
+    /// все остальные — как «требует внимания» на главной владельца.
     private var cardList: some View {
-        ScrollView {
-            LazyVStack(spacing: Spacing.md) {
-                ForEach(store.filteredOrganizations) { organization in
-                    NavigationLink(value: OrganizationRoute(organization: organization)) {
-                        OrganizationCard(organization: organization)
-                    }
-                    .buttonStyle(.pressable)
+        let all = store.filteredOrganizations
+        let flagged = all.filter(OrganizationRow.needsAttention)
+        let rest = all.filter { !OrganizationRow.needsAttention($0) }
+        return ScrollView {
+            VStack(spacing: Spacing.lg) {
+                if !flagged.isEmpty {
+                    organizationSection("Требуют внимания", flagged, countColor: Theme.warning)
+                }
+                if !rest.isEmpty {
+                    organizationSection(flagged.isEmpty ? "Все организации" : "Остальные", rest, countColor: Theme.textDim)
                 }
             }
-            .padding(Spacing.lg)
+            .padding(.horizontal, Spacing.lg)
+            .padding(.top, Spacing.sm)
+            .padding(.bottom, Spacing.xxl)
+            .frame(maxWidth: 720)
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    private func organizationSection(_ title: String, _ organizations: [Organization], countColor: Color) -> some View {
+        OwnerSection(title) {
+            Text("\(organizations.count)")
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(countColor)
+        } content: {
+            LazyVStack(spacing: 0) {
+                ForEach(Array(organizations.enumerated()), id: \.element.id) { index, organization in
+                    if index > 0 {
+                        Rectangle().fill(Theme.borderSoft).frame(height: 1).padding(.leading, 52)
+                    }
+                    NavigationLink(value: OrganizationRoute(organization: organization)) {
+                        OrganizationRow(organization: organization)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
     }
 

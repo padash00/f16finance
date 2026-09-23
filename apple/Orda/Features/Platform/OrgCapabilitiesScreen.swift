@@ -29,19 +29,19 @@ struct OrgCapabilitiesScreen: View {
 
                 ForEach(filteredGroups, id: \.group.id) { entry in
                     Section {
-                        Card {
-                            VStack(spacing: Spacing.sm) {
-                                ForEach(Array(entry.capabilities.enumerated()), id: \.element.id) { index, capability in
-                                    if index > 0 { RowDivider() }
-                                    row(capability)
-                                }
+                        VStack(spacing: Spacing.sm) {
+                            ForEach(Array(entry.capabilities.enumerated()), id: \.element.id) { index, capability in
+                                if index > 0 { RowDivider() }
+                                row(capability)
                             }
                         }
+                        .padding(Spacing.lg)
+                        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
                     } header: {
                         HStack {
                             Text(entry.group.label)
-                                .font(Typography.label)
-                                .foregroundStyle(Theme.textDim)
+                                .font(.system(size: 17, weight: .bold, design: .rounded))
+                                .foregroundStyle(Theme.text)
                             Spacer()
                             Text("\(entry.capabilities.count)")
                                 .font(Typography.caption)
@@ -82,21 +82,14 @@ struct OrgCapabilitiesScreen: View {
 
     private var summaryCard: some View {
         let disabledCount = store.disabledCapabilities[organization.id]?.count ?? 0
-        return Card(accent: disabledCount > 0 ? Theme.warning : nil) {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                Text(organization.name)
-                    .font(Typography.title)
-                    .foregroundStyle(Theme.text)
-
-                Text("Выключенное здесь недоступно всем в организации, включая владельца.")
-                    .font(Typography.caption)
-                    .foregroundStyle(Theme.textMuted)
-
-                if disabledCount > 0 {
-                    StatusChip("\(disabledCount) \(pluralize(disabledCount, "действие выключено", "действия выключено", "действий выключено"))", kind: .warning)
-                }
-            }
-        }
+        return HeroSummary(
+            title: organization.name,
+            value: disabledCount > 0
+                ? "\(disabledCount) \(pluralize(disabledCount, "действие выключено", "действия выключено", "действий выключено"))"
+                : "Всё включено",
+            caption: "Выключенное здесь недоступно всем в организации, включая владельца.",
+            colors: disabledCount > 0 ? [Color(hex: 0xB45309), Color(hex: 0x92400E)] : Theme.heroGradient
+        )
     }
 
     private var filters: some View {
@@ -117,11 +110,12 @@ struct OrgCapabilitiesScreen: View {
                 }
             }
             .padding(Spacing.md)
-            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
 
-            Toggle("Только выключенные", isOn: $showOnlyDisabled)
-                .font(Typography.callout)
-                .tint(Theme.accent(for: .platform))
+            PillSegment(
+                options: [(false, "Все действия"), (true, "Только выключенные")],
+                selection: $showOnlyDisabled
+            )
         }
     }
 
@@ -159,7 +153,7 @@ struct OrgCapabilitiesScreen: View {
                     set: { enabled in toggle(capability, enabled: enabled) }
                 ))
                 .labelsHidden()
-                .tint(Theme.accent(for: .platform))
+                .tint(Theme.brand)
             }
         }
         .padding(.vertical, Spacing.xs)

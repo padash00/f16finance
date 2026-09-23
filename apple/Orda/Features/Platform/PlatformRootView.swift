@@ -70,7 +70,15 @@ struct PlatformRootView: View {
             // был в прошлый раз. Раньше выбор жил только в памяти: iOS
             // выгружала приложение, и оно открывалось во «Всей платформе» —
             // с другими вкладками, будто вернулся старый дизайн.
-            let wanted = LaunchOptions.requestedOrganization ?? savedOrganization
+            // `-ordaOrganization platform` (или `none`) — открыть «Всю
+            // платформу», не поднимая сохранённую организацию.
+            let requested = LaunchOptions.requestedOrganization
+            let forcesPlatform = requested == "platform" || requested == "none"
+            if forcesPlatform {
+                if auth.organizationID != nil { await auth.setOrganization(nil) }
+                savedOrganization = nil
+            }
+            let wanted = forcesPlatform ? nil : (requested ?? savedOrganization)
             if let wanted,
                let organization = platform.organizations.first(where: { $0.slug == wanted || $0.id == wanted }),
                auth.organizationID != organization.id {
@@ -183,11 +191,11 @@ struct PlatformRootView: View {
                 PlatformOverviewScreen()
                     .toolbar { OrganizationSwitcher() }
             }
-            .tabItem { Label("Платформа", systemImage: "chart.bar.doc.horizontal") }
+            .tabItem { Label("Платформа", systemImage: "building.columns.fill") }
             .tag(PlatformTab.platform)
 
             NavigationStack { OrganizationsScreen() }
-                .tabItem { Label("Организации", systemImage: "building.2") }
+                .tabItem { Label("Организации", systemImage: "building.2.fill") }
                 .badge(store?.attention.count ?? 0)
                 .tag(PlatformTab.organizations)
 
@@ -195,7 +203,7 @@ struct PlatformRootView: View {
                 companyHome
                     .toolbar { OrganizationSwitcher() }
             }
-            .tabItem { Label("Моя компания", systemImage: "square.grid.2x2.fill") }
+            .tabItem { Label("Моя компания", systemImage: "house.fill") }
             .tag(PlatformTab.company)
 
             // Та же плитка сервисов, что у владельца, — а не старый список.
@@ -206,7 +214,7 @@ struct PlatformRootView: View {
             .tag(PlatformTab.sections)
 
             NavigationStack { BusinessProfileScreen(resolver: resolver) }
-                .tabItem { Label("Профиль", systemImage: "person.crop.circle") }
+                .tabItem { Label("Профиль", systemImage: "person.crop.circle.fill") }
                 .tag(PlatformTab.profile)
         }
         .tint(Theme.accent(for: .platform))

@@ -75,7 +75,7 @@ struct OwnerTabs<Platform: View>: View {
         TabView(selection: $tab) {
             if hasPlatform {
                 NavigationStack { platform() }
-                    .tabItem { Label("Платформа", systemImage: "building.2.crop.circle") }
+                    .tabItem { Label("Платформа", systemImage: "building.columns.fill") }
                     .tag(Tab.platform)
             }
 
