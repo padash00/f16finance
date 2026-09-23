@@ -25,38 +25,36 @@ struct OperatorHomeScreen: View {
 
     @State private var showOpenSheet = false
     @State private var showCloseSheet = false
+    /// Куда ушли с главной. Значением, а не стопкой адресов: стек вкладки
+    /// принадлежит корню, и своя стопка здесь его бы не видела.
+    @State private var route: OperatorHomeRoute?
 
     var body: some View {
-        ScreenScroll {
-            // Баннер офлайна и состояние смены — всегда во всю ширину: это
-            // не «одна из карточек», а заголовок экрана.
-            if store.queuedSalesCount > 0 { offlineBanner }
-            shiftCard
-
-            // Две осмысленные колонки вместо потока: слева ход смены,
-            // справа то, что требует решения и денег. Поток из карточек
-            // разной высоты давал рваный край и пустые колонки.
-            // Две колонки — только когда левой есть что показать. График
-            // выручки и разбивка по оплатам это деньги смены, и на чужой смене
-            // их видеть нечего. Без них левая колонка оставалась пустой
-            // половиной экрана, а карточки жались к правому краю.
-            if store.isMyShift {
-                SplitDashboard {
-                    revenueChart
-                    paymentSplit
-                } side: {
-                    sideCards
+        ScrollView {
+            VStack(spacing: Spacing.lg) {
+                header
+                if store.queuedSalesCount > 0 { offlineBanner }
+                shiftHero
+                quickActions
+                attention
+                if store.isMyShift, !store.recentSales.isEmpty { shiftMoney }
+                weekCard
+                if let next = cabinet.overview?.nextShift, !store.hasOpenShift {
+                    nextShiftRow(next)
                 }
-            } else {
-                DashboardGrid { sideCards }
             }
-
-            // Быстрые действия внизу на большом экране: там есть боковая
-            // панель, и дублировать её плитками сверху незачем.
-            if surface.isCompact { quickActions }
+            .padding(.horizontal, Spacing.lg)
+            .padding(.bottom, Spacing.xxl)
+            .frame(maxWidth: 720)
+            .frame(maxWidth: .infinity)
         }
-        .navigationTitle(greeting)
-        .navigationDestination(for: OperatorHomeRoute.self) { route in
+        .background(Theme.background)
+        .navigationTitle("Смена")
+        #if os(iOS)
+        .toolbar(surface.isCompact ? .hidden : .visible, for: .navigationBar)
+        #endif
+        .toolbar { if !surface.isCompact { LogoutToolbarItem() } }
+        .navigationDestination(item: $route) { route in
             switch route {
             case .sale: SaleScreen()
             case .audit: AuditScreen()
@@ -66,10 +64,6 @@ struct OperatorHomeScreen: View {
             case .money: MoneyScreen()
             }
         }
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.large)
-        #endif
-        .toolbar { LogoutToolbarItem() }
         .refreshable {
             await store.loadShift()
             await cabinet.loadOverview()
@@ -93,108 +87,306 @@ struct OperatorHomeScreen: View {
         }
     }
 
-    /// То, что требует внимания, и деньги недели.
-    @ViewBuilder
-    private var sideCards: some View {
-        if needsAttention { attentionSection }
-        weekCard
-        if let next = cabinet.overview?.nextShift, !store.hasOpenShift {
-            nextShiftCard(next)
-        }
+    // ── Шапка ────────────────────────────────────────────────────────────────
+
+    private var fullName: String {
+        cabinet.overview?.operatorName ?? auth.role?.displayName ?? "Оператор"
+    }
+
+    /// Имя, а не фамилия: «Сарсенгазинова Али…» крупным заголовком не
+    /// помещалось и читалось как обрыв.
+    private var firstName: String {
+        let words = fullName.split(separator: " ").map(String.init)
+        return words.count > 1 ? words[1] : (words.first ?? fullName)
+    }
+
+    private var initials: String {
+        let letters = fullName.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined()
+        return letters.isEmpty ? "О" : letters.uppercased()
     }
 
     private var greeting: String {
-        let name = cabinet.overview?.operatorName ?? auth.role?.displayName ?? "Смена"
-        return name
+        switch Calendar.current.component(.hour, from: Date()) {
+        case 5..<12: "Доброе утро"
+        case 12..<18: "Добрый день"
+        case 18..<23: "Добрый вечер"
+        default: "Доброй ночи"
+        }
     }
 
-    // ── Смена ────────────────────────────────────────────────────────────────
+    private var header: some View {
+        HStack(spacing: Spacing.md) {
+            Text(initials)
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .background(
+                    LinearGradient(colors: Theme.heroAccent, startPoint: .topLeading, endPoint: .bottomTrailing),
+                    in: Circle()
+                )
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(greeting)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textDim)
+                Text(firstName)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(1)
+            }
+            .accessibilityElement(children: .combine)
+            Spacer(minLength: Spacing.sm)
+            if let role = auth.role?.roleLabel, !role.isEmpty {
+                Text(role)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.brand)
+                    .lineLimit(1)
+                    .padding(.horizontal, 12)
+                    .frame(height: 32)
+                    .background(Theme.brand.opacity(0.12), in: Capsule())
+            }
+        }
+        .padding(.top, Spacing.md)
+    }
+
+    // ── Карточка смены ───────────────────────────────────────────────────────
 
     @ViewBuilder
-    private var shiftCard: some View {
+    private var shiftHero: some View {
         if store.isLoadingShift && store.shiftState == nil {
-            Skeleton(height: 150, cornerRadius: Radius.lg)
+            Skeleton(height: 180, cornerRadius: Radius.xl)
         } else if store.isSomeoneElsesShift {
-            // Чужая смена: имя того, кто стоит, и ничего больше. Раньше здесь
-            // была выручка сменщика и кнопка «Закрыть смену» — оператор со
-            // своего телефона видел чужие деньги и мог попробовать закрыть
-            // смену, стоя дома.
-            Card(accent: Theme.info) {
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    StatusChip("на смене другой", kind: .info)
-                    Text(store.shift?.operatorName ?? "Сменщик")
-                        .font(Typography.metric)
-                        .foregroundStyle(Theme.text)
-                    if let opened = store.shift?.openedAt {
-                        Text("на смене \(elapsed(since: opened))")
-                            .font(Typography.caption)
-                            .foregroundStyle(Theme.textDim)
-                    }
-                    Text("Выручку и закрытие смены видит тот, кто её открыл.")
-                        .font(Typography.caption)
-                        .foregroundStyle(Theme.textMuted)
+            // Чужая смена: имя того, кто стоит, и ничего больше — ни выручки,
+            // ни кнопки закрытия: их видит тот, кто открыл смену.
+            hero(colors: Theme.heroGradient) {
+                heroLabel("На смене другой", icon: "person.fill.checkmark")
+                Text(store.shift?.operatorName ?? "Сменщик")
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.7)
+                    .padding(.top, Spacing.sm)
+                if let opened = store.shift?.openedAt {
+                    Text("на смене \(elapsed(since: opened))")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.white.opacity(0.75))
+                        .padding(.top, 2)
                 }
+                Text("Выручку и закрытие смены видит тот, кто её открыл.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .padding(.top, Spacing.md)
             }
         } else if store.hasOpenShift {
-            Card(accent: Theme.positive) {
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    HStack {
-                        StatusChip("смена открыта", kind: .good)
-                        Spacer()
-                        if let opened = store.shift?.openedAt {
-                            Text(elapsed(since: opened))
-                                .font(Typography.caption.weight(.semibold))
-                                .monospacedDigit()
-                                .foregroundStyle(Theme.textDim)
-                        }
+            hero(colors: Theme.heroAccent) {
+                HStack {
+                    heroLabel("Смена идёт", icon: "circle.fill")
+                    Spacer()
+                    if let opened = store.shift?.openedAt {
+                        Text(elapsed(since: opened))
+                            .font(.system(size: 14, weight: .semibold))
+                            .monospacedDigit()
+                            .foregroundStyle(.white.opacity(0.85))
                     }
-
-                    Text(Money.format(store.totals.netTotal))
-                        .font(Typography.monospacedDigits(Typography.hero))
-                        .foregroundStyle(Theme.text)
-                        .contentTransition(.numericText())
-                        .animation(Motion.value, value: store.totals.netTotal)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.5)
-
-                    Text("выручка смены · \(store.totals.salesCount) \(pluralize(store.totals.salesCount, "чек", "чека", "чеков"))")
-                        .font(Typography.caption)
-                        .foregroundStyle(Theme.textDim)
-
-                    Button("Закрыть смену") { showCloseSheet = true }
-                        .buttonStyle(SecondaryButtonStyle())
-                        .padding(.top, Spacing.xs)
                 }
+                Text(Money.format(store.totals.netTotal))
+                    .font(.system(size: 40, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.white)
+                    .contentTransition(.numericText())
+                    .animation(Motion.value, value: store.totals.netTotal)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .padding(.top, Spacing.sm)
+                Text("выручка смены")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.white.opacity(0.75))
+                HStack(spacing: Spacing.xl) {
+                    heroStat("Чеков", "\(store.totals.salesCount)")
+                    heroStat("Наличные", Money.format(store.totals.expectedCash))
+                    heroStat("Kaspi", Money.format(store.totals.expectedKaspi))
+                }
+                .padding(.top, Spacing.lg)
+                heroButton("Закрыть смену", icon: "lock.fill") { showCloseSheet = true }
+                    .padding(.top, Spacing.lg)
             }
         } else {
-            Card(accent: Theme.accent(for: .operator)) {
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    StatusChip("смена закрыта", kind: .neutral)
-
-                    Text("Начните смену")
-                        .font(Typography.metric)
-                        .foregroundStyle(Theme.text)
-
-                    Text("Пока смена не открыта, продавать нельзя. Открытие проверит, стоите ли вы сегодня в графике.")
-                        .font(Typography.callout)
-                        .foregroundStyle(Theme.textMuted)
-
-                    Button("Открыть смену") { showOpenSheet = true }
-                        .buttonStyle(PrimaryButtonStyle(tint: Theme.accent(for: .operator)))
-                }
+            hero(colors: Theme.heroGradient) {
+                heroLabel("Смена закрыта", icon: "moon.fill")
+                Text("Начните смену")
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .padding(.top, Spacing.sm)
+                Text("Пока смена не открыта, продавать нельзя. Открытие проверит, стоите ли вы сегодня в графике.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.white.opacity(0.75))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 2)
+                heroButton("Открыть смену", icon: "play.fill", prominent: true) { showOpenSheet = true }
+                    .padding(.top, Spacing.lg)
             }
         }
     }
 
-    // ── Выручка ──────────────────────────────────────────────────────────────
+    private func hero<Content: View>(colors: [Color], @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 0, content: content)
+            .padding(Spacing.xl)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing),
+                in: RoundedRectangle(cornerRadius: Radius.xl, style: .continuous)
+            )
+            .overlay(alignment: .topTrailing) {
+                OrdaControlMark(ringColor: .white.opacity(0.10))
+                    .frame(width: 120, height: 120)
+                    .offset(x: 30, y: -24)
+                    .allowsHitTesting(false)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: Radius.xl, style: .continuous))
+    }
 
-    private var revenueChart: some View {
-        TrendChart(
-            title: "Выручка по чекам",
-            subtitle: "последние продажи смены",
-            points: revenuePoints,
-            color: ChartPalette.series1
-        )
+    private func heroLabel(_ text: String, icon: String) -> some View {
+        Label {
+            Text(text)
+        } icon: {
+            Image(systemName: icon).font(.system(size: 9, weight: .bold))
+        }
+        .font(.system(size: 13, weight: .semibold))
+        .foregroundStyle(.white)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(.white.opacity(0.16), in: Capsule())
+    }
+
+    private func heroStat(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.system(size: 13))
+                .foregroundStyle(.white.opacity(0.65))
+            Text(value)
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+    }
+
+    private func heroButton(_ title: String, icon: String, prominent: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(prominent ? Theme.navy : .white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 13)
+                .background(prominent ? Color.white : Color.white.opacity(0.18), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.pressable)
+    }
+
+    // ── Быстрые действия ─────────────────────────────────────────────────────
+
+    /// Круглые кнопки — как у владельца. Продажа и ревизия — работа магазина;
+    /// оператору клуба вместо них регламенты и задачи.
+    private var quickActions: some View {
+        HStack(alignment: .top, spacing: Spacing.sm) {
+            if sellsGoods {
+                RoundAction(icon: "barcode.viewfinder", title: "Продать", tint: Theme.brand) { route = .sale }
+                RoundAction(icon: "list.clipboard.fill", title: "Ревизия", tint: Theme.brand) { route = .audit }
+            } else {
+                RoundAction(icon: "checklist", title: "Задачи", tint: Theme.brand) { route = .tasks }
+            }
+            RoundAction(icon: "checkmark.seal.fill", title: "Чек-листы", tint: Theme.brand) { route = .checklists }
+            RoundAction(icon: "book.closed.fill", title: "База", tint: Theme.brand) { route = .knowledge }
+            RoundAction(icon: "wallet.bifold.fill", title: "Деньги", tint: Theme.brand) { route = .money }
+        }
+    }
+
+    /// Торгует ли точка. Пока сводка не пришла — считаем, что да.
+    private var sellsGoods: Bool {
+        cabinet.overview?.points?.sellsGoods ?? true
+    }
+
+    // ── Требует внимания ─────────────────────────────────────────────────────
+
+    /// Карточками в ряд, как у владельца: каждая — одно дело и куда нажать.
+    @ViewBuilder
+    private var attention: some View {
+        let debts = cabinet.overview?.counters
+        let hasAny = !store.blockingChecklists.isEmpty
+            || !cabinet.pendingArticles.isEmpty
+            || cabinet.overdueCount > 0
+            || (debts?.activeDebts ?? 0) > 0
+        if hasAny {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: Spacing.md) {
+                    if !store.blockingChecklists.isEmpty {
+                        AttentionCard(
+                            icon: "checklist.unchecked",
+                            tint: Theme.warning,
+                            title: "\(store.blockingChecklists.count) \(pluralize(store.blockingChecklists.count, "чек-лист", "чек-листа", "чек-листов")) до закрытия",
+                            subtitle: "без них смену не закрыть"
+                        ) { route = .checklists }
+                    }
+                    if !cabinet.pendingArticles.isEmpty {
+                        AttentionCard(
+                            icon: "book.closed.fill",
+                            tint: Theme.info,
+                            title: "Прочитать \(cabinet.pendingArticles.count) \(pluralize(cabinet.pendingArticles.count, "правило", "правила", "правил"))",
+                            subtitle: "новое в базе знаний"
+                        ) { route = .knowledge }
+                    }
+                    if cabinet.overdueCount > 0 {
+                        AttentionCard(
+                            icon: "clock.badge.exclamationmark.fill",
+                            tint: Theme.negative,
+                            title: "\(cabinet.overdueCount) \(pluralize(cabinet.overdueCount, "задача просрочена", "задачи просрочены", "задач просрочено"))",
+                            subtitle: "откройте и отметьте"
+                        ) { route = .tasks }
+                    }
+                    if let debts, debts.activeDebts > 0 {
+                        AttentionCard(
+                            icon: "creditcard.trianglebadge.exclamationmark",
+                            tint: Theme.negative,
+                            title: "Долг перед точкой",
+                            subtitle: Money.format(debts.activeDebtAmount)
+                        ) { route = .money }
+                    }
+                }
+            }
+            .scrollClipDisabled()
+        }
+    }
+
+    // ── Деньги смены ─────────────────────────────────────────────────────────
+
+    private var shiftMoney: some View {
+        OwnerSection("Выручка по чекам") {
+            Text("\(store.totals.salesCount) \(pluralize(store.totals.salesCount, "чек", "чека", "чеков"))")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.textDim)
+        } content: {
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                TrendChart(
+                    title: "",
+                    subtitle: nil,
+                    points: revenuePoints,
+                    color: ChartPalette.series1
+                )
+                if store.totals.returnsCount > 0 {
+                    HStack {
+                        Label("Возвраты", systemImage: "arrow.uturn.backward")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Theme.textMuted)
+                        Spacer()
+                        Text("\(store.totals.returnsCount) · \(Money.format(store.totals.returnsTotal))")
+                            .font(.system(size: 14, weight: .semibold))
+                            .monospacedDigit()
+                            .foregroundStyle(Theme.warning)
+                    }
+                }
+            }
+        }
     }
 
     /// Накопленная выручка по времени чеков — видно темп смены, а не отдельные
@@ -214,236 +406,94 @@ struct OperatorHomeScreen: View {
         }
     }
 
-    private var paymentSplit: some View {
-        Card {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                Text("Чем платили")
-                    .font(Typography.label)
-                    .foregroundStyle(Theme.textDim)
-
-                SplitBar(segments: [
-                    .init(label: "Наличные", value: store.totals.expectedCash, color: ChartPalette.series1),
-                    .init(label: "Kaspi", value: store.totals.expectedKaspi, color: ChartPalette.series2),
-                ])
-
-                if store.totals.returnsCount > 0 {
-                    RowDivider()
-                    StatRow(
-                        "Возвраты",
-                        value: "\(store.totals.returnsCount) · \(Money.format(store.totals.returnsTotal))",
-                        valueColor: Theme.warning,
-                        icon: "arrow.uturn.backward"
-                    )
-                }
-            }
-        }
-    }
-
-    // ── Быстрые действия ─────────────────────────────────────────────────────
-
-    /// Плитки быстрых действий.
-    ///
-    /// Продажа и ревизия — работа магазина. Оператору клуба они не нужны: он
-    /// обслуживает гостей за компьютерами, и вместо кассы ему полезнее
-    /// регламенты и чат.
-    private var quickActions: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: Spacing.md) {
-            if sellsGoods {
-                NavigationLink(value: OperatorHomeRoute.sale) {
-                    ActionTileLabel(icon: "barcode.viewfinder", title: "Продать", tint: Theme.accent(for: .operator))
-                }
-                .buttonStyle(PressableTileStyle())
-
-                NavigationLink(value: OperatorHomeRoute.audit) {
-                    ActionTileLabel(icon: "list.clipboard", title: "Ревизия", tint: ChartPalette.series2)
-                }
-                .buttonStyle(PressableTileStyle())
-            } else {
-                NavigationLink(value: OperatorHomeRoute.knowledge) {
-                    ActionTileLabel(icon: "book.closed", title: "Регламенты", tint: ChartPalette.series2)
-                }
-                .buttonStyle(PressableTileStyle())
-
-                NavigationLink(value: OperatorHomeRoute.tasks) {
-                    ActionTileLabel(icon: "checklist", title: "Задачи", tint: Theme.accent(for: .operator))
-                }
-                .buttonStyle(PressableTileStyle())
-            }
-
-            NavigationLink(value: OperatorHomeRoute.checklists) {
-                ActionTileLabel(icon: "checklist", title: "Чек-листы", tint: ChartPalette.series3)
-            }
-            .buttonStyle(PressableTileStyle())
-        }
-    }
-
-    /// Торгует ли точка. Пока сводка не пришла — считаем, что да.
-    private var sellsGoods: Bool {
-        cabinet.overview?.points?.sellsGoods ?? true
-    }
-
-    // ── Требует внимания ─────────────────────────────────────────────────────
-
-    private var needsAttention: Bool {
-        !store.blockingChecklists.isEmpty
-            || !cabinet.pendingArticles.isEmpty
-            || cabinet.overdueCount > 0
-            || (cabinet.overview?.counters?.activeDebts ?? 0) > 0
-    }
-
-    /// Что требует внимания.
-    ///
-    /// Пункты разделены линиями: без них четыре строки с иконками и значками
-    /// сливаются в сплошную стену, и понять, где кончается одна и начинается
-    /// другая, можно только по цвету значка.
-    private var attentionSection: some View {
-        Card(accent: Theme.warning) {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                Text("Требует внимания")
-                    .font(Typography.label)
-                    .foregroundStyle(Theme.warning)
-                    .padding(.bottom, Spacing.xs)
-
-                if !store.blockingChecklists.isEmpty {
-                    NavigationLink(value: OperatorHomeRoute.checklists) {
-                        NavigationRow(
-                            icon: "checklist.unchecked",
-                            iconColor: Theme.warning,
-                            title: "Обязательные чек-листы",
-                            subtitle: "без них смену не закрыть",
-                            badge: store.blockingChecklists.count,
-                            badgeColor: Theme.warning
-                        )
-                    }
-                    .buttonStyle(.pressable)
-                }
-
-                if !cabinet.pendingArticles.isEmpty {
-                    if !store.blockingChecklists.isEmpty { RowDivider() }
-                    NavigationLink(value: OperatorHomeRoute.knowledge) {
-                        NavigationRow(
-                            icon: "book.closed",
-                            iconColor: Theme.info,
-                            title: "Подтвердить прочтение",
-                            subtitle: "новые правила в базе знаний",
-                            badge: cabinet.pendingArticles.count,
-                            badgeColor: Theme.info
-                        )
-                    }
-                    .buttonStyle(.pressable)
-                }
-
-                if cabinet.overdueCount > 0 {
-                    if !store.blockingChecklists.isEmpty || !cabinet.pendingArticles.isEmpty { RowDivider() }
-                    NavigationLink(value: OperatorHomeRoute.tasks) {
-                        NavigationRow(
-                            icon: "clock.badge.exclamationmark",
-                            iconColor: Theme.negative,
-                            title: "Просроченные задачи",
-                            badge: cabinet.overdueCount
-                        )
-                    }
-                    .buttonStyle(.pressable)
-                }
-
-                if let counters = cabinet.overview?.counters, counters.activeDebts > 0 {
-                    if !store.blockingChecklists.isEmpty || !cabinet.pendingArticles.isEmpty || cabinet.overdueCount > 0 {
-                        RowDivider()
-                    }
-                    NavigationLink(value: OperatorHomeRoute.money) {
-                        NavigationRow(
-                            icon: "creditcard.trianglebadge.exclamationmark",
-                            iconColor: Theme.negative,
-                            title: "Долг перед точкой",
-                            subtitle: Money.format(counters.activeDebtAmount),
-                            badge: counters.activeDebts
-                        )
-                    }
-                    .buttonStyle(.pressable)
-                }
-            }
-        }
-    }
-
     // ── Неделя ───────────────────────────────────────────────────────────────
 
     @ViewBuilder
     private var weekCard: some View {
         if let week = cabinet.overview?.week {
-            NavigationLink(value: OperatorHomeRoute.money) {
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        HStack {
-                            Text("Заработано за неделю")
-                                .font(Typography.label)
-                                .foregroundStyle(Theme.textDim)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(Theme.textDim)
-                        }
-
-                        Text(Money.format(week.netAmount))
-                            .font(Typography.monospacedDigits(Typography.metric))
-                            .foregroundStyle(Theme.text)
-                            .contentTransition(.numericText())
-
+            Button { route = .money } label: {
+                HStack(spacing: Spacing.md) {
+                    TintedIcon(systemName: "wallet.bifold.fill", tint: Theme.positive, size: 46)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Заработано за неделю")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Theme.textDim)
+                            .lineLimit(1)
                         HStack(spacing: Spacing.sm) {
-                            StatusChip(week.statusLabel, kind: week.status == "paid" ? .good : .neutral)
-                            // Остаток показываем, только если часть уже
-                            // выплачена. Пока не платили, «к выплате» равно
-                            // заработанному — и рядом стояли две одинаковые по
-                            // смыслу суммы, которые читались как расхождение.
-                            if week.paidAmount > 0, week.remainingAmount > 0 {
-                                Text("осталось \(Money.format(week.remainingAmount))")
-                                    .font(Typography.caption)
-                                    .foregroundStyle(Theme.textDim)
-                            }
+                            Text(Money.format(week.netAmount))
+                                .font(.system(size: 22, weight: .bold, design: .rounded))
+                                .monospacedDigit()
+                                .foregroundStyle(Theme.text)
+                                .contentTransition(.numericText())
+                            Text(week.statusLabel)
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(week.status == "paid" ? Theme.positive : Theme.textMuted)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background((week.status == "paid" ? Theme.positive : Theme.textDim).opacity(0.12), in: Capsule())
+                        }
+                        // Остаток — только если часть уже выплачена: иначе он
+                        // равен заработанному и читается как расхождение.
+                        if week.paidAmount > 0, week.remainingAmount > 0 {
+                            Text("осталось получить \(Money.format(week.remainingAmount))")
+                                .font(.system(size: 13))
+                                .foregroundStyle(Theme.textDim)
                         }
                     }
+                    Spacer(minLength: Spacing.sm)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.textDim)
                 }
+                .padding(Spacing.lg)
+                .background(Theme.surface, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
             }
             .buttonStyle(.pressable)
         } else if cabinet.isLoadingOverview {
-            Skeleton(height: 110, cornerRadius: Radius.lg)
+            Skeleton(height: 90, cornerRadius: Radius.lg)
         }
     }
 
-    private func nextShiftCard(_ next: NextShift) -> some View {
-        Card(accent: ChartPalette.series2) {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
+    private func nextShiftRow(_ next: NextShift) -> some View {
+        HStack(spacing: Spacing.md) {
+            TintedIcon(systemName: "calendar", tint: Theme.brand, size: 46)
+            VStack(alignment: .leading, spacing: 3) {
                 Text("Ближайшая смена")
-                    .font(Typography.label)
+                    .font(.system(size: 14))
                     .foregroundStyle(Theme.textDim)
                 Text(next.label ?? next.date)
-                    .font(Typography.title)
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(Theme.text)
             }
+            Spacer()
         }
+        .padding(Spacing.lg)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
     }
 
     // ── Офлайн ───────────────────────────────────────────────────────────────
 
     private var offlineBanner: some View {
-        Card(accent: Theme.warning) {
-            HStack(spacing: Spacing.md) {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .foregroundStyle(Theme.warning)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("\(store.queuedSalesCount) \(pluralize(store.queuedSalesCount, "чек", "чека", "чеков")) ждёт отправки")
-                        .font(Typography.callout.weight(.semibold))
-                        .foregroundStyle(Theme.text)
-                    Text("Продажи сохранены на устройстве.")
-                        .font(Typography.caption)
-                        .foregroundStyle(Theme.textDim)
-                }
-                Spacer()
-                Button("Отправить") { Task { await store.flushQueue() } }
-                    .buttonStyle(.pressable)
-                    .font(Typography.caption.weight(.bold))
-                    .foregroundStyle(Theme.warning)
+        HStack(spacing: Spacing.md) {
+            TintedIcon(systemName: "arrow.triangle.2.circlepath", tint: Theme.warning, size: 42)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(store.queuedSalesCount) \(pluralize(store.queuedSalesCount, "чек", "чека", "чеков")) ждёт отправки")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Theme.text)
+                Text("Продажи сохранены на устройстве.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textDim)
             }
+            Spacer()
+            Button("Отправить") { Task { await store.flushQueue() } }
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(Theme.brand, in: Capsule())
         }
+        .padding(Spacing.lg)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
     }
 
     // ── Вспомогательное ──────────────────────────────────────────────────────

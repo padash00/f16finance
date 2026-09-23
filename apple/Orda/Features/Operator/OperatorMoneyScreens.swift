@@ -430,6 +430,14 @@ enum OperatorProfileRoute: Hashable {
 
 struct OperatorProfileScreen: View {
     @Environment(AuthStore.self) private var auth
+    @Environment(OperatorStore.self) private var store
+    @Environment(CabinetStore.self) private var cabinet
+    @AppStorage(Appearance.storageKey) private var appearance: Appearance = .system
+
+    @State private var confirmingLogout = false
+    @State private var changingPassword = false
+    @State private var lockEnabled = false
+    @State private var didLoadLock = false
 
     /// Торгует ли точка: от этого зависит, показывать ли ревизию.
     private var sellsGoods: Bool { cabinet.overview?.points?.sellsGoods ?? true }
@@ -439,321 +447,33 @@ struct OperatorProfileScreen: View {
         let industries = cabinet.overview?.points?.industries ?? []
         return industries.contains("club") || industries.contains("ps_club")
     }
-    @Environment(OperatorStore.self) private var store
-    @Environment(CabinetStore.self) private var cabinet
 
-    @State private var confirmingLogout = false
-    @State private var changingPassword = false
+    private var name: String { cabinet.overview?.operatorName ?? auth.role?.displayName ?? "Оператор" }
 
     var body: some View {
         ScrollView {
             VStack(spacing: Spacing.lg) {
-                Card {
-                    HStack(spacing: Spacing.lg) {
-                        Image(systemName: "person.crop.circle.fill")
-                            .font(.system(size: 44))
-                            .foregroundStyle(Theme.accent(for: .operator))
-                        VStack(alignment: .leading, spacing: Spacing.xs) {
-                            Text(cabinet.overview?.operatorName ?? auth.role?.displayName ?? "Оператор")
-                                .font(Typography.title)
-                                .foregroundStyle(Theme.text)
-                            if let label = auth.role?.roleLabel {
-                                Text(label)
-                                    .font(Typography.callout)
-                                    .foregroundStyle(Theme.textMuted)
-                            }
-                        }
-                        Spacer()
-                    }
-                }
-
-                Card {
-                    VStack(spacing: Spacing.sm) {
-                        NavigationLink(value: OperatorProfileRoute.schedule) {
-                            NavigationRow(icon: "calendar", iconColor: ChartPalette.series2, title: "Мой график")
-                        }
-                        .buttonStyle(.pressable)
-
-                        RowDivider()
-
-                        // Старший смены — только тем, кто им назначен. У
-                        // остальных сервер отвечает отказом, и показывать
-                        // пункт, который откроет пустой экран, незачем.
-                        if cabinet.isLead {
-                            NavigationLink(value: OperatorProfileRoute.lead) {
-                                NavigationRow(
-                                    icon: "person.2.badge.gearshape",
-                                    iconColor: Theme.warning,
-                                    title: "Старший смены",
-                                    subtitle: "Заявки команды и готовность недели",
-                                    badge: cabinet.leadPendingCount,
-                                    badgeColor: Theme.warning
-                                )
-                            }
-                            .buttonStyle(.pressable)
-
-                            RowDivider()
-                        }
-
-                        NavigationLink(value: OperatorProfileRoute.money) {
-                            NavigationRow(icon: "wallet.bifold", iconColor: Theme.brand, title: "Мои деньги")
-                        }
-                        .buttonStyle(.pressable)
-
-                        RowDivider()
-
-                        // Оценка работы за прилавком. Стоит рядом с деньгами
-                        // намеренно: доплата за качество приходит именно
-                        // отсюда, и человек должен видеть, из чего она вышла.
-                        NavigationLink(value: OperatorProfileRoute.salesQuality) {
-                            NavigationRow(
-                                icon: "chart.line.uptrend.xyaxis",
-                                iconColor: Theme.positive,
-                                title: "Как я работаю",
-                                subtitle: "Оценка за месяц и доплата за качество"
-                            )
-                        }
-                        .buttonStyle(.pressable)
-
-                        RowDivider()
-
-                        // Зал — там, где гости садятся за станции. У точки,
-                        // которая ещё и торгует, вкладки в панели нет: пять
-                        // мест уже заняты, а зал нужен не меньше кассы.
-                        if hasArena, sellsGoods {
-                            NavigationLink(value: OperatorProfileRoute.arena) {
-                                NavigationRow(
-                                    icon: "desktopcomputer",
-                                    iconColor: Theme.info,
-                                    title: "Зал",
-                                    subtitle: "Станции, сессии и продления"
-                                )
-                            }
-                            .buttonStyle(.pressable)
-
-                            RowDivider()
-                        }
-
-                        // Ревизия нужна кассиру магазина, но не каждый день —
-                        // поэтому она здесь, а не в панели, где место занимает
-                        // постоянно. Оператору клуба она не нужна вовсе: он
-                        // ничего не продаёт и остатки не считает.
-                        if sellsGoods {
-                        NavigationLink(value: OperatorProfileRoute.audit) {
-                            NavigationRow(
-                                icon: "list.clipboard",
-                                iconColor: Theme.info,
-                                title: "Ревизия",
-                                subtitle: "Пересчёт товара по актам"
-                            )
-                        }
-                        .buttonStyle(.pressable)
-
-                        RowDivider()
-                        }
-
-                        NavigationLink(value: OperatorProfileRoute.checklists) {
-                            NavigationRow(
-                                icon: "checkmark.seal",
-                                iconColor: Theme.positive,
-                                title: "Чек-листы",
-                                subtitle: "Приём, обход, закрытие смены"
-                            )
-                        }
-                        .buttonStyle(.pressable)
-
-                        RowDivider()
-
-                        NavigationLink(value: OperatorProfileRoute.knowledge) {
-                            NavigationRow(
-                                icon: "book.closed",
-                                iconColor: Theme.info,
-                                title: "База знаний",
-                                badge: cabinet.pendingArticles.count,
-                                badgeColor: Theme.info
-                            )
-                        }
-                        .buttonStyle(.pressable)
-
-                        RowDivider()
-
-                        // Экзамен раньше приходил только в Telegram: у кого его
-                        // нет, тот числился обязанным сдать то, чего не видел.
-                        // Вход на терминал по QR. На пересменке за спиной
-                        // очередь, а логин и пароль набираются на общей
-                        // клавиатуре у всех на виду.
-                        NavigationLink(value: OperatorProfileRoute.pointQR) {
-                            NavigationRow(
-                                icon: "qrcode.viewfinder",
-                                iconColor: Theme.accent(for: .operator),
-                                title: "Вход на точке по QR",
-                                subtitle: "Подтвердить вход в программу терминала"
-                            )
-                        }
-                        .buttonStyle(.pressable)
-
-                        RowDivider()
-
-                        NavigationLink(value: OperatorProfileRoute.exams) {
-                            NavigationRow(
-                                icon: "graduationcap",
-                                iconColor: Theme.warning,
-                                title: "Экзамены",
-                                subtitle: "Аттестация по регламентам точки",
-                                badge: cabinet.openExams,
-                                badgeColor: Theme.warning
-                            )
-                        }
-                        .buttonStyle(.pressable)
-                    }
-                }
-
-                // Общение. Смена — работа в одиночку у стойки: спросить
-                // сменщика, что с должником, или сказать управляющему, что
-                // кончилась бумага, раньше можно было только в личном
-                // мессенджере, мимо системы и без следа.
-                Card {
-                    VStack(spacing: Spacing.sm) {
-                        NavigationLink(value: OperatorProfileRoute.chat) {
-                            NavigationRow(
-                                icon: "bubble.left.and.bubble.right",
-                                iconColor: Theme.accent(for: .operator),
-                                title: "Командный чат",
-                                subtitle: "Общий для всей точки"
-                            )
-                        }
-                        .buttonStyle(.pressable)
-
-                        RowDivider()
-
-                        NavigationLink(value: OperatorProfileRoute.messages) {
-                            NavigationRow(
-                                icon: "envelope",
-                                iconColor: ChartPalette.series2,
-                                title: "Сообщения",
-                                subtitle: "Лично сменщику или управляющему",
-                                badge: cabinet.unreadMessages,
-                                badgeColor: Theme.info
-                            )
-                        }
-                        .buttonStyle(.pressable)
-                    }
-                }
-                .task { await cabinet.refreshUnreadMessages() }
-                .task {
-                    await cabinet.refreshUndeliveredChecklists()
-                    await cabinet.refreshUndeliveredFiles()
-                }
-
-                if !cabinet.undeliveredChecklists.isEmpty || !cabinet.undeliveredFiles.isEmpty {
-                    // Чек-листы и файлы ждут связи наравне с чеками, а видно
-                    // их было только на своих экранах: человек уходил со
-                    // смены, не зная, что часть работы ещё на телефоне.
-                    Card(accent: Theme.warning) {
-                        VStack(alignment: .leading, spacing: Spacing.sm) {
-                            if !cabinet.undeliveredChecklists.isEmpty {
-                                Label(
-                                    "\(cabinet.undeliveredChecklists.count) \(pluralize(cabinet.undeliveredChecklists.count, "чек-лист ждёт", "чек-листа ждут", "чек-листов ждут")) связи",
-                                    systemImage: "checklist"
-                                )
-                                .font(Typography.callout.weight(.medium))
-                                .foregroundStyle(Theme.text)
-                            }
-
-                            if !cabinet.undeliveredFiles.isEmpty {
-                                Label(
-                                    "\(cabinet.undeliveredFiles.count) \(pluralize(cabinet.undeliveredFiles.count, "файл ждёт", "файла ждут", "файлов ждут")) связи",
-                                    systemImage: "photo"
-                                )
-                                .font(Typography.callout.weight(.medium))
-                                .foregroundStyle(Theme.text)
-                            }
-
-                            Text("Всё сохранено на устройстве и уйдёт при связи.")
-                                .font(Typography.caption)
-                                .foregroundStyle(Theme.textMuted)
-
-                            Button("Отправить сейчас") {
-                                Task { await cabinet.flushEverything() }
-                            }
-                            .buttonStyle(SecondaryButtonStyle())
-                        }
-                    }
-                }
-
-                if store.queuedSalesCount > 0 || store.queuedActionsCount > 0 {
-                    Card(accent: Theme.warning) {
-                        VStack(alignment: .leading, spacing: Spacing.md) {
-                            if store.queuedSalesCount > 0 {
-                                Label(
-                                    "\(store.queuedSalesCount) \(pluralize(store.queuedSalesCount, "неотправленный чек", "неотправленных чека", "неотправленных чеков"))",
-                                    systemImage: "arrow.triangle.2.circlepath"
-                                )
-                                .font(Typography.callout.weight(.semibold))
-                                .foregroundStyle(Theme.warning)
-                            }
-
-                            // Чек-листы и подтверждения считаем отдельно от
-                            // чеков: там деньги, здесь работа смены, и «три
-                            // чека и два действия» человеку понятнее, чем
-                            // общее «пять».
-                            if store.queuedActionsCount > 0 {
-                                Label(
-                                    "\(store.queuedActionsCount) \(pluralize(store.queuedActionsCount, "действие ждёт", "действия ждут", "действий ждут")) отправки",
-                                    systemImage: "checklist"
-                                )
-                                .font(Typography.callout.weight(.semibold))
-                                .foregroundStyle(Theme.warning)
-                            }
-
-                            Text("Всё сохранено на устройстве и уйдёт при связи. Не удаляйте приложение.")
-                                .font(Typography.caption)
-                                .foregroundStyle(Theme.textMuted)
-
-                            Button("Отправить сейчас") { Task { await store.flushQueue() } }
-                                .buttonStyle(SecondaryButtonStyle())
-                        }
-                    }
-                }
-
-                // Уведомления — рядом с выходом, но выше него: «мне не пишут
-                // про задачи» чаще всего означает выключённое разрешение, и
-                // проверить это человек должен сам, а не через руководителя.
-                NotificationsCard()
-
-                // Пароль оператору выдаёт владелец, часто временный и вслух.
-                // Сменить его можно было только на сайте — то есть «когда
-                // дойду до компьютера», а выданный вслух пароль живёт ровно до
-                // первой смены рук.
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.sm) {
-                        SectionHeader("Пароль")
-                        Text("Меняется здесь же — текущий спросим для подтверждения.")
-                            .font(Typography.caption)
-                            .foregroundStyle(Theme.textMuted)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Button {
-                            changingPassword = true
-                        } label: {
-                            Label("Сменить пароль", systemImage: "key")
-                        }
-                        .buttonStyle(SecondaryButtonStyle())
-                    }
-                }
-
-                Button("Выйти из аккаунта") { confirmingLogout = true }
-                    .buttonStyle(DestructiveButtonStyle())
+                header
+                pendingUploads
+                workSection
+                knowledgeSection
+                talkSection
+                accountSection
+                appSection
+                logout
             }
-            .padding(Spacing.lg)
-            // Запас снизу под плавающую панель вкладок: без него последняя
-            // кнопка — а это «Выйти из аккаунта» — уезжала под неё и читалась
-            // наполовину.
+            .padding(.horizontal, Spacing.lg)
+            .padding(.top, Spacing.md)
+            // Запас снизу под плавающую панель вкладок.
             .padding(.bottom, Spacing.xxl * 2)
             .frame(maxWidth: 640)
             .frame(maxWidth: .infinity)
         }
         .background(Theme.background)
         .navigationTitle("Профиль")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
         .navigationDestination(for: OperatorProfileRoute.self) { route in
             switch route {
             case .schedule: ScheduleScreen()
@@ -770,9 +490,6 @@ struct OperatorProfileScreen: View {
             case .arena: ArenaScreen()
             }
         }
-        // Окно, а не всплывающая подсказка: подсказку система прижимает к
-        // размеру якоря, и с крупным шрифтом текст переносился с дефисом, а
-        // кнопка «Выйти» обрезалась. Окно центрируется и растёт под текст.
         .sheet(isPresented: $changingPassword) { ChangePasswordSheet() }
         .alert("Выйти из аккаунта?", isPresented: $confirmingLogout) {
             Button("Выйти", role: .destructive) { Task { await auth.signOut() } }
@@ -780,6 +497,285 @@ struct OperatorProfileScreen: View {
         } message: {
             Text("Неотправленные чеки останутся на устройстве.")
         }
+        .task { await cabinet.refreshUnreadMessages() }
+        .task {
+            await cabinet.refreshUndeliveredChecklists()
+            await cabinet.refreshUndeliveredFiles()
+        }
+        .task {
+            guard !didLoadLock else { return }
+            didLoadLock = true
+            lockEnabled = auth.isLockEnabled
+        }
+        .onChange(of: lockEnabled) { _, value in auth.isLockEnabled = value }
+    }
+
+    // ── Кто я ────────────────────────────────────────────────────────────────
+
+    private var header: some View {
+        VStack(spacing: Spacing.md) {
+            Text(initials)
+                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .foregroundStyle(Theme.navy)
+                .frame(width: 84, height: 84)
+                .background(.white, in: Circle())
+                .overlay(Circle().strokeBorder(Theme.cobalt, lineWidth: 3))
+            VStack(spacing: 4) {
+                Text(name)
+                    .font(.system(size: 21, weight: .bold))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                Text(auth.role?.roleLabel ?? "Оператор")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.white.opacity(0.16), in: Capsule())
+            }
+            if let week = cabinet.overview?.week {
+                HStack(spacing: 0) {
+                    heroStat(Money.format(week.netAmount), "за неделю")
+                    Rectangle().fill(.white.opacity(0.2)).frame(width: 1, height: 30)
+                    heroStat(week.statusLabel, "выплата")
+                }
+                .padding(.top, Spacing.xs)
+            }
+        }
+        .padding(.vertical, Spacing.xl)
+        .padding(.horizontal, Spacing.lg)
+        .frame(maxWidth: .infinity)
+        .background(
+            LinearGradient(colors: Theme.heroGradient, startPoint: .topLeading, endPoint: .bottomTrailing),
+            in: RoundedRectangle(cornerRadius: 28, style: .continuous)
+        )
+        .overlay(alignment: .topTrailing) {
+            OrdaControlMark(ringColor: .white.opacity(0.14))
+                .frame(width: 90, height: 90)
+                .offset(x: 18, y: -14)
+                .allowsHitTesting(false)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+    }
+
+    private func heroStat(_ value: String, _ label: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(label)
+                .font(.system(size: 12))
+                .foregroundStyle(.white.opacity(0.7))
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var initials: String {
+        let letters = name.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined()
+        return letters.isEmpty ? "О" : letters.uppercased()
+    }
+
+    // ── Разделы ──────────────────────────────────────────────────────────────
+
+    private var workSection: some View {
+        OwnerSection("Работа") { EmptyView() } content: {
+            VStack(spacing: 0) {
+                link(.schedule, "calendar", Theme.brand, "Мой график", "смены на неделю вперёд")
+                if cabinet.isLead {
+                    divider
+                    link(.lead, "person.2.badge.gearshape.fill", Theme.warning, "Старший смены", "заявки команды и готовность недели", badge: cabinet.leadPendingCount)
+                }
+                divider
+                link(.money, "wallet.bifold.fill", Theme.positive, "Мои деньги", "зарплата, авансы, долги")
+                divider
+                link(.salesQuality, "chart.line.uptrend.xyaxis", Color(hex: 0x0D9488), "Как я работаю", "оценка за месяц и доплата за качество")
+                if hasArena, sellsGoods {
+                    divider
+                    link(.arena, "desktopcomputer", Theme.info, "Зал", "станции, сессии и продления")
+                }
+                if sellsGoods {
+                    divider
+                    link(.audit, "list.clipboard.fill", Color(hex: 0xD97706), "Ревизия", "пересчёт товара по актам")
+                }
+                divider
+                link(.checklists, "checkmark.seal.fill", Theme.brand, "Чек-листы", "приём, обход, закрытие смены", badge: store.blockingChecklists.count)
+            }
+        }
+    }
+
+    private var knowledgeSection: some View {
+        OwnerSection("Знания") { EmptyView() } content: {
+            VStack(spacing: 0) {
+                link(.knowledge, "book.closed.fill", Theme.info, "База знаний", "регламенты точки", badge: cabinet.pendingArticles.count)
+                divider
+                link(.exams, "graduationcap.fill", Theme.warning, "Экзамены", "аттестация по регламентам", badge: cabinet.openExams)
+            }
+        }
+    }
+
+    private var talkSection: some View {
+        OwnerSection("Общение") { EmptyView() } content: {
+            VStack(spacing: 0) {
+                link(.chat, "bubble.left.and.bubble.right.fill", Theme.brand, "Командный чат", "общий для всей точки")
+                divider
+                link(.messages, "envelope.fill", Color(hex: 0x0D9488), "Сообщения", "лично сменщику или управляющему", badge: cabinet.unreadMessages)
+            }
+        }
+    }
+
+    private var accountSection: some View {
+        OwnerSection("Аккаунт") { EmptyView() } content: {
+            VStack(spacing: 0) {
+                link(.pointQR, "qrcode.viewfinder", Theme.navy, "Вход на точке по QR", "подтвердить вход в программу терминала")
+                divider
+                NavigationLink {
+                    ScreenScroll { NotificationsCard() }
+                        .background(Theme.background)
+                        .navigationTitle("Уведомления")
+                } label: {
+                    row("bell.badge.fill", Theme.negative, "Уведомления", "что присылать и проверка")
+                }
+                .buttonStyle(.plain)
+                divider
+                Button { changingPassword = true } label: {
+                    row("key.fill", Color(hex: 0xD97706), "Сменить пароль", "текущий спросим для подтверждения")
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private var appSection: some View {
+        OwnerSection("Приложение") { EmptyView() } content: {
+            VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    row("circle.lefthalf.filled", Theme.navy, "Оформление", nil, chevron: false)
+                    PillSegment(options: Appearance.allCases.map { ($0, $0.title) }, selection: $appearance)
+                }
+                .padding(.bottom, Spacing.sm)
+                if Biometrics.isAvailable {
+                    divider
+                    Toggle(isOn: $lockEnabled) {
+                        row(Biometrics.iconName, Theme.cobalt, "Запрашивать \(Biometrics.displayName)", "при возврате в приложение", chevron: false)
+                    }
+                    .tint(Theme.brand)
+                }
+            }
+        }
+    }
+
+    /// Чеки, чек-листы и файлы, которые ждут связи, — сверху, пока они есть:
+    /// человек не должен уйти со смены, не зная, что часть работы на телефоне.
+    @ViewBuilder
+    private var pendingUploads: some View {
+        let checklists = cabinet.undeliveredChecklists.count
+        let files = cabinet.undeliveredFiles.count
+        let sales = store.queuedSalesCount
+        let actions = store.queuedActionsCount
+        if checklists + files + sales + actions > 0 {
+            HStack(spacing: Spacing.md) {
+                TintedIcon(systemName: "arrow.triangle.2.circlepath", tint: Theme.warning, size: 42)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Ждёт отправки: \(pendingText(sales: sales, actions: actions, checklists: checklists, files: files))")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Theme.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("Сохранено на устройстве и уйдёт при связи. Не удаляйте приложение.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.textDim)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: Spacing.sm)
+                Button("Отправить") {
+                    Task {
+                        await store.flushQueue()
+                        await cabinet.flushEverything()
+                    }
+                }
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(Theme.brand, in: Capsule())
+            }
+            .padding(Spacing.lg)
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+        }
+    }
+
+    private func pendingText(sales: Int, actions: Int, checklists: Int, files: Int) -> String {
+        var parts: [String] = []
+        if sales > 0 { parts.append("\(sales) \(pluralize(sales, "чек", "чека", "чеков"))") }
+        if actions > 0 { parts.append("\(actions) \(pluralize(actions, "действие", "действия", "действий"))") }
+        if checklists > 0 { parts.append("\(checklists) \(pluralize(checklists, "чек-лист", "чек-листа", "чек-листов"))") }
+        if files > 0 { parts.append("\(files) \(pluralize(files, "файл", "файла", "файлов"))") }
+        return parts.joined(separator: ", ")
+    }
+
+    private var logout: some View {
+        Button { confirmingLogout = true } label: {
+            HStack {
+                Image(systemName: "rectangle.portrait.and.arrow.right")
+                Text("Выйти из аккаунта")
+            }
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundStyle(Theme.negative)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+        .buttonStyle(.pressable)
+    }
+
+    // ── Мелочи ───────────────────────────────────────────────────────────────
+
+    private var divider: some View {
+        Rectangle().fill(Theme.borderSoft).frame(height: 1).padding(.leading, 52)
+    }
+
+    private func link(_ route: OperatorProfileRoute, _ icon: String, _ tint: Color, _ title: String, _ subtitle: String?, badge: Int = 0) -> some View {
+        NavigationLink(value: route) {
+            row(icon, tint, title, subtitle, badge: badge)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func row(_ icon: String, _ tint: Color, _ title: String, _ subtitle: String?, badge: Int = 0, chevron: Bool = true) -> some View {
+        HStack(spacing: Spacing.md) {
+            TintedIcon(systemName: icon, tint: tint, size: 38, corner: 11)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Theme.text)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.textDim)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: Spacing.sm)
+            if badge > 0 {
+                Text("\(badge)")
+                    .font(.system(size: 12, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 7)
+                    .frame(minHeight: 20)
+                    .background(Theme.negative, in: Capsule())
+            }
+            if chevron {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.textDim)
+            }
+        }
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
     }
 }
 

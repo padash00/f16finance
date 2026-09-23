@@ -134,6 +134,16 @@ struct OperatorRootView: View {
                 }
             }
         }
+        #if DEBUG
+        .task {
+            // Снимки экрана: `-ordaOperatorTab sale|profile|chat|tasks`.
+            if let raw = UserDefaults.standard.string(forKey: "ordaOperatorTab"),
+               let section = OperatorSection(rawValue: raw) {
+                try? await Task.sleep(for: .seconds(1))
+                selection = section
+            }
+        }
+        #endif
         .task {
             guard store == nil else { return }
             // Очередь отложенных действий одна на оба стора: файл на диске
