@@ -47,7 +47,8 @@ struct PlatformRootView: View {
                 // Данные бизнес-разделов зависят от выбранной организации:
                 // при переключении их надо перечитать, иначе на экране
                 // останутся цифры прошлой.
-                .onChange(of: auth.organizationID) { _, _ in
+                .onChange(of: auth.organizationID) { _, id in
+                    savedOrganization = id
                     Task { await business.bootstrap() }
                 }
             } else {
@@ -65,7 +66,12 @@ struct PlatformRootView: View {
             async let businessLoad: Void = businessStore.bootstrap()
             _ = await (platformLoad, businessLoad)
 
-            if let wanted = LaunchOptions.requestedOrganization,
+            // Организация из флага запуска, иначе — та, в которой суперадмин
+            // был в прошлый раз. Раньше выбор жил только в памяти: iOS
+            // выгружала приложение, и оно открывалось во «Всей платформе» —
+            // с другими вкладками, будто вернулся старый дизайн.
+            let wanted = LaunchOptions.requestedOrganization ?? savedOrganization
+            if let wanted,
                let organization = platform.organizations.first(where: { $0.slug == wanted || $0.id == wanted }),
                auth.organizationID != organization.id {
                 await auth.setOrganization(organization.id)
@@ -86,6 +92,28 @@ struct PlatformRootView: View {
             openIfAllowed(pageID: pageID)
         }
         }
+    }
+
+    /// Последняя выбранная организация — своя запись у каждого аккаунта.
+    /// `nil` — суперадмин сам ушёл во «Всю платформу», это тоже помним.
+    private var savedOrganization: String? {
+        get {
+            guard let key = savedOrganizationKey else { return nil }
+            return UserDefaults.standard.string(forKey: key)
+        }
+        nonmutating set {
+            guard let key = savedOrganizationKey else { return }
+            if let newValue {
+                UserDefaults.standard.set(newValue, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+    }
+
+    private var savedOrganizationKey: String? {
+        guard let userID = auth.session?.userID else { return nil }
+        return "orda.platform.organization.\(userID)"
     }
 
     /// Открыть раздел по идентификатору страницы каталога.
@@ -170,10 +198,11 @@ struct PlatformRootView: View {
             .tabItem { Label("Моя компания", systemImage: "square.grid.2x2.fill") }
             .tag(PlatformTab.company)
 
+            // Та же плитка сервисов, что у владельца, — а не старый список.
             NavigationStack(path: $sectionsPath) {
-                BusinessSectionsScreen(resolver: resolver)
+                OwnerServicesScreen(resolver: resolver)
             }
-            .tabItem { Label("Разделы", systemImage: "list.bullet") }
+            .tabItem { Label("Сервисы", systemImage: "square.grid.2x2.fill") }
             .tag(PlatformTab.sections)
 
             NavigationStack { BusinessProfileScreen(resolver: resolver) }
@@ -191,7 +220,11 @@ struct PlatformRootView: View {
             OwnerHomeScreen(resolver: resolver) { destination in
                 switch destination {
                 case .analytics: openIfAllowed(pageID: "business.analytics")
-                case .services: break
+                case .services:
+                    #if os(iOS)
+                    phoneTab = .sections
+                    sectionsPath = []
+                    #endif
                 case let .page(id): openIfAllowed(pageID: id)
                 }
             }
