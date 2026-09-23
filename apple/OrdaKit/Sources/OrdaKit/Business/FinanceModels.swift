@@ -774,7 +774,7 @@ public struct CashflowOutlook: Decodable, Sendable {
 }
 
 public struct CashflowService: Sendable {
-    private let api: APIClient
+    let api: APIClient
     public init(api: APIClient) { self.api = api }
 
     /// `companyID` — одна точка; `nil` — вся организация.

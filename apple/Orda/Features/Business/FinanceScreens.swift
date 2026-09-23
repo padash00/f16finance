@@ -394,6 +394,18 @@ struct CashflowScreen: View {
     @State private var range: AnalyticsPeriod = .thisMonth
     @State private var companyID: String?
     @State private var tab: Tab = .overview
+    @Environment(\.access) private var access
+    /// Лист «Остаток денег» — отметки остатка, как диалог на сайте.
+    @State private var showsBalance = false
+    @State private var aiText: String?
+    @State private var isAskingAI = false
+    @State private var aiError: String?
+    @State private var exported: ExportedFile?
+    @State private var isExporting = false
+    @State private var exportError: String?
+
+    private var canAskAI: Bool { access?.can("cashflow.ai_analysis") ?? false }
+    private var canExport: Bool { access?.can("cashflow.export") ?? false }
 
     var body: some View {
         ScreenScroll {
@@ -429,7 +441,38 @@ struct CashflowScreen: View {
         }
         .background(Theme.background)
         .navigationTitle("Движение денег")
-        .toolbar { LogoutToolbarItem() }
+        .toolbar {
+            if canExport, store?.report != nil {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { Task { await exportPDF() } } label: {
+                        if isExporting {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "square.and.arrow.up")
+                        }
+                    }
+                    .disabled(isExporting)
+                    .accessibilityLabel("Выгрузить PDF")
+                }
+            }
+            LogoutToolbarItem()
+        }
+        .shareSheet($exported)
+        .alert("PDF не собрался", isPresented: Binding(get: { exportError != nil }, set: { if !$0 { exportError = nil } })) {
+            Button("Понятно", role: .cancel) {}
+        } message: {
+            Text(exportError ?? "")
+        }
+        .sheet(isPresented: $showsBalance) {
+            CashflowBalanceSheet(
+                companies: store?.companies ?? [],
+                defaultCompanyID: companyID
+            ) {
+                Task { await reload() }
+            }
+        }
+        .onChange(of: range) { _, _ in aiText = nil }
+        .onChange(of: companyID) { _, _ in aiText = nil }
         .task {
             if store == nil {
                 let created = CashflowStore(api: api)
@@ -441,6 +484,15 @@ struct CashflowScreen: View {
                 }
                 #endif
                 await created.load(range: range, companyID: companyID)
+                #if DEBUG
+                // Снимки экрана: `-ordaCashflowOpen balance|ai|pdf`.
+                switch UserDefaults.standard.string(forKey: "ordaCashflowOpen") {
+                case "balance": showsBalance = true
+                case "ai": await askAI()
+                case "pdf": await exportPDF()
+                default: break
+                }
+                #endif
             }
         }
         .onChange(of: range) { _, _ in Task { await reload() } }
@@ -551,6 +603,8 @@ struct CashflowScreen: View {
 
     @ViewBuilder
     private func overview(_ report: CashflowReport) -> some View {
+        balanceRow(report)
+
         dailyChart(report)
 
         let activities = report.activities.filter { $0.amount > 0 || $0.previous > 0 }
@@ -579,6 +633,113 @@ struct CashflowScreen: View {
         }
 
         highlights(report)
+
+        if canAskAI { aiCard(report) }
+    }
+
+    /// Строка «Остаток денег»: чем подтверждён остаток и куда нажать, чтобы
+    /// указать его. Без отметки остаток не считается — это честно пишем.
+    private func balanceRow(_ report: CashflowReport) -> some View {
+        Button { showsBalance = true } label: {
+            HStack(spacing: Spacing.md) {
+                TintedIcon(systemName: "banknote.fill", tint: Theme.brand, size: 42)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Остаток денег")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Theme.text)
+                    Text(report.balance?.anchor.map { "отметка на \(Self.dayLabel($0.asOfDate))" } ?? "не указан — нажмите, чтобы указать")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.textDim)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: Spacing.sm)
+                if let end = report.balance?.end {
+                    Text(Money.format(end.total))
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(end.total < 0 ? Theme.negative : Theme.text)
+                }
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.textDim)
+            }
+            .padding(Spacing.lg)
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+        }
+        .buttonStyle(.pressable)
+    }
+
+    /// Разбор ИИ — по кнопке: запрос платный и не нужен при каждом входе.
+    private func aiCard(_ report: CashflowReport) -> some View {
+        OwnerSection("Разбор ИИ") {
+            if aiText != nil {
+                Button("Обновить") { Task { await askAI() } }
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Theme.brand)
+                    .disabled(isAskingAI)
+            }
+        } content: {
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                if let aiText {
+                    AiTextBlocks(blocks: InsightMarkdown.blocks(from: aiText))
+                } else {
+                    Text("Три коротких вывода с цифрами: что хорошо, что тревожит — особенно наличные и крупные выплаты — и одно главное действие.")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Theme.textDim)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button {
+                        Task { await askAI() }
+                    } label: {
+                        HStack(spacing: Spacing.sm) {
+                            if isAskingAI {
+                                ProgressView().controlSize(.small).tint(.white)
+                                Text("Разбираем…")
+                            } else {
+                                Image(systemName: "sparkles")
+                                Text("Разобрать период")
+                            }
+                        }
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .disabled(isAskingAI)
+                }
+                if let aiError {
+                    Text(aiError)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.negative)
+                }
+            }
+        }
+    }
+
+    private func askAI() async {
+        guard let report = store?.report, !isAskingAI else { return }
+        isAskingAI = true
+        defer { isAskingAI = false }
+        aiError = nil
+        do {
+            aiText = try await CashflowService(api: api).aiAnalysis(report)
+        } catch let error as APIError {
+            aiError = error.userMessage
+        } catch {
+            aiError = error.localizedDescription
+        }
+    }
+
+    /// PDF собирает сервер — тот же отчёт, что скачивают на сайте.
+    private func exportPDF() async {
+        guard let report = store?.report, !isExporting else { return }
+        isExporting = true
+        defer { isExporting = false }
+        do {
+            let data = try await CashflowService(api: api).pdf(report)
+            exported = try ExportedFile.write(data, name: CashflowExport.pdfFileName(report))
+            Haptics.success()
+        } catch let error as APIError {
+            exportError = error.userMessage
+        } catch {
+            exportError = error.localizedDescription
+        }
     }
 
     private static func activityIcon(_ key: String) -> String {
@@ -1031,6 +1192,260 @@ private struct PaymentsTab: View {
     private static func monthShort(_ iso: String) -> String {
         guard let date = DateParsing.parseDateOnly(iso) else { return "" }
         return date.formatted(.dateTime.month(.abbreviated))
+    }
+}
+
+// ── Остаток денег ────────────────────────────────────────────────────────────
+
+/// Отметки остатка — как диалог «Остаток денег» на сайте.
+///
+/// Сколько было наличных и безналичных на утро даты — до движений этого дня.
+/// Дальше система считает остаток сама. Пересчитали кассу — новая отметка.
+struct CashflowBalanceSheet: View {
+    let companies: [CashflowCompany]
+    let defaultCompanyID: String?
+    var onChanged: () -> Void
+
+    @Environment(\.api) private var api
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var list: CashflowAnchorList?
+    @State private var loadError: String?
+    @State private var companyID: String?
+    @State private var date = Date()
+    @State private var cashText = ""
+    @State private var cashlessText = ""
+    @State private var note = ""
+    @State private var isSaving = false
+    @State private var saveError: String?
+    @State private var deleting: CashflowAnchor?
+
+    var body: some View {
+        NavigationStack {
+            ScreenScroll {
+                Text("Сколько было наличных и безналичных на утро даты — до движений этого дня. Дальше система считает остаток сама. Пересчитали кассу — добавьте новую отметку.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Theme.textDim)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                if let list {
+                    if !list.available {
+                        notice(list.hint ?? "Функция ещё не включена.", icon: "exclamationmark.triangle.fill", tint: Theme.warning)
+                    } else {
+                        if list.canEdit {
+                            form
+                        } else {
+                            notice("Указать остаток может владелец или управляющий.", icon: "lock.fill", tint: Theme.textDim)
+                        }
+                        anchors(list)
+                    }
+                } else if let loadError {
+                    notice(loadError, icon: "exclamationmark.circle.fill", tint: Theme.negative)
+                } else {
+                    LoadingRows(count: 3)
+                }
+            }
+            .background(Theme.background)
+            .navigationTitle("Остаток денег")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Закрыть") { dismiss() }
+                }
+            }
+            .task {
+                companyID = defaultCompanyID
+                await load()
+            }
+            .confirmationDialog(
+                "Удалить отметку остатка?",
+                isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
+                titleVisibility: .visible
+            ) {
+                if let anchor = deleting {
+                    Button("Удалить", role: .destructive) { Task { await remove(anchor) } }
+                }
+                Button("Отмена", role: .cancel) { deleting = nil }
+            } message: {
+                Text("Остаток будет считаться от предыдущей отметки, если она есть.")
+            }
+        }
+    }
+
+    // ── Новая отметка ────────────────────────────────────────────────────────
+
+    private var form: some View {
+        VStack(spacing: Spacing.md) {
+            LedgerEditForm.section("Новая отметка") {
+                LedgerEditForm.menuRow("Чьи деньги", icon: "building.2.fill", value: companyName(companyID)) {
+                    Button("Вся организация") { companyID = nil }
+                    ForEach(companies) { company in
+                        Button(company.name) { companyID = company.id }
+                    }
+                }
+                LedgerEditForm.divider
+                HStack {
+                    Label {
+                        Text("На утро даты").font(.system(size: 16)).foregroundStyle(Theme.text)
+                    } icon: {
+                        Image(systemName: "calendar")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Theme.brand)
+                            .frame(width: 28)
+                    }
+                    Spacer()
+                    DatePicker("", selection: $date, in: ...Date(), displayedComponents: .date)
+                        .labelsHidden()
+                }
+                .padding(.vertical, 8)
+                LedgerEditForm.divider
+                LedgerEditForm.amountRow("Наличные", icon: "banknote.fill", text: $cashText)
+                LedgerEditForm.divider
+                LedgerEditForm.amountRow("Безналичный", icon: "creditcard.fill", text: $cashlessText)
+                LedgerEditForm.divider
+                LedgerEditForm.commentRow($note)
+            }
+            LedgerEditForm.saveButton(isSaving: isSaving, problem: nil, error: saveError) {
+                Task { await save() }
+            }
+        }
+    }
+
+    // ── Отметки ──────────────────────────────────────────────────────────────
+
+    @ViewBuilder
+    private func anchors(_ list: CashflowAnchorList) -> some View {
+        OwnerSection("Отметки") {
+            Text("\(list.anchors.count)")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.textDim)
+        } content: {
+            if list.anchors.isEmpty {
+                Text("Пока нет ни одной.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Theme.textDim)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(list.anchors.enumerated()), id: \.element.id) { index, anchor in
+                        if index > 0 {
+                            Rectangle().fill(Theme.borderSoft).frame(height: 1).padding(.leading, 52)
+                        }
+                        HStack(spacing: Spacing.md) {
+                            TintedIcon(systemName: anchor.companyID == nil ? "building.columns.fill" : "storefront.fill", tint: Theme.brand, size: 40, corner: 12)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("\(CashflowScreen.dayLabel(anchor.asOfDate)) · \(anchor.companyID == nil ? "Вся организация" : companyName(anchor.companyID))")
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundStyle(Theme.text)
+                                    .lineLimit(1)
+                                Text(anchorLine(anchor))
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(Theme.textDim)
+                                    .lineLimit(2)
+                            }
+                            Spacer(minLength: Spacing.sm)
+                            if list.canEdit {
+                                Button { deleting = anchor } label: {
+                                    Image(systemName: "trash")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundStyle(Theme.negative)
+                                        .frame(width: 32, height: 32)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Удалить отметку")
+                            }
+                        }
+                        .padding(.vertical, 10)
+                    }
+                }
+            }
+        }
+    }
+
+    private func anchorLine(_ anchor: CashflowAnchor) -> String {
+        var line = "нал \(Money.format(anchor.cash)) · безнал \(Money.format(anchor.cashless))"
+        if let note = anchor.note, !note.isEmpty { line += " · \(note)" }
+        return line
+    }
+
+    private func notice(_ text: String, icon: String, tint: Color) -> some View {
+        HStack(alignment: .top, spacing: Spacing.md) {
+            Image(systemName: icon)
+                .foregroundStyle(tint)
+            Text(text)
+                .font(.system(size: 14))
+                .foregroundStyle(Theme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(Spacing.lg)
+        .background(tint.opacity(0.10), in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+    }
+
+    private func companyName(_ id: String?) -> String {
+        guard let id else { return "Вся организация" }
+        return companies.first { $0.id == id }?.name ?? "Точка"
+    }
+
+    // ── Запросы ──────────────────────────────────────────────────────────────
+
+    private func load() async {
+        do {
+            list = try await CashflowService(api: api).balanceAnchors()
+            loadError = nil
+        } catch let error as APIError {
+            loadError = error.userMessage
+        } catch {
+            loadError = error.localizedDescription
+        }
+    }
+
+    private func save() async {
+        let cash = AmountParsing.value(cashText.isEmpty ? "0" : cashText)
+        let cashless = AmountParsing.value(cashlessText.isEmpty ? "0" : cashlessText)
+        isSaving = true
+        defer { isSaving = false }
+        saveError = nil
+        do {
+            try await CashflowService(api: api).saveBalanceAnchor(CashflowAnchorDraft(
+                companyID: companyID,
+                date: DateParsing.dateOnlyString(from: date),
+                cash: cash,
+                cashless: cashless,
+                note: note
+            ))
+            Haptics.success()
+            cashText = ""
+            cashlessText = ""
+            note = ""
+            await load()
+            onChanged()
+        } catch let error as APIError {
+            saveError = error.userMessage
+            Haptics.error()
+        } catch {
+            saveError = error.localizedDescription
+            Haptics.error()
+        }
+    }
+
+    private func remove(_ anchor: CashflowAnchor) async {
+        deleting = nil
+        do {
+            try await CashflowService(api: api).deleteBalanceAnchor(id: anchor.id)
+            Haptics.success()
+            await load()
+            onChanged()
+        } catch let error as APIError {
+            saveError = error.userMessage
+            Haptics.error()
+        } catch {
+            saveError = error.localizedDescription
+            Haptics.error()
+        }
     }
 }
 
