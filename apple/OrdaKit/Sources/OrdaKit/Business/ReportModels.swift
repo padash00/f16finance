@@ -92,29 +92,46 @@ public struct ReportBucket: Decodable, Sendable, Identifiable, Hashable {
 public struct ReportAggregate: Decodable, Sendable {
     public let dateFrom: String
     public let dateTo: String
+    /// База сравнения: прошлый период той же длины или тот же период год назад.
+    public let prevFrom: String
+    public let prevTo: String
     public let current: FinancialTotals
     public let previous: FinancialTotals
     public let buckets: [ReportBucket]
     public let expenseByCategory: [String: Double]
-    public let incomeByCompany: [String: Double]
+    /// Выручка точек: название и сумма.
+    ///
+    /// Сервер отдаёт по каждой точке объект `{name, value, cash, …}`, а не
+    /// число. Раньше здесь ждали число, разбор молча падал, и блок «Выручка по
+    /// точкам» был пуст всегда.
+    public let companyIncome: [ReportCompanyIncome]
+    /// Итоги точек за период: выручка, расходы, прибыль. Ключ — id точки.
+    public let companyStats: [String: ReportCompanyStat]
+    /// То же за базу сравнения.
+    public let companyStatsPrev: [String: ReportCompanyStat]
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         dateFrom = try c.decodeFlexibleString(forKey: .dateFrom) ?? ""
         dateTo = try c.decodeFlexibleString(forKey: .dateTo) ?? ""
+        prevFrom = try c.decodeFlexibleString(forKey: .prevFrom) ?? ""
+        prevTo = try c.decodeFlexibleString(forKey: .prevTo) ?? ""
         current = (try? c.decodeIfPresent(FinancialTotals.self, forKey: .totalsCur)) ?? .zero
         previous = (try? c.decodeIfPresent(FinancialTotals.self, forKey: .totalsPrev)) ?? .zero
         buckets = (try? c.decodeIfPresent([ReportBucket].self, forKey: .chartData)) ?? []
         expenseByCategory = (try? c.decodeIfPresent([String: Double].self, forKey: .expenseByCategory)) ?? [:]
-        incomeByCompany = (try? c.decodeIfPresent([String: Double].self, forKey: .incomeByCompany)) ?? [:]
+        let incomeObjects = (try? c.decodeIfPresent([String: ReportCompanyIncome].self, forKey: .incomeByCompany)) ?? [:]
+        companyIncome = incomeObjects.values.sorted { $0.amount > $1.amount }
+        companyStats = (try? c.decodeIfPresent([String: ReportCompanyStat].self, forKey: .companyStats)) ?? [:]
+        companyStatsPrev = (try? c.decodeIfPresent([String: ReportCompanyStat].self, forKey: .companyStatsPrev)) ?? [:]
     }
 
     private enum CodingKeys: String, CodingKey {
-        case dateFrom, dateTo, totalsCur, totalsPrev, chartData
-        case expenseByCategory, incomeByCompany
+        case dateFrom, dateTo, prevFrom, prevTo, totalsCur, totalsPrev, chartData
+        case expenseByCategory, incomeByCompany, companyStats, companyStatsPrev
     }
 
-    /// Изменение выручки к прошлому периоду. `nil`, когда сравнивать не с чем.
+    /// Изменение выручки к базе сравнения. `nil`, когда сравнивать не с чем.
     public var incomeChange: Double? {
         Percent.change(current: current.totalIncome, previous: previous.totalIncome)
     }
@@ -133,25 +150,270 @@ public struct ReportAggregate: Decodable, Sendable {
             .map { (name: $0.key, amount: $0.value) }
             .sorted { $0.amount > $1.amount }
     }
+}
 
-    /// Выручка по точкам.
-    public var companyIncome: [(name: String, amount: Double)] {
-        incomeByCompany
-            .map { (name: $0.key, amount: $0.value) }
-            .sorted { $0.amount > $1.amount }
+/// Выручка одной точки за период (`aggregate.incomeByCompany[id]`).
+public struct ReportCompanyIncome: Decodable, Sendable, Hashable {
+    public let companyID: String
+    public let name: String
+    public let amount: Double
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        companyID = try c.decodeFlexibleString(forKey: .companyId) ?? ""
+        name = try c.decodeFlexibleString(forKey: .name) ?? "Точка"
+        amount = try c.decodeFlexibleDouble(forKey: .value) ?? 0
+    }
+
+    private enum CodingKeys: String, CodingKey { case companyId, name, value }
+}
+
+/// Итоги точки (`aggregate.companyStats[id]`): для таблицы «Точки».
+public struct ReportCompanyStat: Decodable, Sendable, Hashable {
+    public let income: Double
+    public let expense: Double
+    public let profit: Double
+    public let transactions: Int
+
+    /// Маржа — прибыль к выручке. `nil`, когда выручки нет.
+    public var margin: Double? { income > 0 ? profit / income : nil }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        income = try c.decodeFlexibleDouble(forKey: .income) ?? 0
+        expense = try c.decodeFlexibleDouble(forKey: .expense) ?? 0
+        profit = try c.decodeFlexibleDouble(forKey: .profit) ?? (income - expense)
+        transactions = Int(try c.decodeFlexibleDouble(forKey: .transactions) ?? 0)
+    }
+
+    private enum CodingKeys: String, CodingKey { case income, expense, profit, transactions }
+}
+
+/// Статья расходов ОПиУ за период (`expenseByGroup`): сумма, база сравнения
+/// и категории внутри.
+public struct ReportExpenseArticle: Decodable, Sendable, Hashable, Identifiable {
+    public struct Category: Decodable, Sendable, Hashable {
+        public let name: String
+        public let amount: Double
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            name = try c.decodeFlexibleString(forKey: .name) ?? "Без категории"
+            amount = try c.decodeFlexibleDouble(forKey: .amount) ?? 0
+        }
+
+        private enum CodingKeys: String, CodingKey { case name, amount }
+    }
+
+    public let group: String
+    public let label: String
+    /// CAPEX и выплаты партнёрам: в ОПиУ не вычитаются.
+    public let offChain: Bool
+    public let amount: Double
+    public let prevAmount: Double
+    public let categories: [Category]
+
+    public var id: String { group }
+    public var change: Double? { Percent.change(current: amount, previous: prevAmount) }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        group = try c.decodeFlexibleString(forKey: .group) ?? UUID().uuidString
+        label = try c.decodeFlexibleString(forKey: .label) ?? "Статья"
+        offChain = (try? c.decodeIfPresent(Bool.self, forKey: .offChain)) ?? false
+        amount = try c.decodeFlexibleDouble(forKey: .amount) ?? 0
+        prevAmount = try c.decodeFlexibleDouble(forKey: .prevAmount) ?? 0
+        categories = (try? c.decodeIfPresent([Category].self, forKey: .categories)) ?? []
+    }
+
+    private enum CodingKeys: String, CodingKey { case group, label, offChain, amount, prevAmount, categories }
+}
+
+/// Операция периода для вкладки «Операции» (`rows=current`).
+public struct ReportOperation: Sendable, Hashable, Identifiable {
+    public enum Kind: Sendable, Hashable { case income, expense }
+
+    public let id: String
+    public let kind: Kind
+    public let date: String
+    public let companyID: String?
+    /// Смена у дохода, статья у расхода.
+    public let title: String?
+    public let amount: Double
+    public let comment: String?
+}
+
+/// Строка дохода из `rows=current`.
+struct ReportIncomeRowDTO: Decodable {
+    let id: String
+    let date: String
+    let companyID: String?
+    let shift: String?
+    let zone: String?
+    let total: Double
+    let comment: String?
+
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeFlexibleString(forKey: .id) ?? UUID().uuidString
+        date = try c.decodeFlexibleString(forKey: .date) ?? ""
+        companyID = try c.decodeFlexibleString(forKey: .companyId)
+        shift = try c.decodeFlexibleString(forKey: .shift)
+        zone = try c.decodeFlexibleString(forKey: .zone)
+        total = (try c.decodeFlexibleDouble(forKey: .cash) ?? 0)
+            + (try c.decodeFlexibleDouble(forKey: .kaspi) ?? 0)
+            + (try c.decodeFlexibleDouble(forKey: .online) ?? 0)
+            + (try c.decodeFlexibleDouble(forKey: .card) ?? 0)
+        comment = try c.decodeFlexibleString(forKey: .comment)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, date, shift, zone, comment
+        case companyId = "company_id"
+        case cash = "cash_amount"
+        case kaspi = "kaspi_amount"
+        case online = "online_amount"
+        case card = "card_amount"
+    }
+}
+
+/// Строка расхода из `rows=current`.
+struct ReportExpenseRowDTO: Decodable {
+    let id: String
+    let date: String
+    let companyID: String?
+    let category: String?
+    let total: Double
+    let comment: String?
+
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeFlexibleString(forKey: .id) ?? UUID().uuidString
+        date = try c.decodeFlexibleString(forKey: .date) ?? ""
+        companyID = try c.decodeFlexibleString(forKey: .companyId)
+        category = try c.decodeFlexibleString(forKey: .category)
+        total = (try c.decodeFlexibleDouble(forKey: .cash) ?? 0) + (try c.decodeFlexibleDouble(forKey: .kaspi) ?? 0)
+        comment = try c.decodeFlexibleString(forKey: .comment)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, date, category, comment
+        case companyId = "company_id"
+        case cash = "cash_amount"
+        case kaspi = "kaspi_amount"
     }
 }
 
 /// Ответ `GET /api/admin/reports/bundle`.
 public struct ReportBundle: Decodable, Sendable {
     public let aggregate: ReportAggregate
+    /// Расходы по статьям ОПиУ — вкладка «Расходы».
+    public let expenseArticles: [ReportExpenseArticle]
+    /// Операции периода — только при `rows=current`, иначе пусто.
+    public let operations: [ReportOperation]
+    /// Строк ночной смены, где Kaspi не разделён по полуночи: суммы по дням
+    /// у них приблизительные.
+    public let impreciseNightKaspiCount: Int
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         aggregate = try c.decode(ReportAggregate.self, forKey: .aggregate)
+        expenseArticles = (try? c.decodeIfPresent([ReportExpenseArticle].self, forKey: .expenseByGroup)) ?? []
+        impreciseNightKaspiCount = Int(try c.decodeFlexibleDouble(forKey: .impreciseNightKaspiCount) ?? 0)
+        let incomes = (try? c.decodeIfPresent([ReportIncomeRowDTO].self, forKey: .incomes)) ?? []
+        let expenses = (try? c.decodeIfPresent([ReportExpenseRowDTO].self, forKey: .expenses)) ?? []
+        let shiftTitle: (String?) -> String? = { shift in
+            switch shift {
+            case "day": "Дневная смена"
+            case "night": "Ночная смена"
+            default: nil
+            }
+        }
+        operations = (
+            incomes.map {
+                ReportOperation(id: "i." + $0.id, kind: .income, date: $0.date, companyID: $0.companyID,
+                                title: shiftTitle($0.shift) ?? $0.zone, amount: $0.total, comment: $0.comment)
+            }
+            + expenses.map {
+                ReportOperation(id: "e." + $0.id, kind: .expense, date: $0.date, companyID: $0.companyID,
+                                title: $0.category, amount: $0.total, comment: $0.comment)
+            }
+        )
+        .sorted { $0.date == $1.date ? $0.amount > $1.amount : $0.date > $1.date }
     }
 
-    private enum CodingKeys: String, CodingKey { case aggregate }
+    private enum CodingKeys: String, CodingKey {
+        case aggregate, expenseByGroup, incomes, expenses, impreciseNightKaspiCount
+    }
+}
+
+/// Параметры отчёта — те же, что у страницы /reports на сайте.
+public struct ReportQuery: Sendable, Hashable {
+    public enum Grouping: String, Sendable, CaseIterable {
+        case auto, day, week, month
+
+        public var title: String {
+            switch self {
+            case .auto: "Авто"
+            case .day: "Дни"
+            case .week: "Недели"
+            case .month: "Месяцы"
+            }
+        }
+    }
+
+    public enum Shift: String, Sendable, CaseIterable {
+        case all, day, night
+
+        public var title: String {
+            switch self {
+            case .all: "Все смены"
+            case .day: "День"
+            case .night: "Ночь"
+            }
+        }
+    }
+
+    public var from: String
+    public var to: String
+    public var companyID: String?
+    public var shift: Shift = .all
+    public var grouping: Grouping = .auto
+    /// Сравнивать с тем же периодом год назад, а не с прошлым той же длины.
+    public var compareYear = false
+    public var includeExtra = false
+
+    public init(from: String, to: String) {
+        self.from = from
+        self.to = to
+    }
+
+    /// Шаг графика для «Авто»: неделя — по дням, квартал — по неделям, год —
+    /// по месяцам. Сервер без `group` всегда считает по дням, и за год
+    /// получалось 365 столбиков.
+    public var resolvedGroup: String {
+        guard grouping == .auto else { return grouping.rawValue }
+        return Self.autoGroup(from: from, to: to)
+    }
+
+    public static func autoGroup(from: String, to: String) -> String {
+        guard let start = DateParsing.parseDateOnly(from), let end = DateParsing.parseDateOnly(to) else { return "day" }
+        let days = (Calendar(identifier: .gregorian).dateComponents([.day], from: start, to: end).day ?? 0) + 1
+        if days <= 31 { return "day" }
+        if days <= 120 { return "week" }
+        return "month"
+    }
+
+    /// Параметры запроса. `rows` — «0» для итогов и графиков (ответ в разы
+    /// легче), «current» — строки выбранного периода для «Операций».
+    public func queryItems(rows: String, asOf: String) -> [String: String] {
+        var query = ["from": from, "to": to, "group": resolvedGroup, "rows": rows, "as_of": asOf]
+        if let companyID, !companyID.isEmpty { query["company_id"] = companyID }
+        if shift != .all { query["shift"] = shift.rawValue }
+        if compareYear { query["compare"] = "year" }
+        if includeExtra { query["include_extra"] = "1" }
+        return query
+    }
 }
 
 // ── Задачи: /api/admin/tasks ─────────────────────────────────────────────────

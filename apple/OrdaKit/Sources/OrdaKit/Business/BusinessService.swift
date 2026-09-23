@@ -1082,12 +1082,25 @@ public struct BusinessService: Sendable {
 
     /// Сводный отчёт за период: итоги, сравнение с прошлым периодом, разрезы.
     public func report(from: String, to: String, includeExtra: Bool = false) async throws -> ReportAggregate {
-        var query = ["from": from, "to": to]
-        if includeExtra { query["include_extra"] = "1" }
+        var query = ReportQuery(from: from, to: to)
+        query.includeExtra = includeExtra
+        return try await reportBundle(query).aggregate
+    }
+
+    /// Отчёт с фильтрами сайта: точка, смена, шаг, база сравнения.
+    ///
+    /// `rows=0` — без сырых строк: раньше приложение их не просило и получало
+    /// все доходы и расходы за оба периода (до 200 000 строк), чтобы выбросить.
+    /// `operations: true` — строки выбранного периода для вкладки «Операции».
+    public func reportBundle(_ query: ReportQuery, operations: Bool = false) async throws -> ReportBundle {
+        let asOf = DateParsing.dateOnlyString(from: Date())
         let response: Envelope<ReportBundle> = try await api.send(
-            APIRequest(path: "/api/admin/reports/bundle", query: query)
+            APIRequest(
+                path: "/api/admin/reports/bundle",
+                query: query.queryItems(rows: operations ? "current" : "0", asOf: asOf)
+            )
         )
-        return response.data.aggregate
+        return response.data
     }
 
     /// Аналитика по месяцам года. Требует `analytics.view`.
