@@ -19,16 +19,61 @@ final class ReportsStore {
     private(set) var operationsError: APIError?
     private(set) var isLoadingOperations = false
 
+    /// Разбор ИИ — по кнопке: вызов платный, и тратить его на срез, который
+    /// никто не прочтёт, незачем. Сбрасывается при смене среза.
+    private(set) var insight: String?
+    private(set) var insightError: String?
+    private(set) var isLoadingInsight = false
+
+    private(set) var isExportingPDF = false
+
     private let service: BusinessService
     private var generation = 0
 
     init(api: APIClient) { service = BusinessService(api: api) }
+
+    func loadInsight() async {
+        guard let aggregate = bundle?.aggregate, !isLoadingInsight else { return }
+        isLoadingInsight = true
+        insightError = nil
+        defer { isLoadingInsight = false }
+        do {
+            insight = try await service.reportInsight(body: ReportExport.insightBody(aggregate: aggregate))
+        } catch let apiError as APIError {
+            insightError = apiError.userMessage
+        } catch {
+            insightError = error.localizedDescription
+        }
+    }
+
+    /// PDF как на сайте: сервер собирает его из итогов и операций периода.
+    /// Операции дочитываем, если вкладку «Операции» ещё не открывали.
+    func exportPDF(_ query: ReportQuery, companyLabel: String, companyName: (String?) -> String) async throws -> ExportedFile? {
+        guard let aggregate = bundle?.aggregate else { return nil }
+        isExportingPDF = true
+        defer { isExportingPDF = false }
+        var rows = operations
+        if rows == nil {
+            rows = try await service.reportBundle(query, operations: true).operations
+            operations = rows
+        }
+        let body = try ReportExport.finreportBody(
+            aggregate: aggregate,
+            operations: rows ?? [],
+            companyLabel: companyLabel,
+            companyName: companyName
+        )
+        let data = try await service.reportPDF(body: body)
+        return try ExportedFile.write(data, name: "Финансовый отчёт \(aggregate.dateFrom) — \(aggregate.dateTo).pdf")
+    }
 
     func load(_ query: ReportQuery) async {
         generation += 1
         let mine = generation
         isLoading = true
         operations = nil
+        insight = nil
+        insightError = nil
         defer { if mine == generation { isLoading = false } }
         do {
             let result = try await service.reportBundle(query)
@@ -81,8 +126,11 @@ struct ReportsScreen: View {
 
     @Environment(BusinessStore.self) private var store
     @Environment(\.api) private var api
+    @Environment(\.access) private var access
 
     @State private var reports: ReportsStore?
+    @State private var exported: ExportedFile?
+    @State private var exportError: String?
     @State private var tab: Tab = .overview
     @State private var companyID: String?
     @State private var shift: ReportQuery.Shift = .all
@@ -129,7 +177,28 @@ struct ReportsScreen: View {
         }
         .background(Theme.background)
         .navigationTitle("Отчёты")
-        .toolbar { LogoutToolbarItem() }
+        .toolbar {
+            if access?.can("reports.export") == true, reports?.bundle != nil {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { Task { await exportPDF() } } label: {
+                        if reports?.isExportingPDF == true {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "square.and.arrow.up")
+                        }
+                    }
+                    .disabled(reports?.isExportingPDF == true)
+                    .accessibilityLabel("Скачать PDF")
+                }
+            }
+            LogoutToolbarItem()
+        }
+        .shareSheet($exported)
+        .alert("Не удалось собрать PDF", isPresented: Binding(get: { exportError != nil }, set: { if !$0 { exportError = nil } })) {
+            Button("Понятно", role: .cancel) {}
+        } message: {
+            Text(exportError ?? "")
+        }
         .task(id: query) {
             if reports == nil { reports = ReportsStore(api: api) }
             await reload()
@@ -152,6 +221,25 @@ struct ReportsScreen: View {
 
     private func reload() async {
         await reports?.load(query)
+    }
+
+    /// Что стоит в шапке PDF: точка или вся сеть — как на сайте.
+    private var companyLabel: String {
+        if let companyID { return store.companyName(companyID) ?? "Точка" }
+        return ExtraCashPreference.shared.includeExtra ? "Все компании (включая F16 Extra)" : "Все компании"
+    }
+
+    private func exportPDF() async {
+        do {
+            exported = try await reports?.exportPDF(query, companyLabel: companyLabel) { id in
+                store.companyName(id) ?? "—"
+            }
+            if exported != nil { Haptics.success() }
+        } catch let error as APIError {
+            exportError = error.userMessage
+        } catch {
+            exportError = error.localizedDescription
+        }
     }
 
     private var loadingState: some View {
@@ -270,6 +358,18 @@ struct ReportsScreen: View {
                 .background(Theme.warning.opacity(0.08), in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
             }
 
+            if let forecast = ReportForecast.forPeriod(
+                dateFrom: report.dateFrom,
+                dateTo: report.dateTo,
+                asOf: bundle.asOf ?? DateParsing.dateOnlyString(from: Date()),
+                income: totals.totalIncome,
+                expense: totals.totalExpense,
+                profit: totals.profit,
+                hints: bundle.forecastHints
+            ) {
+                forecastCard(forecast)
+            }
+
             trend(report)
 
             SplitDashboard {
@@ -278,7 +378,199 @@ struct ReportsScreen: View {
                 payments(totals)
                 companies(report)
             }
+
+            heatmap(report)
+
+            if access?.can("reports.view") != false, totals.totalIncome != 0 || totals.totalExpense != 0 {
+                insightCard
+            }
         }
+    }
+
+    // ── Прогноз ──────────────────────────────────────────────────────────────
+
+    /// Период ещё идёт — чем он, скорее всего, закончится. Для календарного
+    /// месяца — гибрид темпа и «хвоста» прошлого месяца, иначе линейно.
+    private func forecastCard(_ forecast: ReportForecast) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: Spacing.sm) {
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                    .font(.system(size: 13, weight: .bold))
+                Text("Прогноз на конец периода")
+                    .font(.system(size: 14, weight: .semibold))
+                Spacer()
+                Text("точность \(Int(forecast.confidence.rounded()))%")
+                    .font(.system(size: 12, weight: .semibold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.white.opacity(0.16), in: Capsule())
+            }
+            .foregroundStyle(.white)
+
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.xl) {
+                forecastValue("Выручка", forecast.forecastIncome)
+                forecastValue("Прибыль", forecast.forecastProfit)
+            }
+            .padding(.top, Spacing.md)
+
+            Text("Осталось \(forecast.remainingDays) \(pluralize(forecast.remainingDays, "день", "дня", "дней")) · \(forecast.note)")
+                .font(.system(size: 12))
+                .foregroundStyle(.white.opacity(0.7))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, Spacing.md)
+        }
+        .padding(Spacing.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            LinearGradient(colors: Theme.heroAccent, startPoint: .topLeading, endPoint: .bottomTrailing),
+            in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+        )
+    }
+
+    private func forecastValue(_ label: String, _ value: Double) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.system(size: 13))
+                .foregroundStyle(.white.opacity(0.7))
+            Text(Money.format(value))
+                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+        }
+    }
+
+    // ── Тепловая карта ───────────────────────────────────────────────────────
+
+    /// Прибыль по дням календарём: зелёные дни в плюс, красные в минус, чем
+    /// ярче — тем больше. Дольше трёх месяцев — клетка на месяц.
+    @ViewBuilder
+    private func heatmap(_ report: ReportAggregate) -> some View {
+        let map = ProfitHeatmap.build(from: report.dateFrom, to: report.dateTo, dailyIncome: report.dailyIncome, dailyExpense: report.dailyExpense)
+        if !map.cells.isEmpty, map.maxAbsProfit > 0 {
+            OwnerSection("Прибыль по дням") {
+                Text(map.byMonth ? "по месяцам" : "календарь")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textDim)
+            } content: {
+                let columns = Array(repeating: GridItem(.flexible(), spacing: 5), count: map.byMonth ? 4 : 7)
+                LazyVGrid(columns: columns, spacing: 5) {
+                    if !map.byMonth {
+                        ForEach(["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"], id: \.self) { day in
+                            Text(day)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(Theme.textDim)
+                        }
+                        ForEach(0..<map.leadingBlanks, id: \.self) { _ in Color.clear.frame(height: 1) }
+                    }
+                    ForEach(map.cells) { cell in
+                        heatCell(cell, maxAbs: map.maxAbsProfit, byMonth: map.byMonth)
+                    }
+                }
+                HStack(spacing: Spacing.md) {
+                    legend(Theme.positive, "в плюс")
+                    legend(Theme.negative, "в минус")
+                    Spacer()
+                }
+                .padding(.top, Spacing.xs)
+            }
+        }
+    }
+
+    private func heatCell(_ cell: ProfitHeatCell, maxAbs: Double, byMonth: Bool) -> some View {
+        let profit = cell.profit
+        let alpha = profit == 0 || maxAbs == 0 ? 0 : 0.14 + 0.6 * (abs(profit) / maxAbs)
+        let color = profit > 0 ? Theme.positive : Theme.negative
+        return VStack(spacing: 1) {
+            Text(cell.label)
+                .font(.system(size: byMonth ? 12 : 13, weight: .semibold))
+                .foregroundStyle(Theme.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            if byMonth, profit != 0 {
+                Text(Money.axisTick(profit))
+                    .font(.system(size: 11, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.textMuted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: byMonth ? 52 : 40)
+        .background(
+            profit == 0 ? Theme.surfaceRaised : color.opacity(alpha),
+            in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+        )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(cell.label): прибыль \(Money.format(profit))")
+    }
+
+    private func legend(_ color: Color, _ title: String) -> some View {
+        HStack(spacing: 5) {
+            RoundedRectangle(cornerRadius: 3).fill(color.opacity(0.6)).frame(width: 12, height: 12)
+            Text(title)
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.textDim)
+        }
+    }
+
+    // ── Разбор ИИ ────────────────────────────────────────────────────────────
+
+    private var insightCard: some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            HStack(spacing: Spacing.md) {
+                TintedIcon(systemName: "sparkles", tint: Theme.accent, size: 40, corner: 12)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Разбор ИИ")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Theme.text)
+                    Text("что выросло, что просело и на что смотреть")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.textDim)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: Spacing.sm)
+                Button {
+                    Task { await reports?.loadInsight() }
+                } label: {
+                    if reports?.isLoadingInsight == true {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Text(reports?.insight == nil ? "Получить" : "Обновить")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(Theme.brand, in: Capsule())
+                    }
+                }
+                .buttonStyle(.pressable)
+                .disabled(reports?.isLoadingInsight == true)
+            }
+
+            if let error = reports?.insightError {
+                Text(error)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.negative)
+            } else if let text = reports?.insight {
+                Text(text)
+                    .font(.system(size: 15))
+                    .foregroundStyle(Theme.text)
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            } else if reports?.isLoadingInsight == true {
+                VStack(alignment: .leading, spacing: 8) {
+                    Skeleton(height: 12)
+                    Skeleton(height: 12)
+                    Skeleton(height: 12).frame(maxWidth: 200)
+                }
+            }
+        }
+        .padding(Spacing.lg)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
     }
 
     // ── Динамика ─────────────────────────────────────────────────────────────

@@ -109,6 +109,9 @@ public struct ReportAggregate: Decodable, Sendable {
     public let companyStats: [String: ReportCompanyStat]
     /// То же за базу сравнения.
     public let companyStatsPrev: [String: ReportCompanyStat]
+    /// Доход и расход по дням периода — для тепловой карты прибыли.
+    public let dailyIncome: [String: Double]
+    public let dailyExpense: [String: Double]
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -124,11 +127,13 @@ public struct ReportAggregate: Decodable, Sendable {
         companyIncome = incomeObjects.values.sorted { $0.amount > $1.amount }
         companyStats = (try? c.decodeIfPresent([String: ReportCompanyStat].self, forKey: .companyStats)) ?? [:]
         companyStatsPrev = (try? c.decodeIfPresent([String: ReportCompanyStat].self, forKey: .companyStatsPrev)) ?? [:]
+        dailyIncome = (try? c.decodeIfPresent([String: Double].self, forKey: .dailyIncome)) ?? [:]
+        dailyExpense = (try? c.decodeIfPresent([String: Double].self, forKey: .dailyExpense)) ?? [:]
     }
 
     private enum CodingKeys: String, CodingKey {
         case dateFrom, dateTo, prevFrom, prevTo, totalsCur, totalsPrev, chartData
-        case expenseByCategory, incomeByCompany, companyStats, companyStatsPrev
+        case expenseByCategory, incomeByCompany, companyStats, companyStatsPrev, dailyIncome, dailyExpense
     }
 
     /// Изменение выручки к базе сравнения. `nil`, когда сравнивать не с чем.
@@ -157,15 +162,26 @@ public struct ReportCompanyIncome: Decodable, Sendable, Hashable {
     public let companyID: String
     public let name: String
     public let amount: Double
+    /// Разбивка по способам и число чеков — для PDF, как на сайте.
+    public let cash: Double
+    public let kaspi: Double
+    public let online: Double
+    public let card: Double
+    public let count: Int
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         companyID = try c.decodeFlexibleString(forKey: .companyId) ?? ""
         name = try c.decodeFlexibleString(forKey: .name) ?? "Точка"
         amount = try c.decodeFlexibleDouble(forKey: .value) ?? 0
+        cash = try c.decodeFlexibleDouble(forKey: .cash) ?? 0
+        kaspi = try c.decodeFlexibleDouble(forKey: .kaspi) ?? 0
+        online = try c.decodeFlexibleDouble(forKey: .online) ?? 0
+        card = try c.decodeFlexibleDouble(forKey: .card) ?? 0
+        count = Int(try c.decodeFlexibleDouble(forKey: .count) ?? 0)
     }
 
-    private enum CodingKeys: String, CodingKey { case companyId, name, value }
+    private enum CodingKeys: String, CodingKey { case companyId, name, value, cash, kaspi, online, card, count }
 }
 
 /// Итоги точки (`aggregate.companyStats[id]`): для таблицы «Точки».
@@ -241,6 +257,14 @@ public struct ReportOperation: Sendable, Hashable, Identifiable {
     public let title: String?
     public let amount: Double
     public let comment: String?
+    /// Разбивка по способам — для строк PDF.
+    public var cash: Double = 0
+    public var kaspi: Double = 0
+    public var online: Double = 0
+    public var card: Double = 0
+    public var zone: String?
+    /// Смена как в базе («day» / «night») — у дохода.
+    public var shift: String?
 }
 
 /// Строка дохода из `rows=current`.
@@ -250,8 +274,13 @@ struct ReportIncomeRowDTO: Decodable {
     let companyID: String?
     let shift: String?
     let zone: String?
-    let total: Double
+    let cash: Double
+    let kaspi: Double
+    let online: Double
+    let card: Double
     let comment: String?
+
+    var total: Double { cash + kaspi + online + card }
 
     init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -260,10 +289,10 @@ struct ReportIncomeRowDTO: Decodable {
         companyID = try c.decodeFlexibleString(forKey: .companyId)
         shift = try c.decodeFlexibleString(forKey: .shift)
         zone = try c.decodeFlexibleString(forKey: .zone)
-        total = (try c.decodeFlexibleDouble(forKey: .cash) ?? 0)
-            + (try c.decodeFlexibleDouble(forKey: .kaspi) ?? 0)
-            + (try c.decodeFlexibleDouble(forKey: .online) ?? 0)
-            + (try c.decodeFlexibleDouble(forKey: .card) ?? 0)
+        cash = try c.decodeFlexibleDouble(forKey: .cash) ?? 0
+        kaspi = try c.decodeFlexibleDouble(forKey: .kaspi) ?? 0
+        online = try c.decodeFlexibleDouble(forKey: .online) ?? 0
+        card = try c.decodeFlexibleDouble(forKey: .card) ?? 0
         comment = try c.decodeFlexibleString(forKey: .comment)
     }
 
@@ -283,8 +312,11 @@ struct ReportExpenseRowDTO: Decodable {
     let date: String
     let companyID: String?
     let category: String?
-    let total: Double
+    let cash: Double
+    let kaspi: Double
     let comment: String?
+
+    var total: Double { cash + kaspi }
 
     init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -292,7 +324,8 @@ struct ReportExpenseRowDTO: Decodable {
         date = try c.decodeFlexibleString(forKey: .date) ?? ""
         companyID = try c.decodeFlexibleString(forKey: .companyId)
         category = try c.decodeFlexibleString(forKey: .category)
-        total = (try c.decodeFlexibleDouble(forKey: .cash) ?? 0) + (try c.decodeFlexibleDouble(forKey: .kaspi) ?? 0)
+        cash = try c.decodeFlexibleDouble(forKey: .cash) ?? 0
+        kaspi = try c.decodeFlexibleDouble(forKey: .kaspi) ?? 0
         comment = try c.decodeFlexibleString(forKey: .comment)
     }
 
@@ -314,10 +347,17 @@ public struct ReportBundle: Decodable, Sendable {
     /// Строк ночной смены, где Kaspi не разделён по полуночи: суммы по дням
     /// у них приблизительные.
     public let impreciseNightKaspiCount: Int
+    /// День, на который сервер считал («сегодня» в его часовом поясе).
+    public let asOf: String?
+    /// Прошлый месяц целиком и его начало — для прогноза на конец месяца.
+    /// Есть только когда выбран ровно календарный месяц.
+    public let forecastHints: ReportForecastHints?
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         aggregate = try c.decode(ReportAggregate.self, forKey: .aggregate)
+        asOf = try c.decodeFlexibleString(forKey: .asOf)
+        forecastHints = try? c.decodeIfPresent(ReportForecastHints.self, forKey: .forecastHints)
         expenseArticles = (try? c.decodeIfPresent([ReportExpenseArticle].self, forKey: .expenseByGroup)) ?? []
         impreciseNightKaspiCount = Int(try c.decodeFlexibleDouble(forKey: .impreciseNightKaspiCount) ?? 0)
         let incomes = (try? c.decodeIfPresent([ReportIncomeRowDTO].self, forKey: .incomes)) ?? []
@@ -332,18 +372,20 @@ public struct ReportBundle: Decodable, Sendable {
         operations = (
             incomes.map {
                 ReportOperation(id: "i." + $0.id, kind: .income, date: $0.date, companyID: $0.companyID,
-                                title: shiftTitle($0.shift) ?? $0.zone, amount: $0.total, comment: $0.comment)
+                                title: shiftTitle($0.shift) ?? $0.zone, amount: $0.total, comment: $0.comment,
+                                cash: $0.cash, kaspi: $0.kaspi, online: $0.online, card: $0.card, zone: $0.zone, shift: $0.shift)
             }
             + expenses.map {
                 ReportOperation(id: "e." + $0.id, kind: .expense, date: $0.date, companyID: $0.companyID,
-                                title: $0.category, amount: $0.total, comment: $0.comment)
+                                title: $0.category, amount: $0.total, comment: $0.comment,
+                                cash: $0.cash, kaspi: $0.kaspi)
             }
         )
         .sorted { $0.date == $1.date ? $0.amount > $1.amount : $0.date > $1.date }
     }
 
     private enum CodingKeys: String, CodingKey {
-        case aggregate, expenseByGroup, incomes, expenses, impreciseNightKaspiCount
+        case aggregate, expenseByGroup, incomes, expenses, impreciseNightKaspiCount, asOf, forecastHints
     }
 }
 
