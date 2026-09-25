@@ -116,10 +116,7 @@ struct OperatorHomeScreen: View {
 
     /// Имя, а не фамилия: «Сарсенгазинова Али…» крупным заголовком не
     /// помещалось и читалось как обрыв.
-    private var firstName: String {
-        let words = fullName.split(separator: " ").map(String.init)
-        return words.count > 1 ? words[1] : (words.first ?? fullName)
-    }
+    private var firstName: String { PersonName.firstName(fullName) ?? fullName }
 
     private var initials: String {
         let letters = fullName.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined()

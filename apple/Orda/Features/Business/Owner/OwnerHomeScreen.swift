@@ -233,11 +233,7 @@ struct OwnerHomeScreen: View {
         resolver.session.displayName ?? auth.role?.displayName
     }
 
-    private var firstName: String? {
-        fullName?
-            .split(separator: " ").first.map(String.init)
-            .flatMap { $0.contains("@") ? nil : $0 }
-    }
+    private var firstName: String? { PersonName.firstName(fullName) }
 
     private var initials: String {
         let words = (fullName ?? "")

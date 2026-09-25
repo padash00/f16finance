@@ -51,3 +51,15 @@ struct StaffRolePlaybookTests {
         #expect(!pages.contains("expenses"))
     }
 }
+
+@Suite("Имя для приветствия")
+struct PersonNameTests {
+    @Test("Фамилия первой — берём имя")
+    func surnameFirst() {
+        #expect(PersonName.firstName("Магомедов Салим") == "Салим")
+        #expect(PersonName.firstName("Сарсенгазинова Алима Асланқызы") == "Алима")
+        #expect(PersonName.firstName("Салим Магомедов") == "Салим")
+        #expect(PersonName.firstName("Асан") == "Асан")
+        #expect(PersonName.firstName("owner@mail.kz") == nil)
+    }
+}

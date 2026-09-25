@@ -18,6 +18,7 @@ struct StaffHomeScreen: View {
 
     @Environment(BusinessStore.self) private var business
     @Environment(AuthStore.self) private var auth
+    @Environment(\.surface) private var surface
 
     @State private var sheet: OwnerHomeScreen.QuickSheet?
 
@@ -109,11 +110,7 @@ struct StaffHomeScreen: View {
         resolver.session.displayName ?? auth.role?.displayName
     }
 
-    private var firstName: String? {
-        fullName?
-            .split(separator: " ").first.map(String.init)
-            .flatMap { $0.contains("@") ? nil : $0 }
-    }
+    private var firstName: String? { PersonName.firstName(fullName) }
 
     private var initials: String {
         let words = (fullName ?? "")
@@ -254,7 +251,10 @@ struct StaffHomeScreen: View {
         // Всегда последней — все сервисы: у кнопок выше порядок должности,
         // а здесь всё остальное, что выдано.
         items = Array(items.prefix(4))
-        items.append(QuickItem(id: "services", icon: "square.grid.2x2.fill", title: "Сервисы") { navigate(.services) })
+        // На планшете все разделы и так в боковом меню — кнопка вела в никуда.
+        if surface.isCompact {
+            items.append(QuickItem(id: "services", icon: "square.grid.2x2.fill", title: "Сервисы") { navigate(.services) })
+        }
         return items
     }
 
@@ -326,9 +326,11 @@ struct StaffHomeScreen: View {
         return Group {
             if !favorites.isEmpty {
                 OwnerSection("Мои сервисы") {
-                    Button("Все") { navigate(.services) }
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Theme.brand)
+                    if surface.isCompact {
+                        Button("Все") { navigate(.services) }
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Theme.brand)
+                    }
                 } content: {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Spacing.sm), count: 4), spacing: Spacing.lg) {
                         ForEach(favorites) { item in

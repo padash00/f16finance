@@ -152,7 +152,12 @@ struct BusinessRootView: View {
                 }
             }
         } else {
-            BusinessDashboardScreen(resolver: resolver)
+            StaffHomeScreen(resolver: resolver) { destination in
+                switch destination {
+                case .analytics, .services: break
+                case let .page(id): openIfAllowed(pageID: id)
+                }
+            }
         }
     }
 
@@ -192,13 +197,16 @@ struct BusinessRootView: View {
                     ]
                 )
             )
-        } else if resolver.can("dashboard.view") {
+        } else {
+            // Сотруднику — его главная по должности, как на телефоне: кнопки,
+            // задачи, зарплата, сервисы. Раньше на планшете меню начиналось
+            // сразу с разделов, и своей главной у сотрудника не было.
             result.append(
                 WorkspaceSection(
                     id: "home",
                     title: "Главное",
                     icon: "square.grid.2x2",
-                    items: [WorkspaceItem(id: "home.dashboard", title: "Обзор", icon: "chart.bar.fill")]
+                    items: [WorkspaceItem(id: "home.dashboard", title: "Главная", icon: "house.fill")]
                 )
             )
         }
