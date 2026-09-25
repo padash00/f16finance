@@ -27,6 +27,11 @@ struct ServerPdfButton<Label: View>: View {
         }
         .disabled(isLoading)
         .shareSheet($file)
+        #if DEBUG
+        .task {
+            if UserDefaults.standard.string(forKey: "ordaAutoExport") == "pdf" { await run() }
+        }
+        #endif
         .alert("Не удалось собрать PDF", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("Понятно", role: .cancel) {}
         } message: {

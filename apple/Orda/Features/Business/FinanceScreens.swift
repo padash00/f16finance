@@ -488,7 +488,9 @@ struct CashflowScreen: View {
                 // Снимки экрана: `-ordaCashflowOpen balance|ai|pdf`.
                 switch UserDefaults.standard.string(forKey: "ordaCashflowOpen") {
                 case "balance": showsBalance = true
-                case "ai": await askAI()
+                case "ai":
+                    await askAI()
+                    DebugDump.write("ai_cashflow.txt", aiText ?? aiError ?? "пусто")
                 case "pdf": await exportPDF()
                 default: break
                 }

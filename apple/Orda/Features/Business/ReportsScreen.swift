@@ -214,6 +214,17 @@ struct ReportsScreen: View {
             if let raw = UserDefaults.standard.string(forKey: "ordaReportsTab"), let wanted = Tab(rawValue: raw) {
                 tab = wanted
             }
+            // Проверка выгрузки и ИИ: `-ordaAutoExport pdf|ai`.
+            switch UserDefaults.standard.string(forKey: "ordaAutoExport") {
+            case "pdf":
+                try? await Task.sleep(for: .seconds(3))
+                await exportPDF()
+            case "ai":
+                try? await Task.sleep(for: .seconds(3))
+                await reports?.loadInsight()
+                DebugDump.write("ai_reports.txt", reports?.insight.map { "\($0)" } ?? reports?.insightError ?? "пусто")
+            default: break
+            }
             #endif
         }
         .refreshable { await reload() }

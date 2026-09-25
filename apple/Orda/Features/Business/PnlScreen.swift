@@ -69,6 +69,9 @@ final class PnlStore {
 struct PnlScreen: View {
     @Environment(\.api) private var api
     @Environment(\.access) private var access
+    @State private var isExportingPDF = false
+    @State private var pdfFile: ExportedFile?
+    @State private var pdfError: String?
     @State private var store: PnlStore?
     /// Точка отчёта; пусто — все точки.
     @State private var companyID: String?
@@ -113,20 +116,43 @@ struct PnlScreen: View {
         }
         .refreshable { await store?.load() }
         .onChange(of: ExtraCashPreference.shared.includeExtra) { _, _ in store?.reload() }
+        .shareSheet($pdfFile)
+        .alert("Не удалось собрать PDF", isPresented: Binding(get: { pdfError != nil }, set: { if !$0 { pdfError = nil } })) {
+            Button("Понятно", role: .cancel) {}
+        } message: {
+            Text(pdfError ?? "")
+        }
+        #if DEBUG
+        .task(id: store?.report?.companies.count ?? 0) {
+            // Проверка выгрузки: `-ordaAutoExport pdf` — PDF первой точки.
+            guard UserDefaults.standard.string(forKey: "ordaAutoExport") == "pdf",
+                  let store, let first = store.report?.companies.first, pdfFile == nil else { return }
+            await exportPDF(store, company: first)
+        }
+        #endif
     }
 
     /// PDF — по одной точке, как на сайте: отчёт для партнёра точки, а не
     /// сводка сети. Выбрана точка — сразу её PDF; иначе меню точек.
+    ///
+    /// Пункт меню только выбирает точку, а скачивание и «Поделиться» живут на
+    /// самом экране: лист, привязанный к пункту меню, iOS не показывает —
+    /// файл скачивался и пропадал.
     @ViewBuilder
     private func pdfMenu(_ store: PnlStore) -> some View {
         let companies = store.report?.companies ?? []
-        if let companyID, let company = companies.first(where: { $0.id == companyID }) {
-            pdfButton(store, company: company) { Image(systemName: "doc.richtext") }
+        if isExportingPDF {
+            ProgressView().controlSize(.small)
+        } else if let companyID, let company = companies.first(where: { $0.id == companyID }) {
+            Button { Task { await exportPDF(store, company: company) } } label: {
+                Image(systemName: "doc.richtext")
+            }
+            .accessibilityLabel("PDF отчёта")
         } else if !companies.isEmpty {
             Menu {
                 Section("PDF по точке") {
                     ForEach(companies) { company in
-                        pdfButton(store, company: company) { Text(company.name) }
+                        Button(company.name) { Task { await exportPDF(store, company: company) } }
                     }
                 }
             } label: {
@@ -136,19 +162,23 @@ struct PnlScreen: View {
         }
     }
 
-    private func pdfButton<L: View>(_ store: PnlStore, company: PnlCompany, @ViewBuilder label: @escaping () -> L) -> some View {
-        ServerPdfButton(
-            fileName: "ОПиУ \(company.name) \(store.month)",
-            load: {
-                try await BusinessService(api: api).pnlPDF(PnlPdfQuery(
-                    companyID: company.id,
-                    fromMonth: store.month,
-                    toMonth: store.month,
-                    includeExtra: ExtraCashPreference.shared.includeExtra
-                ))
-            },
-            label: label
-        )
+    private func exportPDF(_ store: PnlStore, company: PnlCompany) async {
+        isExportingPDF = true
+        defer { isExportingPDF = false }
+        do {
+            let data = try await BusinessService(api: api).pnlPDF(PnlPdfQuery(
+                companyID: company.id,
+                fromMonth: store.month,
+                toMonth: store.month,
+                includeExtra: ExtraCashPreference.shared.includeExtra
+            ))
+            pdfFile = try ExportedFile.write(data, name: SpreadsheetExport.fileName("ОПиУ \(company.name) \(store.month)", ext: "pdf"))
+            Haptics.success()
+        } catch let error as APIError {
+            pdfError = error.userMessage
+        } catch {
+            pdfError = error.localizedDescription
+        }
     }
 
     private var loading: some View {

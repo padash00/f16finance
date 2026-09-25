@@ -67,3 +67,12 @@ struct ExportToolbarButton: View {
         .accessibilityLabel("Выгрузить в Excel")
     }
 }
+
+#if DEBUG
+/// Отладка: записать строку в tmp/exports, чтобы прочитать её с Mac.
+enum DebugDump {
+    static func write(_ name: String, _ text: String) {
+        _ = try? ExportedFile.write(Data(text.utf8), name: name)
+    }
+}
+#endif
