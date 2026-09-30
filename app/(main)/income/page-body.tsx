@@ -39,8 +39,6 @@ import {
   Loader2,
   Globe,
   Sparkles,
-  Calendar,
-  ChevronDown,
   Brain,
   Activity,
   AlertTriangle,
@@ -59,6 +57,7 @@ import {
 import Link from 'next/link'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { DatePicker } from '@/components/ui/date-picker'
+import { DateRangePicker } from '@/components/ui/date-range-picker'
 import { useIncome } from '@/hooks/use-income'
 import { splitIncomeKaspiByCalendarDay, type ReportIncomeCalendarRow } from '@/lib/reports/income-calendar-kaspi'
 import { useCompanies } from '@/hooks/use-companies'
@@ -308,6 +307,8 @@ async function logIncomeEvent(event: {
 }
 
 // --- Главный компонент ---
+
+const PERIOD_PRESETS: { key: DateRangePreset; label: string }[] = [{ key: 'today', label: 'Сегодня' }, { key: 'week', label: '7 дней' }, { key: 'month', label: 'Месяц' }, { key: 'all', label: 'Всё время' }]
 export default function IncomePage() {
   const cashLabels = useCashlessLabels()
   // Фильтры (объявляем до хуков — они передаются в useIncome)
@@ -315,7 +316,6 @@ export default function IncomePage() {
   const [dateFrom, setDateFrom] = usePersistentState('income.dateFrom', DateUtils.monthStartISO())
   const [dateTo, setDateTo] = usePersistentState('income.dateTo', DateUtils.todayISO())
   const [activePreset, setActivePreset] = usePersistentState<DateRangePreset>('income.preset', 'month')
-  const [isCalendarOpen, setIsCalendarOpen] = useState(false)
   const [companyFilter, setCompanyFilter] = usePersistentState<'all' | string>('income.company', 'all')
 
   useEffect(() => {
@@ -848,7 +848,6 @@ export default function IncomePage() {
         setDateTo('')
         break
     }
-    setIsCalendarOpen(false)
   }
 
   // Сброс всех фильтров
@@ -1023,14 +1022,14 @@ export default function IncomePage() {
                     )}
                   </button>
 
-                  <button
-                    onClick={() => setIsCalendarOpen(!isCalendarOpen)}
-                    className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800/50 rounded-xl border border-border hover:border-amber-500/50 transition-colors"
-                  >
-                    <Calendar className="w-4 h-4 text-amber-400" />
-                    <span className="text-body text-sm">{periodLabel}</span>
-                    <ChevronDown className={`w-3 h-3 text-slate-500 transition-transform ${isCalendarOpen ? 'rotate-180' : ''}`} />
-                  </button>
+                  <DateRangePicker
+                    from={dateFrom}
+                    to={dateTo}
+                    presets={PERIOD_PRESETS}
+                    activePreset={activePreset}
+                    onPresetSelect={(p) => setPreset(p)}
+                    onRangeChange={(f, t) => { setDateFrom(f); setDateTo(t); setActivePreset('custom' as any) }}
+                  />
 
                   {extraCompanyId && (
                     <button
@@ -1065,44 +1064,6 @@ export default function IncomePage() {
             )}
             toolbar={(
               <>
-              {/* Календарь */}
-              {isCalendarOpen && (
-                <div className="mt-4 p-4 bg-white dark:bg-slate-900/95 backdrop-blur-xl border border-amber-500/20 rounded-2xl">
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {(['today', 'week', 'month', 'all'] as DateRangePreset[]).map(p => (
-                      <button
-                        key={p}
-                        onClick={() => setPreset(p)}
-                        className={`px-4 py-2 text-sm font-medium rounded-xl transition-all ${
-                          activePreset === p
-                            ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/25'
-                            : 'bg-card text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700'
-                        }`}
-                      >
-                        {p === 'today' ? 'Сегодня' : p === 'week' ? 'Неделя' : p === 'month' ? 'Месяц' : 'Все время'}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div>
-                      <label className="text-xs text-slate-500 uppercase mb-1 block">С</label>
-                      <DatePicker
-                        value={dateFrom}
-                        onChange={(v) => { setDateFrom(v); setActivePreset('custom' as any) }}
-                        className="w-full"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-slate-500 uppercase mb-1 block">По</label>
-                      <DatePicker
-                        value={dateTo}
-                        onChange={(v) => { setDateTo(v); setActivePreset('custom' as any) }}
-                        className="w-full"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
 
               {/* Панель фильтров */}
               {showFilters && (
@@ -1289,27 +1250,6 @@ export default function IncomePage() {
                 </div>
               )}
 
-              {/* Date presets — always visible */}
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {(['today', 'week', 'month', 'all'] as DateRangePreset[]).map(p => (
-                  <button
-                    key={p}
-                    onClick={() => setPreset(p)}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                      activePreset === p
-                        ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
-                        : 'bg-white dark:bg-slate-800/50 border border-border text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    {p === 'today' ? 'Сегодня' : p === 'week' ? '7 дней' : p === 'month' ? 'Месяц' : 'Все время'}
-                  </button>
-                ))}
-                {activePreset !== 'today' && activePreset !== 'week' && activePreset !== 'month' && activePreset !== 'all' && (
-                  <span className="px-3 py-1.5 text-xs text-muted-foreground border border-slate-200 dark:border-slate-700/50 rounded-lg">
-                    {dateFrom && dateTo ? `${DateUtils.formatDate(dateFrom)} — ${DateUtils.formatDate(dateTo)}` : 'Весь период'}
-                  </span>
-                )}
-              </div>
               </>
             )}
           />

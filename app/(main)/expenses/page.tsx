@@ -24,6 +24,7 @@ import { useOperators, type OperatorWithProfile } from '@/hooks/use-operators'
 import { FloatingAssistant } from '@/components/ai/floating-assistant'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { DatePicker } from '@/components/ui/date-picker'
+import { DateRangePicker } from '@/components/ui/date-range-picker'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { CardSkeleton, TableSkeleton, StatGridSkeleton } from '@/components/skeleton'
@@ -36,7 +37,6 @@ import {
   Banknote,
   Smartphone,
   Tag,
-  CalendarDays,
   ChevronDown,
   RefreshCw,
   BarChart3,
@@ -319,6 +319,8 @@ async function logExpenseEvent(event: {
 }
 
 // ================== MAIN COMPONENT ==================
+
+const PERIOD_PRESETS: { key: DateRangePreset; label: string }[] = [{ key: 'today', label: 'Сегодня' }, { key: 'week', label: '7 дней' }, { key: 'month', label: 'Месяц' }, { key: 'all', label: 'Всё время' }]
 export default function ExpensesPage() {
   const cashLabels = useCashlessLabels()
   const router = useRouter()
@@ -329,7 +331,6 @@ export default function ExpensesPage() {
   const [dateFrom, setDateFrom] = usePersistentState('expenses.dateFrom', DateUtils.monthStartISO())
   const [dateTo, setDateTo] = usePersistentState('expenses.dateTo', DateUtils.todayISO())
   const [activePreset, setActivePreset] = usePersistentState<DateRangePreset>('expenses.preset', 'month')
-  const [isCalendarOpen, setIsCalendarOpen] = useState(false)
 
   // Пресетный период (Сегодня/Неделя/Месяц/Все время) пересчитываем под СЕГОДНЯ при
   // каждом заходе — иначе сохранённый в localStorage диапазон «застывает» (был выбран
@@ -566,7 +567,6 @@ export default function ExpensesPage() {
         setDateTo('')
         break
     }
-    setIsCalendarOpen(false)
   }
 
   const resetFilters = () => {
@@ -1234,14 +1234,14 @@ export default function ExpensesPage() {
                     )}
                   </button>
 
-                  <button
-                    onClick={() => setIsCalendarOpen(!isCalendarOpen)}
-                    className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800/50 rounded-xl border border-slate-200 dark:border-gray-700 hover:border-red-500/50 transition-colors"
-                  >
-                    <CalendarDays className="w-4 h-4 text-red-400" />
-                    <span className="text-slate-700 dark:text-gray-300 text-sm">{periodLabel}</span>
-                    <ChevronDown className={`w-3 h-3 text-gray-500 transition-transform ${isCalendarOpen ? 'rotate-180' : ''}`} />
-                  </button>
+                  <DateRangePicker
+                    from={dateFrom}
+                    to={dateTo}
+                    presets={PERIOD_PRESETS}
+                    activePreset={activePreset}
+                    onPresetSelect={(p) => setPreset(p)}
+                    onRangeChange={(f, t) => { setDateFrom(f); setDateTo(t); setActivePreset('custom' as any) }}
+                  />
 
                   {extraCompanyId && (
                     <button
@@ -1279,44 +1279,6 @@ export default function ExpensesPage() {
             }
             toolbar={
               <>
-              {/* Calendar */}
-              {isCalendarOpen && (
-                <div className="mt-4 p-4 bg-white dark:bg-gray-900/95 backdrop-blur-xl border border-red-500/20 rounded-2xl">
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {(['today', 'week', 'month', 'all'] as DateRangePreset[]).map(p => (
-                      <button
-                        key={p}
-                        onClick={() => setPreset(p)}
-                        className={`px-4 py-2 text-sm font-medium rounded-xl transition-all ${
-                          activePreset === p
-                            ? 'bg-red-500 text-white shadow-lg shadow-red-500/25'
-                            : 'bg-slate-100 dark:bg-gray-800 text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-gray-700'
-                        }`}
-                      >
-                        {p === 'today' ? 'Сегодня' : p === 'week' ? 'Неделя' : p === 'month' ? 'Месяц' : 'Все время'}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div>
-                      <label className="text-xs text-gray-500 uppercase mb-1 block">С</label>
-                      <DatePicker
-                        value={dateFrom}
-                        onChange={(v) => { setDateFrom(v); setActivePreset('custom' as any) }}
-                        className="w-full"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-gray-500 uppercase mb-1 block">По</label>
-                      <DatePicker
-                        value={dateTo}
-                        onChange={(v) => { setDateTo(v); setActivePreset('custom' as any) }}
-                        className="w-full"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
 
 
               {/* Filters Panel */}

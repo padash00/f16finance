@@ -69,7 +69,7 @@
   --foreground: #f4f7fb;
   --card: rgba(13, 22, 35, 0.82);
   --card-foreground: #f4f7fb;
-  --popover: rgba(12, 20, 31, 0.96);
+  --popover: #0c141f; /* сплошной: сквозь всплывающие окна не должна просвечивать страница */
   --popover-foreground: #f4f7fb;
   --primary: #ffb36b;
   --primary-foreground: #09111b;

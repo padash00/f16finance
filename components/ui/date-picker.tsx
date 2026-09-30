@@ -89,7 +89,7 @@ export function DatePicker({
       </PopoverTrigger>
       <PopoverContent
         align={align}
-        className="w-auto rounded-2xl border border-border bg-card p-0 shadow-2xl"
+        className="w-auto rounded-2xl border border-border bg-popover p-0 shadow-2xl"
       >
         <Calendar
           mode="single"

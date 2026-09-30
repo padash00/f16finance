@@ -9,7 +9,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   Plus, Pencil, Trash2, Save, X, Monitor, Clock, Banknote,
   BarChart3, Loader2, CheckCircle2, ChevronDown, ChevronRight,
-  RefreshCw, TrendingUp, Calendar, Search, Download, Paintbrush, Gamepad2, Layers, LayoutGrid,
+  RefreshCw, TrendingUp, Search, Download, Paintbrush, Gamepad2, Layers, LayoutGrid,
 } from 'lucide-react'
 import { ArenaLiveTab } from '@/components/arena/live/arena-live-tab'
 import { ArenaBookingsTab } from '@/components/arena/bookings/arena-bookings-tab'
@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/dialog'
 import { formatTariffWindowLabel, parseTimeToMinutes } from '@/lib/core/arena-tariff-window'
 import { useCapabilities } from '@/lib/client/use-capabilities'
-import { DatePicker } from '@/components/ui/date-picker'
+import { DateRangePicker } from '@/components/ui/date-range-picker'
 
 /**
  * Единые стили управляющих элементов.
@@ -1299,6 +1299,9 @@ export function ArenaWorkspace({ section }: { section: ArenaSection }) {
 
 
   const loadAnalytics = useCallback(async () => {
+    // Точка ещё не выбрана (первый рендер) — запрос без projectId сервер отклоняет
+    // и пользователь видел «projectId required», хотя данные потом грузились.
+    if (!projectId) return
     setAnalyticsLoading(true)
     try {
       const res = await fetch('/api/admin/arena', {
@@ -3024,10 +3027,12 @@ export function ArenaWorkspace({ section }: { section: ArenaSection }) {
         {activeTab === 'analytics' && (
           <div className="space-y-6">
             <div className="flex flex-wrap items-center gap-3">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              <DatePicker value={analyticsFrom} onChange={setAnalyticsFrom} max={analyticsTo} />
-              <span className="text-muted-foreground">—</span>
-              <DatePicker value={analyticsTo} onChange={setAnalyticsTo} min={analyticsFrom} />
+              <DateRangePicker
+                from={analyticsFrom}
+                to={analyticsTo}
+                align="start"
+                onRangeChange={(f, t) => { setAnalyticsFrom(f); setAnalyticsTo(t) }}
+              />
               <button type="button" onClick={() => void loadAnalytics()} disabled={analyticsLoading} className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-50">
                 {analyticsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Загрузить
               </button>
