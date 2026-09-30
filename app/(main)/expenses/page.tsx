@@ -434,7 +434,10 @@ export default function ExpensesPage() {
 
   // Data hooks
   const { companies } = useCompanies()
-  const { operators } = useOperators({ activeOnly: true })
+  // Все операторы, включая уволенных: имена нужны для старых записей. Выбирать
+  // в формах можно только действующих — для этого отдельный список `operators`.
+  const { operators: allOperators } = useOperators()
+  const operators = useMemo(() => allOperators.filter((o) => o.is_active), [allOperators])
   const { rows, setRows, loading, loadingMore, hasMore, loadMore, reload } = useExpenses({
     from: dateFrom || undefined,
     to: dateTo || undefined,
@@ -497,15 +500,16 @@ export default function ExpensesPage() {
 
   const operatorMap = useMemo(() => {
     const map = new Map<string, OperatorWithProfile>()
-    for (const operator of operators) map.set(operator.id, operator)
+    for (const operator of allOperators) map.set(operator.id, operator)
     return map
-  }, [operators])
+  }, [allOperators])
 
   const operatorName = useCallback(
     (operatorId: string | null) => {
       if (!operatorId) return 'Без оператора'
-      const operator = operatorMap.get(operatorId)
-      return operator?.short_name || operator?.name || 'Без оператора'
+      const op = operatorMap.get(operatorId)
+      if (!op) return 'Без оператора'
+      return `${op.short_name || op.name}${op.is_active ? '' : ' · уволен'}`
     },
     [operatorMap]
   )
@@ -1570,6 +1574,10 @@ export default function ExpensesPage() {
                   className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-red-500/50"
                 >
                   <option value="none">Без оператора</option>
+                  {/* Уволенный оператор записи остаётся в списке, иначе сохранение молча сбросит его на «Без оператора». */}
+                  {editExpenseOperatorId !== 'none' && operatorMap.get(editExpenseOperatorId)?.is_active === false && (
+                    <option value={editExpenseOperatorId}>{operatorName(editExpenseOperatorId)}</option>
+                  )}
                   {operators.map((operator) => (
                     <option key={operator.id} value={operator.id}>
                       {operator.short_name || operator.name}

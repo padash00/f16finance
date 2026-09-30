@@ -383,7 +383,10 @@ export default function IncomePage() {
     const c = new URLSearchParams(window.location.search).get('company_id')
     if (c && companies.some((co) => co.id === c)) setCompanyFilter(c)
   }, [companies])
-  const { operators } = useOperators({ activeOnly: true })
+  // Все операторы, включая уволенных: имена нужны для старых записей. Выбирать
+  // в формах можно только действующих — для этого отдельный список `operators`.
+  const { operators: allOperators } = useOperators()
+  const operators = useMemo(() => allOperators.filter((o) => o.is_active), [allOperators])
   const {
     rows: serverRows,
     loading,
@@ -471,17 +474,25 @@ export default function IncomePage() {
 
   const operatorMap = useMemo(() => {
     const map = new Map<string, Operator>()
-    operators.forEach(o => map.set(o.id, o))
+    allOperators.forEach(o => map.set(o.id, o))
     return map
-  }, [operators])
+  }, [allOperators])
 
   const companyName = useCallback((id: string) => companyMap.get(id)?.name ?? '—', [companyMap])
   
   const operatorName = useCallback((id: string | null) => {
     if (!id) return 'Без оператора'
     const op = operatorMap.get(id)
-    return op?.short_name || op?.name || 'Без оператора'
+    if (!op) return 'Без оператора'
+    return `${op.short_name || op.name}${op.is_active ? '' : ' · уволен'}`
   }, [operatorMap])
+
+  // Уволенные, у которых есть записи в загруженных данных, — чтобы по ним
+  // можно было отфильтровать старые смены.
+  const firedOperatorsInRows = useMemo(() => {
+    const ids = new Set(rows.map((r) => r.operator_id).filter(Boolean))
+    return allOperators.filter((o) => !o.is_active && ids.has(o.id))
+  }, [allOperators, rows])
 
   const extraCompanyId = useMemo(() => {
     const extra = companies.find(c => isExtraCompany(c))
@@ -1127,6 +1138,13 @@ export default function IncomePage() {
                         {operators.map(o => (
                           <option key={o.id} value={o.id}>{o.short_name || o.name}</option>
                         ))}
+                        {firedOperatorsInRows.length > 0 && (
+                          <optgroup label="Уволенные">
+                            {firedOperatorsInRows.map(o => (
+                              <option key={o.id} value={o.id}>{o.short_name || o.name}</option>
+                            ))}
+                          </optgroup>
+                        )}
                       </select>
                     </div>
 
@@ -1345,6 +1363,10 @@ export default function IncomePage() {
                       className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground outline-none focus:border-amber-500/40"
                     >
                       <option value="none">Без оператора</option>
+                      {/* Уволенный оператор записи остаётся в списке, иначе сохранение молча сбросит его на «Без оператора». */}
+                      {editIncomeOperatorId !== 'none' && operatorMap.get(editIncomeOperatorId)?.is_active === false && (
+                        <option value={editIncomeOperatorId}>{operatorName(editIncomeOperatorId)}</option>
+                      )}
                       {operators.map((operator) => (
                         <option key={operator.id} value={operator.id}>
                           {operator.short_name || operator.name}
