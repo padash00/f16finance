@@ -219,6 +219,24 @@
       linear-gradient(180deg, #07101a 0%, #09121d 42%, #081019 100%);
   }
 
+  /* Раскрытый список родного <select> в тёмной теме. Поле полупрозрачное,
+     поэтому Chrome рисует список на белом, а пункты наследуют светлый текст —
+     выходит «белое на белом». Даём пунктам свой тёмный фон и светлый текст,
+     плюс color-scheme, чтобы скролл и рамка списка тоже были тёмными. */
+  .dark {
+    color-scheme: dark;
+  }
+
+  .dark select option,
+  .dark select optgroup {
+    background-color: #0c141f;
+    color: var(--foreground);
+  }
+
+  .dark select option:disabled {
+    color: #64748b;
+  }
+
   /* Светлая тема — мягкая подложка */
   :root:not(.dark) body {
     background-image:
