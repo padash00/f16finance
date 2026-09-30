@@ -1,49 +1,46 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowDown, ArrowUp, AlertCircle, CheckSquare, ChevronDown, ChevronRight, Download, ExternalLink, LayoutGrid, List, Loader2, MoreVertical, Pencil, Search, Square, TrendingUp, UserMinus, UserCheck, UserPlus, Users, WifiOff, X as XIcon } from 'lucide-react'
+import {
+  AlertCircle,
+  Briefcase,
+  Download,
+  History,
+  Loader2,
+  Pencil,
+  Search,
+  Send,
+  UserCheck,
+  UserMinus,
+  UserPlus,
+  Users,
+  X as XIcon,
+} from 'lucide-react'
 
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { Skeleton, TableSkeleton } from '@/components/skeleton'
+import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { confirmDialog } from '@/components/ui/confirm-dialog'
-import { AppModal } from '@/components/ui/app-modal'
-import { toast } from '@/hooks/use-toast'
 import { DatePicker } from '@/components/ui/date-picker'
-import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { NativeSelect } from '@/components/ui/native-select'
+import { SortableTh } from '@/components/ui/sortable-th'
+import { toast } from '@/hooks/use-toast'
 import { useCapabilities } from '@/lib/client/use-capabilities'
-import { useModalEscape } from '@/lib/client/use-modal-escape'
-import HireModal from './HireModal'
-import EmployeePanel, { type HrEmployee as PanelEmployee } from './EmployeePanel'
-import CareerTimeline from './CareerTimeline'
-import PositionsOverview from './PositionsOverview'
-import HrAnalytics from './HrAnalytics'
+import { useTableSort } from '@/lib/client/use-table-sort'
+import type { SortColumns } from '@/lib/core/table-sort'
+import { cn } from '@/lib/utils'
+
 import Avatar from './Avatar'
-import { RowMenu, InlineRoleDropdown } from './RowMenu'
-import { Skeleton, TableSkeleton } from '@/components/skeleton'
+import CareerTimeline from './CareerTimeline'
+import EmployeePanel, { type HrEmployee as PanelEmployee } from './EmployeePanel'
+import HireModal from './HireModal'
+import HrAnalytics from './HrAnalytics'
+import PositionsOverview from './PositionsOverview'
+import { InlineRoleDropdown, RowMenu } from './RowMenu'
 
-function formatRelative(iso: string | null | undefined): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  const ms = Date.now() - d.getTime()
-  const min = Math.floor(ms / 60000)
-  if (min < 1) return 'только что'
-  if (min < 60) return `${min} мин назад`
-  const h = Math.floor(min / 60)
-  if (h < 24) return `${h} ч назад`
-  const days = Math.floor(h / 24)
-  if (days < 7) return `${days} дн назад`
-  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
-}
-
-function csvCell(v: string | null | undefined): string {
-  if (v == null) return ''
-  const s = String(v)
-  if (s.includes(';') || s.includes('"') || s.includes('\n')) {
-    return `"${s.replace(/"/g, '""')}"`
-  }
-  return s
-}
+// ─── Типы и справочники ──────────────────────────────────────────────
 
 type DismissalType = 'voluntary' | 'mutual_agreement' | 'cause' | 'contract_end' | 'other'
 
@@ -72,6 +69,7 @@ type HrEmployee = {
   is_active: boolean
   is_admin_staff?: boolean
   is_hybrid?: boolean
+  company_ids?: string[]
   dismissed_at: string | null
   dismissal_date: string | null
   dismissal_type: string | null
@@ -81,10 +79,6 @@ type HrEmployee = {
   monthly_salary: number | null
 }
 
-type SortKey = 'name' | 'role' | 'hire_date' | 'salary'
-type ViewMode = 'cards' | 'table'
-type ChipFilter = 'all' | 'no_login' | 'hybrid' | 'today_birthday'
-
 type HistoryEntry = {
   id: string
   action: string
@@ -93,10 +87,10 @@ type HistoryEntry = {
   actor_name: string | null
 }
 
-type Tab = 'active' | 'dismissed' | 'career' | 'positions' | 'analytics'
-type KindFilter = 'all' | 'staff' | 'operator'
-const shortDate = (value: string) =>
-  new Date(value).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short', year: 'numeric' })
+type Tab = 'active' | 'dismissed' | 'positions' | 'career' | 'analytics'
+type KindFilter = 'all' | 'operator' | 'staff'
+type ActiveSortKey = 'name' | 'role' | 'salary' | 'login'
+type DismissedSortKey = 'name' | 'role' | 'dismissed'
 
 const ACTION_LABEL: Record<string, string> = {
   dismiss: 'Уволен',
@@ -108,46 +102,97 @@ const ACTION_LABEL: Record<string, string> = {
   deactivate: 'Деактивирован',
 }
 
+// ─── Помощники ───────────────────────────────────────────────────────
+
+const empKey = (e: { kind: string; id: string }) => `${e.kind}-${e.id}`
+const isDismissed = (e: HrEmployee) => !!e.dismissed_at || !e.is_active
+const money = (v: number) => `${v.toLocaleString('ru-RU')} ₸`
+const todayISO = () => new Date().toISOString().slice(0, 10)
+
+function shortDate(value: string) {
+  return new Date(value).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+function formatRelative(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const min = Math.floor((Date.now() - d.getTime()) / 60000)
+  if (min < 1) return 'только что'
+  if (min < 60) return `${min} мин назад`
+  const h = Math.floor(min / 60)
+  if (h < 24) return `${h} ч назад`
+  const days = Math.floor(h / 24)
+  if (days < 7) return `${days} дн назад`
+  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
+}
+
+function csvCell(v: string | null | undefined): string {
+  if (v == null) return ''
+  const s = String(v)
+  return s.includes(';') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s
+}
+
+function kindLabel(e: HrEmployee) {
+  if (e.is_hybrid) return 'Оператор + админ'
+  return e.kind === 'operator' ? 'Оператор' : 'Администрация'
+}
+
+function plural(n: number, one: string, few: string, many: string) {
+  const m10 = n % 10
+  const m100 = n % 100
+  if (m10 === 1 && m100 !== 11) return one
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few
+  return many
+}
+
+// ─── Страница ────────────────────────────────────────────────────────
+
 export default function HrPage() {
   const { can } = useCapabilities()
   const canDismiss = can('hr.dismiss')
   const canRestore = can('hr.restore')
   const canViewHistory = can('hr.view_history')
+  const canExport = can('hr.export')
   const canHire = can('staff.create') || can('operators.create')
   const canEdit = can('staff.edit') || can('operators.edit')
+
+  const [items, setItems] = useState<HrEmployee[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [positions, setPositions] = useState<Array<{ name: string; label: string | null }>>([])
+  const [companies, setCompanies] = useState<Array<{ id: string; name: string }>>([])
+
+  const [tab, setTab] = useState<Tab>('active')
+  const [search, setSearch] = useState('')
+  const [kindFilter, setKindFilter] = useState<KindFilter>('all')
+  const [companyFilter, setCompanyFilter] = useState('all')
+  const [roleFilter, setRoleFilter] = useState('all')
+  const [noLoginOnly, setNoLoginOnly] = useState(false)
+
   const [hireOpen, setHireOpen] = useState(false)
   const [selectedEmp, setSelectedEmp] = useState<PanelEmployee | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkBusy, setBulkBusy] = useState(false)
-  const [viewMode, setViewMode] = useState<ViewMode>('cards')
-  const [sortKey, setSortKey] = useState<SortKey>('name')
-  const [sortAsc, setSortAsc] = useState(true)
-  const [chipFilter, setChipFilter] = useState<ChipFilter>('all')
-  const [openMenuKey, setOpenMenuKey] = useState<string | null>(null)
-  const [positions, setPositions] = useState<Array<{ name: string; label: string | null }>>([])
-  const [editingRoleKey, setEditingRoleKey] = useState<string | null>(null)
-  const [groupBy, setGroupBy] = useState<'none' | 'role' | 'kind'>('none')
-  const [items, setItems] = useState<HrEmployee[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState<Tab>('active')
-  const [kindFilter, setKindFilter] = useState<KindFilter>('all')
-  const [search, setSearch] = useState('')
   const [busyId, setBusyId] = useState<string | null>(null)
+
+  // Увольнение одного сотрудника
   const [dismissTarget, setDismissTarget] = useState<HrEmployee | null>(null)
-  useModalEscape(!!dismissTarget, () => setDismissTarget(null))
   const [dismissReason, setDismissReason] = useState('')
-  const [dismissDate, setDismissDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [dismissDate, setDismissDate] = useState(todayISO)
   const [dismissType, setDismissType] = useState<DismissalType>('voluntary')
-  const [pairedRecord, setPairedRecord] = useState<{ kind: 'staff' | 'operator'; id: string; name: string; role?: string | null } | null>(null)
+  const [pairedRecord, setPairedRecord] = useState<{ kind: 'staff' | 'operator'; id: string; name: string } | null>(null)
   const [pairedLoading, setPairedLoading] = useState(false)
   const [cascadeDismiss, setCascadeDismiss] = useState(true)
-  const [historyOpen, setHistoryOpen] = useState<Record<string, boolean>>({})
-  const [historyData, setHistoryData] = useState<Record<string, HistoryEntry[]>>({})
-  const [historyLoading, setHistoryLoading] = useState<Record<string, boolean>>({})
-  // Причина массового увольнения — в окне, а не в window.prompt
+
+  // Массовое увольнение
   const [bulkDismissOpen, setBulkDismissOpen] = useState(false)
   const [bulkDismissReason, setBulkDismissReason] = useState('')
+
+  // История действий — отдельным окном
+  const [historyFor, setHistoryFor] = useState<HrEmployee | null>(null)
+  const [historyCache, setHistoryCache] = useState<Record<string, HistoryEntry[]>>({})
+  const [historyLoading, setHistoryLoading] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -164,103 +209,134 @@ export default function HrPage() {
     }
   }
 
-  useEffect(() => { load() }, [])
-
-  // Загрузка справочника должностей для inline-смены роли
   useEffect(() => {
-    fetch('/api/admin/positions').then((r) => r.json()).then((d) => {
-      setPositions((d.data || []).map((p: any) => ({ name: p.name, label: p.label || p.name })))
-    }).catch(() => {})
+    void load()
+    fetch('/api/admin/positions')
+      .then((r) => r.json())
+      .then((d) => setPositions((d.data || []).map((p: any) => ({ name: p.name, label: p.label || p.name }))))
+      .catch(() => {})
+    fetch('/api/admin/companies')
+      .then((r) => r.json())
+      .then((d) => setCompanies((d.data || []).map((c: any) => ({ id: String(c.id), name: String(c.name) }))))
+      .catch(() => {})
   }, [])
 
-  const counts = useMemo(() => {
-    let active = 0, dismissed = 0
-    for (const it of items) {
-      // «Уволенные» = либо явно уволены, либо просто is_active=false
-      // (старые архивные записи без dismissed_at)
-      if (it.dismissed_at || !it.is_active) dismissed++
-      else active++
+  const companyName = useMemo(() => {
+    const map = new Map(companies.map((c) => [c.id, c.name]))
+    return (id: string) => map.get(id) || '—'
+  }, [companies])
+
+  // ─── Сводка ──────────────────────────────────────────────────────
+  const summary = useMemo(() => {
+    const active = items.filter((e) => !isDismissed(e))
+    const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+    return {
+      active: active.length,
+      operators: active.filter((e) => e.kind === 'operator').length,
+      staff: active.filter((e) => e.kind === 'staff').length,
+      noLogin: active.filter((e) => e.has_login === false).length,
+      payroll: active.reduce((s, e) => s + (e.monthly_salary || 0), 0),
+      dismissed: items.length - active.length,
+      dismissedMonth: items.filter((e) => isDismissed(e) && (e.dismissal_date || e.dismissed_at || '').slice(0, 10) >= monthAgo).length,
     }
-    return { active, dismissed }
   }, [items])
 
+  // Должности, которые реально встречаются, — для фильтра
+  const roleOptions = useMemo(() => {
+    const set = new Set<string>()
+    for (const e of items) if (e.role) set.add(e.role)
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ru'))
+  }, [items])
+
+  // ─── Фильтрация ──────────────────────────────────────────────────
+  const peopleTab = tab === 'active' || tab === 'dismissed'
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    const list = items.filter((it) => {
-      const inactive = !it.is_active || !!it.dismissed_at
-      if (tab === 'active' && inactive) return false
-      if (tab === 'dismissed' && !inactive) return false
-      if (kindFilter !== 'all' && it.kind !== kindFilter) return false
-      // Smart-чипы
-      if (chipFilter === 'no_login' && it.has_login !== false) return false
-      if (chipFilter === 'hybrid' && !it.is_hybrid) return false
+    return items.filter((e) => {
+      if (tab === 'active' && isDismissed(e)) return false
+      if (tab === 'dismissed' && !isDismissed(e)) return false
+      if (kindFilter !== 'all' && e.kind !== kindFilter) return false
+      // Точка привязана только к операторам; администрация к точке не относится
+      if (companyFilter !== 'all' && !(e.company_ids || []).includes(companyFilter)) return false
+      if (roleFilter !== 'all' && e.role !== roleFilter) return false
+      if (noLoginOnly && e.has_login !== false) return false
       if (q) {
-        const hay = `${it.full_name} ${it.short_name || ''} ${it.position || ''} ${it.role || ''} ${it.phone || ''} ${it.email || ''}`.toLowerCase()
+        const hay = `${e.full_name} ${e.short_name || ''} ${e.role || ''} ${e.position || ''} ${e.phone || ''} ${e.email || ''}`.toLowerCase()
         if (!hay.includes(q)) return false
       }
       return true
     })
-    // Сортировка
-    const sorted = [...list].sort((a, b) => {
-      let av: string | number = ''
-      let bv: string | number = ''
-      switch (sortKey) {
-        case 'name': av = a.full_name || ''; bv = b.full_name || ''; break
-        case 'role': av = a.role || ''; bv = b.role || ''; break
-        case 'hire_date': av = a.hire_date || ''; bv = b.hire_date || ''; break
-        case 'salary': av = a.monthly_salary || 0; bv = b.monthly_salary || 0; break
-      }
-      if (av < bv) return sortAsc ? -1 : 1
-      if (av > bv) return sortAsc ? 1 : -1
-      return 0
+  }, [items, tab, search, kindFilter, companyFilter, roleFilter, noLoginOnly])
+
+  const activeColumns = useMemo<SortColumns<HrEmployee, ActiveSortKey>>(
+    () => ({
+      name: { get: (e) => e.full_name || null },
+      role: { get: (e) => e.role || null },
+      salary: { get: (e) => e.monthly_salary || null, defaultDir: 'desc' },
+      login: { get: (e) => e.last_login || null, defaultDir: 'desc' },
+    }),
+    [],
+  )
+  const dismissedColumns = useMemo<SortColumns<HrEmployee, DismissedSortKey>>(
+    () => ({
+      name: { get: (e) => e.full_name || null },
+      role: { get: (e) => e.role || null },
+      dismissed: { get: (e) => e.dismissal_date || e.dismissed_at || null, defaultDir: 'desc' },
+    }),
+    [],
+  )
+  const activeSort = useTableSort<HrEmployee, ActiveSortKey>({
+    storageKey: 'hr.activeSort',
+    columns: activeColumns,
+    initial: { key: 'name', dir: 'asc' },
+    rows: tab === 'active' ? filtered : [],
+  })
+  const dismissedSort = useTableSort<HrEmployee, DismissedSortKey>({
+    storageKey: 'hr.dismissedSort',
+    columns: dismissedColumns,
+    initial: { key: 'dismissed', dir: 'desc' },
+    rows: tab === 'dismissed' ? filtered : [],
+  })
+  const rows = tab === 'dismissed' ? dismissedSort.sortedRows : activeSort.sortedRows
+
+  // Выделение сбрасываем при смене вкладки и фильтров: иначе действие
+  // применилось бы к невидимым сейчас людям
+  useEffect(() => {
+    setSelectedIds(new Set())
+  }, [tab, kindFilter, companyFilter, roleFilter, noLoginOnly])
+
+  const resetFilters = () => {
+    setSearch('')
+    setKindFilter('all')
+    setCompanyFilter('all')
+    setRoleFilter('all')
+    setNoLoginOnly(false)
+  }
+  const hasFilters = !!search || kindFilter !== 'all' || companyFilter !== 'all' || roleFilter !== 'all' || noLoginOnly
+
+  const employeeLabel = (kind: string, id: string) => items.find((e) => e.kind === kind && e.id === id)?.full_name || id
+  const parseKey = (key: string) => {
+    const idx = key.indexOf('-')
+    return { kind: key.slice(0, idx), id: key.slice(idx + 1) } // id может содержать дефисы
+  }
+
+  const toggleSelected = (key: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
     })
-    return sorted
-  }, [items, tab, kindFilter, search, chipFilter, sortKey, sortAsc])
+  const allSelected = rows.length > 0 && rows.every((e) => selectedIds.has(empKey(e)))
+  const toggleAll = () => setSelectedIds(allSelected ? new Set() : new Set(rows.map(empKey)))
 
-  // Группировка списка
-  const groups = useMemo(() => {
-    if (groupBy === 'none') return [{ key: 'all', label: '', items: filtered }]
-    const map = new Map<string, HrEmployee[]>()
-    for (const e of filtered) {
-      const key =
-        groupBy === 'role'
-          ? (e.role || 'Без должности')
-          : groupBy === 'kind'
-            ? (e.is_hybrid ? 'Hybrid' : e.kind === 'operator' ? 'Операторы' : 'Админ-сотрудники')
-            : 'all'
-      const arr = map.get(key) || []
-      arr.push(e)
-      map.set(key, arr)
-    }
-    return Array.from(map.entries())
-      .sort((a, b) => b[1].length - a[1].length)
-      .map(([k, items]) => ({ key: k, label: k, items }))
-  }, [filtered, groupBy])
+  const openProfile = (e: HrEmployee) => {
+    if (isDismissed(e) || !canEdit) return
+    setSelectedEmp(e as unknown as PanelEmployee)
+  }
 
-  // Кол-во noLogin / hybrid для чипов (по текущей видимой вкладке)
-  const chipCounts = useMemo(() => {
-    let noLogin = 0
-    let hybrid = 0
-    const inActiveTab = items.filter((it) => {
-      const inactive = !it.is_active || !!it.dismissed_at
-      if (tab === 'active' && inactive) return false
-      if (tab === 'dismissed' && !inactive) return false
-      return true
-    })
-    for (const it of inActiveTab) {
-      if (it.has_login === false) noLogin++
-      if (it.is_hybrid) hybrid++
-    }
-    return { noLogin, hybrid, total: inActiveTab.length }
-  }, [items, tab])
-
-  // Имя сотрудника по ключу выделения — для внятных сообщений о частичных отказах
-  const employeeLabel = (kind: string, id: string) =>
-    items.find((e) => e.kind === kind && e.id === id)?.full_name || id
-
-  // Inline-смена роли
+  // ─── Действия ────────────────────────────────────────────────────
   const changeRoleInline = async (emp: HrEmployee, newRole: string) => {
-    setEditingRoleKey(null)
     try {
       const res = await fetch('/api/admin/hr/update', {
         method: 'POST',
@@ -276,24 +352,21 @@ export default function HrPage() {
     }
   }
 
-  // Bulk-смена роли
   const bulkChangeRole = async (newRole: string) => {
     if (selectedIds.size === 0 || bulkBusy) return
+    const total = selectedIds.size
     const ok = await confirmDialog({
-      title: `Сменить должность на "${newRole}"?`,
-      description: `Новая должность будет назначена ${selectedIds.size} сотрудникам.`,
+      title: `Сменить должность на «${newRole}»?`,
+      description: `Новая должность будет назначена ${total} ${plural(total, 'сотруднику', 'сотрудникам', 'сотрудникам')}.`,
       confirmLabel: 'Сменить',
     })
     if (!ok) return
     setBulkBusy(true)
-    // Считаем отказы по каждому запросу: раньше цикл игнорировал ответы
-    // и рапортовал об успехе, даже когда не прошёл ни один
+    // Считаем отказы по каждому запросу, чтобы не рапортовать об успехе, когда сервер отказал
     const failures: string[] = []
     try {
       for (const key of selectedIds) {
-        const idx = key.indexOf('-')
-        const kind = key.slice(0, idx)
-        const id = key.slice(idx + 1)
+        const { kind, id } = parseKey(key)
         try {
           const res = await fetch('/api/admin/hr/update', {
             method: 'POST',
@@ -306,18 +379,14 @@ export default function HrPage() {
           failures.push(`${employeeLabel(kind, id)}: ${e?.message || 'ошибка'}`)
         }
       }
-      clearSelection()
+      setSelectedIds(new Set())
       await load()
-      const okCount = selectedIds.size - failures.length
-      if (failures.length) {
-        toast({
-          title: `Должность сменена у ${okCount} из ${selectedIds.size}`,
-          description: failures.slice(0, 3).join('; '),
-          variant: 'destructive',
-        })
-      } else {
-        toast({ title: `Должность сменена у ${okCount} сотрудников` })
-      }
+      const okCount = total - failures.length
+      toast(
+        failures.length
+          ? { title: `Должность сменена у ${okCount} из ${total}`, description: failures.slice(0, 3).join('; '), variant: 'destructive' }
+          : { title: `Должность сменена у ${okCount} ${plural(okCount, 'сотрудника', 'сотрудников', 'сотрудников')}` },
+      )
     } finally {
       setBulkBusy(false)
     }
@@ -326,22 +395,19 @@ export default function HrPage() {
   async function openDismiss(emp: HrEmployee) {
     setDismissTarget(emp)
     setDismissReason('')
-    setDismissDate(new Date().toISOString().slice(0, 10))
+    setDismissDate(todayISO())
     setDismissType('voluntary')
     setPairedRecord(null)
     setCascadeDismiss(true)
     setPairedLoading(true)
     try {
-      const res = await fetch(
-        `/api/admin/hr/paired?kind=${encodeURIComponent(emp.kind)}&id=${encodeURIComponent(emp.id)}`,
-        { cache: 'no-store' },
-      )
+      const res = await fetch(`/api/admin/hr/paired?kind=${encodeURIComponent(emp.kind)}&id=${encodeURIComponent(emp.id)}`, {
+        cache: 'no-store',
+      })
       const json = await res.json().catch(() => ({}))
-      if (res.ok && json?.paired) {
-        setPairedRecord(json.paired)
-      }
+      if (res.ok && json?.paired) setPairedRecord(json.paired)
     } catch {
-      // молча: предупреждение про парную запись опционально
+      // предупреждение о парной записи необязательное
     } finally {
       setPairedLoading(false)
     }
@@ -350,7 +416,6 @@ export default function HrPage() {
   async function confirmDismiss() {
     if (!dismissTarget || busyId) return
     if (dismissReason.trim().length < 5) {
-      // Уведомлением, а не карточкой вверху страницы: за открытым окном её не видно
       toast({ title: 'Причина обязательна', description: 'Минимум 5 символов.', variant: 'destructive' })
       return
     }
@@ -371,15 +436,12 @@ export default function HrPage() {
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error || 'Не удалось уволить')
       toast({ title: `${dismissTarget.full_name} уволен` })
-      setDismissTarget(null)
-      setDismissReason('')
-      setPairedRecord(null)
-      setCascadeDismiss(true)
-      setHistoryData((s) => {
+      setHistoryCache((s) => {
         const copy = { ...s }
-        delete copy[`${dismissTarget.kind}-${dismissTarget.id}`]
+        delete copy[empKey(dismissTarget)]
         return copy
       })
+      setDismissTarget(null)
       await load()
     } catch (e: any) {
       toast({ title: 'Не удалось уволить', description: e?.message, variant: 'destructive' })
@@ -388,25 +450,43 @@ export default function HrPage() {
     }
   }
 
-  async function toggleHistory(emp: HrEmployee) {
-    const key = `${emp.kind}-${emp.id}`
-    const isOpen = historyOpen[key]
-    if (isOpen) {
-      setHistoryOpen((s) => ({ ...s, [key]: false }))
+  const bulkDismiss = async () => {
+    if (bulkBusy) return
+    const reason = bulkDismissReason.trim()
+    if (reason.length < 5) {
+      toast({ title: 'Причина обязательна', description: 'Минимум 5 символов.', variant: 'destructive' })
       return
     }
-    setHistoryOpen((s) => ({ ...s, [key]: true }))
-    if (historyData[key]) return
-    setHistoryLoading((s) => ({ ...s, [key]: true }))
+    setBulkBusy(true)
+    const failures: string[] = []
+    const total = selectedIds.size
     try {
-      const res = await fetch(`/api/admin/hr/history?kind=${emp.kind}&id=${encodeURIComponent(emp.id)}`, { cache: 'no-store' })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json.error || 'Не удалось загрузить историю')
-      setHistoryData((s) => ({ ...s, [key]: json.data || [] }))
-    } catch (e: any) {
-      toast({ title: 'Не удалось загрузить историю', description: e?.message, variant: 'destructive' })
+      for (const key of selectedIds) {
+        const { kind, id } = parseKey(key)
+        try {
+          const res = await fetch('/api/admin/hr/dismiss', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ kind, id, reason, dismissal_date: todayISO(), dismissal_type: 'voluntary' }),
+          })
+          const json = await res.json().catch(() => ({}))
+          if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`)
+        } catch (e: any) {
+          failures.push(`${employeeLabel(kind, id)}: ${e?.message || 'ошибка'}`)
+        }
+      }
+      setSelectedIds(new Set())
+      setBulkDismissOpen(false)
+      setBulkDismissReason('')
+      await load()
+      const okCount = total - failures.length
+      toast(
+        failures.length
+          ? { title: `Уволено ${okCount} из ${total}`, description: failures.slice(0, 3).join('; '), variant: 'destructive' }
+          : { title: `Уволено ${okCount} ${plural(okCount, 'сотрудник', 'сотрудника', 'сотрудников')}` },
+      )
     } finally {
-      setHistoryLoading((s) => ({ ...s, [key]: false }))
+      setBulkBusy(false)
     }
   }
 
@@ -435,837 +515,708 @@ export default function HrPage() {
     }
   }
 
-  // ─── Bulk selection ─────────────────────────────────────────
-  const toggleSelected = (key: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
-  }
-  const clearSelection = () => setSelectedIds(new Set())
-  const selectAllVisible = () => {
-    setSelectedIds(new Set(filtered.map((e) => `${e.kind}-${e.id}`)))
-  }
-
-  // Сбрасываем выделение при смене таба/фильтра
-  useEffect(() => {
-    setSelectedIds(new Set())
-  }, [tab, kindFilter])
-
-  const bulkDismiss = async () => {
-    if (bulkBusy) return
-    const reason = bulkDismissReason.trim()
-    if (reason.length < 5) {
-      toast({ title: 'Причина обязательна', description: 'Минимум 5 символов.', variant: 'destructive' })
-      return
-    }
-    setBulkBusy(true)
-    // Ответ каждого запроса проверяем: раньше об успехе сообщали даже когда
-    // сервер отказал по всем
-    const failures: string[] = []
-    const total = selectedIds.size
+  async function openHistory(emp: HrEmployee) {
+    setHistoryFor(emp)
+    const key = empKey(emp)
+    if (historyCache[key]) return
+    setHistoryLoading(true)
     try {
-      for (const key of selectedIds) {
-        const idx = key.indexOf('-')
-        const kind = key.slice(0, idx)
-        // безопасный срез: id может содержать дефисы
-        const realId = key.slice(idx + 1)
-        try {
-          const res = await fetch('/api/admin/hr/dismiss', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              kind,
-              id: realId,
-              reason,
-              dismissal_date: new Date().toISOString().slice(0, 10),
-              dismissal_type: 'voluntary',
-            }),
-          })
-          const json = await res.json().catch(() => ({}))
-          if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`)
-        } catch (e: any) {
-          failures.push(`${employeeLabel(kind, realId)}: ${e?.message || 'ошибка'}`)
-        }
-      }
-      clearSelection()
-      setBulkDismissOpen(false)
-      setBulkDismissReason('')
-      await load()
-      const okCount = total - failures.length
-      if (failures.length) {
-        toast({
-          title: `Уволено ${okCount} из ${total}`,
-          description: failures.slice(0, 3).join('; '),
-          variant: 'destructive',
-        })
-      } else {
-        toast({ title: `Уволено ${okCount} ${okCount === 1 ? 'сотрудник' : 'сотрудников'}` })
-      }
+      const res = await fetch(`/api/admin/hr/history?kind=${emp.kind}&id=${encodeURIComponent(emp.id)}`, { cache: 'no-store' })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || 'Не удалось загрузить историю')
+      setHistoryCache((s) => ({ ...s, [key]: json.data || [] }))
+    } catch (e: any) {
+      toast({ title: 'Не удалось загрузить историю', description: e?.message, variant: 'destructive' })
     } finally {
-      setBulkBusy(false)
+      setHistoryLoading(false)
     }
   }
 
   const exportCSV = () => {
-    const rows = (selectedIds.size > 0
-      ? filtered.filter((e) => selectedIds.has(`${e.kind}-${e.id}`))
-      : filtered) as HrEmployee[]
-    const header = ['Тип', 'ФИО', 'Краткое имя', 'Должность', 'Телефон', 'Email', 'Оклад', 'Активен', 'Уволен_дата', 'Причина']
+    const list = selectedIds.size > 0 ? rows.filter((e) => selectedIds.has(empKey(e))) : rows
+    const header = ['Тип', 'ФИО', 'Краткое имя', 'Должность', 'Точки', 'Телефон', 'Email', 'Оклад', 'Активен', 'Уволен_дата', 'Причина']
     const csv = [
       header.join(';'),
-      ...rows.map((e) =>
+      ...list.map((e) =>
         [
-          e.kind === 'operator' ? 'Оператор' : 'Админ',
+          kindLabel(e),
           csvCell(e.full_name),
           csvCell(e.short_name),
           csvCell(e.role || e.position),
+          csvCell((e.company_ids || []).map(companyName).join(', ')),
           csvCell(e.phone),
           csvCell(e.email),
           e.monthly_salary != null ? String(e.monthly_salary) : '',
-          e.is_active ? 'да' : 'нет',
+          isDismissed(e) ? 'нет' : 'да',
           e.dismissal_date || e.dismissed_at?.slice(0, 10) || '',
           csvCell(e.dismissal_reason),
         ].join(';'),
       ),
     ].join('\n')
-    // BOM для Excel'а на Windows
+    // BOM — чтобы Excel на Windows открыл кириллицу
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `hr-${new Date().toISOString().slice(0, 10)}.csv`
+    a.download = `kadry-${todayISO()}.csv`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
   }
 
+  const menuFor = (emp: HrEmployee) => {
+    const dismissed = isDismissed(emp)
+    return [
+      { label: 'Открыть профиль', icon: Pencil, onClick: () => openProfile(emp), hidden: dismissed || !canEdit },
+      { label: 'История действий', icon: History, onClick: () => void openHistory(emp), hidden: !canViewHistory },
+      { label: 'Восстановить', icon: UserCheck, tone: 'success' as const, onClick: () => void restore(emp), hidden: !dismissed || !canRestore },
+      { label: 'Уволить', icon: UserMinus, tone: 'danger' as const, onClick: () => void openDismiss(emp), hidden: dismissed || !canDismiss },
+    ]
+  }
+
+  const TABS: Array<{ key: Tab; label: string; count?: number }> = [
+    { key: 'active', label: 'Сотрудники', count: summary.active },
+    { key: 'dismissed', label: 'Уволенные', count: summary.dismissed },
+    { key: 'positions', label: 'Должности' },
+    { key: 'career', label: 'Карьера' },
+    { key: 'analytics', label: 'Аналитика' },
+  ]
+
+  // ─── Разметка ────────────────────────────────────────────────────
   return (
-    <div className="app-page-wide space-y-6">
+    <div className="app-page-wide space-y-5 pb-24">
       <AdminPageHeader
         title="Кадры"
-        description="Активные и уволенные сотрудники: операторы и администрация"
+        description="Сотрудники всех точек: операторы и администрация"
         icon={<Users className="h-5 w-5" />}
         accent="amber"
         backHref="/"
         actions={
-          canHire ? (
-            <Button
-              data-tour="hr-hire"
-              onClick={() => setHireOpen(true)}
-              className="bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white shadow-lg shadow-amber-500/20 h-10 sm:h-auto sm:px-5"
-            >
-              <UserPlus className="w-4 h-4 mr-1.5" />
-              Нанять
-            </Button>
-          ) : null
-        }
-        toolbar={
-          <div className="grid grid-cols-2 gap-2 sm:gap-3 sm:max-w-md">
-            <Card className="px-3 py-2 border-emerald-500/25 bg-emerald-500/10">
-              <div className="text-[11px] uppercase tracking-wide text-emerald-700 dark:text-emerald-300/90">Активные</div>
-              <div className="text-lg font-bold text-emerald-700 dark:text-emerald-200">{counts.active}</div>
-            </Card>
-            <Card className="px-3 py-2 border-red-500/25 bg-red-500/10">
-              <div className="text-[11px] uppercase tracking-wide text-red-700 dark:text-red-300/90">Уволенные</div>
-              <div className="text-lg font-bold text-red-700 dark:text-red-200">{counts.dismissed}</div>
-            </Card>
+          <div className="flex items-center gap-2">
+            {canExport && peopleTab && (
+              <Button variant="outline" size="sm" onClick={exportCSV} disabled={rows.length === 0}>
+                <Download className="mr-1.5 h-4 w-4" />
+                Экспорт{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
+              </Button>
+            )}
+            {canHire && (
+              <Button
+                data-tour="hr-hire"
+                size="sm"
+                onClick={() => setHireOpen(true)}
+                className="bg-amber-500 text-white shadow-lg shadow-amber-500/20 hover:bg-amber-400"
+              >
+                <UserPlus className="mr-1.5 h-4 w-4" />
+                Нанять
+              </Button>
+            )}
           </div>
         }
       />
 
-      <HireModal open={hireOpen} onClose={() => setHireOpen(false)} onCreated={() => load()} />
-
       {error && (
-        <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-sm flex items-start gap-2">
-          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+        <div className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <div>{error}</div>
         </div>
       )}
 
-      <Card className="p-4 bg-white dark:bg-slate-900/70 border-slate-200 dark:border-slate-800">
-        <div className="flex flex-col xl:flex-row xl:items-center gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => setTab('active')}
-              className={`px-4 py-2 rounded-lg text-sm border transition ${
-                tab === 'active'
-                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40'
-                  : 'border-border text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
-              }`}
-            >
-              Активные · <span className="font-bold">{counts.active}</span>
-            </button>
-            <button
-              onClick={() => setTab('dismissed')}
-              className={`px-4 py-2 rounded-lg text-sm border transition ${
-                tab === 'dismissed'
-                  ? 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/40'
-                  : 'border-border text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
-              }`}
-            >
-              Уволенные · <span className="font-bold">{counts.dismissed}</span>
-            </button>
-            <button
-              onClick={() => setTab('career')}
-              className={`px-4 py-2 rounded-lg text-sm border transition ${
-                tab === 'career'
-                  ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40'
-                  : 'border-border text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
-              }`}
-            >
-              Карьера
-            </button>
-            <button
-              onClick={() => setTab('positions')}
-              className={`px-4 py-2 rounded-lg text-sm border transition ${
-                tab === 'positions'
-                  ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/40'
-                  : 'border-border text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
-              }`}
-            >
-              Должности
-            </button>
-            <button
-              onClick={() => setTab('analytics')}
-              className={`px-4 py-2 rounded-lg text-sm border transition ${
-                tab === 'analytics'
-                  ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40'
-                  : 'border-border text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
-              }`}
-            >
-              Аналитика
-            </button>
-          </div>
+      {/* Сводка */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <SummaryTile label="В штате" value={summary.active} hint={`${summary.operators} опер. · ${summary.staff} адм.`} loading={loading && !items.length} />
+        <SummaryTile label="ФОТ в месяц" value={money(summary.payroll)} hint="по окладам администрации" loading={loading && !items.length} />
+        <SummaryTile
+          label="Без входа в систему"
+          value={summary.noLogin}
+          hint={summary.noLogin > 0 ? 'нажмите, чтобы показать' : 'у всех есть логин'}
+          tone={summary.noLogin > 0 ? 'warn' : 'default'}
+          onClick={summary.noLogin > 0 ? () => { setTab('active'); setNoLoginOnly(true) } : undefined}
+          loading={loading && !items.length}
+        />
+        <SummaryTile label="Уволено за 30 дней" value={summary.dismissedMonth} hint={`всего в архиве ${summary.dismissed}`} loading={loading && !items.length} />
+      </div>
 
-          <div className="xl:ml-auto flex flex-col sm:flex-row gap-2 w-full xl:w-auto">
-            <select
-              value={kindFilter}
-              onChange={(e) => setKindFilter(e.target.value as KindFilter)}
-              className="h-10 px-3 rounded-lg border border-border bg-card text-sm w-full sm:w-[240px]"
-            >
-              <option value="all">Все типы</option>
-              <option value="operator">Только операторы</option>
-              <option value="staff">Только админ-сотрудники</option>
-            </select>
-            <div className="relative w-full sm:w-[320px]">
-              <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input
-                placeholder="Поиск по имени, телефону, email..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="h-10 pl-8 pr-3 rounded-lg border border-border bg-card text-sm w-full"
-              />
-            </div>
-          </div>
-        </div>
-      </Card>
+      {/* Вкладки */}
+      <div className="flex gap-1 overflow-x-auto border-b border-border">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => setTab(t.key)}
+            className={cn(
+              '-mb-px flex shrink-0 items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors',
+              tab === t.key ? 'border-amber-500 text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {t.label}
+            {t.count != null && (
+              <span className={cn('rounded-full px-2 py-0.5 text-xs', tab === t.key ? 'bg-amber-500/15 text-amber-600 dark:text-amber-300' : 'bg-surface-muted text-muted-foreground')}>
+                {t.count}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
 
-      {tab === 'career' ? (
-        <CareerTimeline />
-      ) : tab === 'positions' ? (
+      {tab === 'positions' ? (
         <PositionsOverview />
+      ) : tab === 'career' ? (
+        <CareerTimeline />
       ) : tab === 'analytics' ? (
         <HrAnalytics />
       ) : (
         <>
-        {/* Smart-чипы + view + sort */}
-        {(tab === 'active' || tab === 'dismissed') && (
-          <div className="p-3 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 flex flex-row flex-wrap items-center gap-2">
-            <Chip active={chipFilter === 'all'} onClick={() => setChipFilter('all')} count={chipCounts.total}>Все</Chip>
-            {chipCounts.noLogin > 0 && (
-              <Chip active={chipFilter === 'no_login'} onClick={() => setChipFilter('no_login')} count={chipCounts.noLogin} tone="orange">Без логина</Chip>
-            )}
-            {chipCounts.hybrid > 0 && (
-              <Chip active={chipFilter === 'hybrid'} onClick={() => setChipFilter('hybrid')} count={chipCounts.hybrid} tone="purple">Гибрид</Chip>
-            )}
-            <div className="ml-auto flex items-center gap-2 flex-wrap">
-              {/* Группировка */}
-              <select
-                value={groupBy}
-                onChange={(e) => setGroupBy(e.target.value as 'none' | 'role' | 'kind')}
-                className="h-8 px-2 rounded-md border border-border bg-card text-xs text-body"
-              >
-                <option value="none">Без группировки</option>
-                <option value="role">По должности</option>
-                <option value="kind">По типу</option>
-              </select>
-              {/* Sort */}
-              <select
-                value={`${sortKey}|${sortAsc ? 'a' : 'd'}`}
-                onChange={(e) => {
-                  const [k, dir] = e.target.value.split('|') as [SortKey, 'a' | 'd']
-                  setSortKey(k)
-                  setSortAsc(dir === 'a')
-                }}
-                className="h-8 px-2 rounded-md border border-border bg-card text-xs text-body"
-              >
-                <option value="name|a">ФИО ↑</option>
-                <option value="name|d">ФИО ↓</option>
-                <option value="role|a">Должность ↑</option>
-                <option value="role|d">Должность ↓</option>
-                <option value="hire_date|d">Новые сначала</option>
-                <option value="hire_date|a">Старые сначала</option>
-                <option value="salary|d">Оклад ↓</option>
-                <option value="salary|a">Оклад ↑</option>
-              </select>
-              {/* View toggle */}
-              <div className="flex border border-border rounded-md overflow-hidden">
+          {/* Фильтры — одна строка */}
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+            <div className="relative lg:w-80">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                placeholder="Имя, телефон, email…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-9 w-full rounded-md border border-input bg-transparent pl-9 pr-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+              <NativeSelect value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} className="sm:w-44">
+                <option value="all">Все точки</option>
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </NativeSelect>
+              <NativeSelect value={kindFilter} onChange={(e) => setKindFilter(e.target.value as KindFilter)} className="sm:w-44">
+                <option value="all">Все сотрудники</option>
+                <option value="operator">Операторы</option>
+                <option value="staff">Администрация</option>
+              </NativeSelect>
+              <NativeSelect value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="sm:w-44">
+                <option value="all">Все должности</option>
+                {roleOptions.map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </NativeSelect>
+              {tab === 'active' && (
                 <button
-                  onClick={() => setViewMode('cards')}
-                  className={`p-1.5 ${viewMode === 'cards' ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'}`}
-                  title="Карточки"
+                  type="button"
+                  onClick={() => setNoLoginOnly((v) => !v)}
+                  className={cn(
+                    'h-9 rounded-md border px-3 text-sm transition-colors',
+                    noLoginOnly
+                      ? 'border-orange-500/50 bg-orange-500/10 text-orange-600 dark:text-orange-300'
+                      : 'border-input text-muted-foreground hover:text-foreground',
+                  )}
                 >
-                  <LayoutGrid className="w-3.5 h-3.5" />
+                  Без логина
                 </button>
-                <button
-                  onClick={() => setViewMode('table')}
-                  className={`p-1.5 ${viewMode === 'table' ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'}`}
-                  title="Таблица"
-                >
-                  <List className="w-3.5 h-3.5" />
+              )}
+            </div>
+            <div className="flex items-center gap-3 text-sm text-muted-foreground lg:ml-auto">
+              {hasFilters && (
+                <button type="button" onClick={resetFilters} className="inline-flex items-center gap-1 hover:text-foreground">
+                  <XIcon className="h-3.5 w-3.5" /> Сбросить
                 </button>
+              )}
+              {!loading && (
+                <span>
+                  {rows.length} {plural(rows.length, 'человек', 'человека', 'человек')}
+                </span>
+              )}
+            </div>
+          </div>
+          {companyFilter !== 'all' && kindFilter !== 'operator' && (
+            <p className="-mt-2 text-xs text-muted-foreground">
+              Администрация к точкам не привязана — при выборе точки в списке только её операторы.
+            </p>
+          )}
+
+          {/* Список */}
+          {loading && items.length === 0 ? (
+            <Card className="p-4">
+              <TableSkeleton rows={8} cols={6} />
+            </Card>
+          ) : rows.length === 0 ? (
+            <Card className="flex flex-col items-center gap-3 p-10 text-center">
+              <Users className="h-8 w-8 text-muted-foreground" />
+              <div className="text-sm text-muted-foreground">
+                {hasFilters ? 'Под фильтр никто не подходит' : tab === 'active' ? 'Сотрудников пока нет' : 'Уволенных нет'}
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* Bulk-action bar и экспорт */}
-        {(tab === 'active' || tab === 'dismissed') && filtered.length > 0 && (
-          <div className="p-3 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 flex flex-row flex-wrap items-center gap-2">
-            <button
-              onClick={selectedIds.size === filtered.length ? clearSelection : selectAllVisible}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs text-muted-foreground hover:text-slate-900 dark:hover:text-white"
-            >
-              {selectedIds.size === filtered.length && filtered.length > 0 ? (
-                <CheckSquare className="w-3.5 h-3.5" />
-              ) : (
-                <Square className="w-3.5 h-3.5" />
-              )}
-              {selectedIds.size > 0 ? `Выделено: ${selectedIds.size}` : 'Выделить всех'}
-            </button>
-            {selectedIds.size > 0 && (
-              <button
-                onClick={clearSelection}
-                className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-slate-500 hover:text-slate-900 dark:hover:text-white"
-              >
-                <XIcon className="w-3 h-3" /> Снять
-              </button>
-            )}
-            <div className="ml-auto flex items-center gap-2 flex-wrap">
-              {selectedIds.size > 0 && tab === 'active' && canEdit && positions.length > 0 && (
-                <select
-                  onChange={(e) => { if (e.target.value) bulkChangeRole(e.target.value); e.target.value = '' }}
-                  disabled={bulkBusy}
-                  defaultValue=""
-                  className="h-8 px-2 rounded-md border border-border bg-card text-xs text-body"
-                >
-                  <option value="" disabled>Сменить должность…</option>
-                  {positions.map((p) => <option key={p.name} value={p.name}>{p.label || p.name}</option>)}
-                </select>
-              )}
-              {selectedIds.size > 0 && tab === 'active' && canDismiss && (
-                <Button size="sm" variant="destructive" onClick={() => { setBulkDismissReason(''); setBulkDismissOpen(true) }} disabled={bulkBusy}>
-                  {bulkBusy ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <UserMinus className="w-3 h-3 mr-1" />}
-                  Уволить {selectedIds.size}
+              {hasFilters ? (
+                <Button variant="outline" size="sm" onClick={resetFilters}>Сбросить фильтры</Button>
+              ) : tab === 'active' && canHire ? (
+                <Button size="sm" onClick={() => setHireOpen(true)}>
+                  <UserPlus className="mr-1.5 h-4 w-4" /> Нанять первого
                 </Button>
-              )}
-              {can('hr.export') && (
-              <Button size="sm" variant="outline" onClick={exportCSV} className="border-border">
-                <Download className="w-3 h-3 mr-1" />
-                Экспорт CSV{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
-              </Button>
-              )}
-            </div>
-          </div>
-        )}
-      {/* Quick stats для табов active/dismissed */}
-      {tab === 'active' && filtered.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 px-1">
-          {(() => {
-            const totalSalary = filtered.reduce((s, e) => s + (e.monthly_salary || 0), 0)
-            const withSalary = filtered.filter((e) => (e.monthly_salary || 0) > 0).length
-            const avgSalary = withSalary > 0 ? Math.round(totalSalary / withSalary) : 0
-            const noLoginCount = filtered.filter((e) => e.has_login === false).length
-            const hybridCount = filtered.filter((e) => e.is_hybrid).length
-            return (
-              <>
-                <MiniStat label="Всего" value={filtered.length} tone="indigo" />
-                <MiniStat label="ФОТ" value={`${totalSalary.toLocaleString('ru-RU')} ₸`} tone="emerald" />
-                <MiniStat label="Средний оклад" value={`${avgSalary.toLocaleString('ru-RU')} ₸`} tone="blue" />
-                <MiniStat label="Без логина" value={noLoginCount} tone={noLoginCount > 0 ? 'orange' : 'gray'} />
-              </>
-            )
-          })()}
-        </div>
-      )}
-      <div className="flex items-center justify-between px-1">
-        <div className="text-sm text-muted-foreground">
-          {tab === 'active' ? 'Список активных сотрудников' : 'Список уволенных сотрудников'}
-        </div>
-        {!loading && filtered.length > 0 ? (
-          <div className="text-xs text-slate-500">
-            Найдено: <span className="text-body font-semibold">{filtered.length}</span>
-          </div>
-        ) : null}
-      </div>
-
-      {loading && items.length === 0 ? (
-        <Card className="p-4 bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
-          <TableSkeleton rows={8} cols={6} />
-        </Card>
-      ) : filtered.length === 0 ? (
-        <Card className="p-8 text-center text-sm text-muted-foreground bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
-          {tab === 'active' ? 'Активных сотрудников не найдено' : 'Уволенных сотрудников нет'}
-        </Card>
-      ) : viewMode === 'table' ? (
-        <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[780px] text-sm">
-              <thead className="bg-slate-100 dark:bg-slate-800/40 text-[11px] uppercase tracking-wider text-slate-500 sticky top-0">
-                <tr>
-                  <th className="text-left px-3 py-2 w-8"></th>
-                  <th className="text-left px-3 py-2">Сотрудник</th>
-                  <th className="text-left px-3 py-2">Тип</th>
-                  <th className="text-left px-3 py-2">Должность</th>
-                  <th className="text-left px-3 py-2">Контакты</th>
-                  <th className="text-right px-3 py-2">Оклад</th>
-                  <th className="text-center px-3 py-2 w-12"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((emp) => {
-                  const empKey = `${emp.kind}-${emp.id}`
-                  const isSelected = selectedIds.has(empKey)
-                  const dismissed = !!emp.dismissed_at || !emp.is_active
-                  return (
-                    <tr
-                      key={empKey}
-                      className={`border-t border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition ${isSelected ? 'bg-amber-500/5' : ''}`}
-                    >
-                      <td className="px-3 py-2">
-                        <button onClick={() => toggleSelected(empKey)}>
-                          {isSelected ? <CheckSquare className="w-4 h-4 text-amber-400" /> : <Square className="w-4 h-4 text-slate-600" />}
-                        </button>
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-2.5">
-                          <Avatar
-                            name={emp.full_name || '?'}
-                            photoUrl={emp.photo_url}
-                            size="sm"
-                            status={emp.kind === 'operator' ? (emp.has_login === false ? 'no-login' : null) : null}
-                          />
-                          <div className="min-w-0">
-                            <div className="font-medium text-foreground truncate max-w-[200px]">{emp.full_name || '—'}</div>
-                            {emp.short_name && <div className="text-[10px] text-slate-500 truncate">{emp.short_name}</div>}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded border ${
-                          emp.is_hybrid ? 'border-amber-500/40 text-amber-400 bg-amber-500/10'
-                          : emp.kind === 'operator' ? 'border-blue-500/40 text-blue-400 bg-blue-500/10'
-                          : 'border-amber-500/40 text-amber-400 bg-amber-500/10'
-                        }`}>
-                          {emp.is_hybrid ? 'Hybrid' : emp.kind === 'operator' ? 'Operator' : 'Admin'}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-body text-xs">{emp.role || '—'}</td>
-                      <td className="px-3 py-2 text-xs">
-                        {emp.phone && <div className="text-body">{emp.phone}</div>}
-                        {emp.email && <div className="text-slate-500 truncate max-w-[200px]">{emp.email}</div>}
-                      </td>
-                      <td className="px-3 py-2 text-right text-xs text-body font-mono">
-                        {emp.monthly_salary != null ? emp.monthly_salary.toLocaleString('ru-RU') : '—'}
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        <div className="flex items-center justify-end gap-1">
-                          {!dismissed && canEdit && (
-                            <button
-                              onClick={() => setSelectedEmp(emp as unknown as PanelEmployee)}
-                              className="p-1.5 rounded hover:bg-amber-500/10 text-amber-600 dark:text-amber-300"
-                              title="Профиль"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                          {dismissed && canRestore && (
-                            <button
-                              onClick={() => restore(emp)}
-                              className="p-1.5 rounded hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-300"
-                              title="Восстановить"
-                            >
-                              <UserCheck className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                          {!dismissed && canDismiss && (
-                            <button
-                              onClick={() => openDismiss(emp)}
-                              className="p-1.5 rounded hover:bg-red-500/10 text-red-400"
-                              title="Уволить"
-                            >
-                              <UserMinus className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      </td>
+              ) : null}
+            </Card>
+          ) : (
+            <Card className="overflow-hidden p-0">
+              {/* Таблица — от md */}
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full text-sm">
+                  <thead className="border-b border-border bg-surface-muted/60 text-[11px] uppercase tracking-wider text-muted-foreground [&_th]:px-4 [&_th]:py-3 [&_th]:font-medium">
+                    <tr>
+                      <th className="w-10">
+                        <Checkbox checked={allSelected} onChange={toggleAll} label="Выделить всех" />
+                      </th>
+                      {tab === 'active' ? (
+                        <>
+                          <SortableTh label="Сотрудник" sortKey="name" sort={activeSort.sort} onSort={activeSort.toggle} />
+                          <SortableTh label="Должность" sortKey="role" sort={activeSort.sort} onSort={activeSort.toggle} />
+                          <th className="text-left">Точки</th>
+                          <th className="text-left">Контакты</th>
+                          <SortableTh label="Оклад" sortKey="salary" sort={activeSort.sort} onSort={activeSort.toggle} align="right" />
+                          <SortableTh label="Вход" sortKey="login" sort={activeSort.sort} onSort={activeSort.toggle} />
+                        </>
+                      ) : (
+                        <>
+                          <SortableTh label="Сотрудник" sortKey="name" sort={dismissedSort.sort} onSort={dismissedSort.toggle} />
+                          <SortableTh label="Должность" sortKey="role" sort={dismissedSort.sort} onSort={dismissedSort.toggle} />
+                          <SortableTh label="Уволен" sortKey="dismissed" sort={dismissedSort.sort} onSort={dismissedSort.toggle} />
+                          <th className="text-left">Причина</th>
+                        </>
+                      )}
+                      <th className="w-12" />
                     </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {rows.map((emp) => {
+                      const key = empKey(emp)
+                      const selected = selectedIds.has(key)
+                      const clickable = !isDismissed(emp) && canEdit
+                      return (
+                        <tr
+                          key={key}
+                          onClick={() => openProfile(emp)}
+                          className={cn(
+                            'transition-colors [&_td]:px-4 [&_td]:py-3 [&_td]:align-middle',
+                            clickable && 'cursor-pointer',
+                            selected ? 'bg-amber-500/[0.06]' : 'hover:bg-surface-hover/60',
+                          )}
+                        >
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <Checkbox checked={selected} onChange={() => toggleSelected(key)} label={`Выделить ${emp.full_name}`} />
+                          </td>
+                          <td>
+                            <PersonCell emp={emp} />
+                          </td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            {tab === 'active' && canEdit && emp.role ? (
+                              <InlineRoleDropdown current={emp.role} positions={positions} onChange={(r) => void changeRoleInline(emp, r)} />
+                            ) : (
+                              <span className="text-body">{emp.role || '—'}</span>
+                            )}
+                          </td>
+                          {tab === 'active' ? (
+                            <>
+                              <td>
+                                <CompanyChips ids={emp.company_ids} name={companyName} />
+                              </td>
+                              <td onClick={(e) => e.stopPropagation()}>
+                                <Contacts emp={emp} />
+                              </td>
+                              <td className="whitespace-nowrap text-right tabular-nums text-body">
+                                {emp.monthly_salary ? money(emp.monthly_salary) : <span className="text-muted-foreground">—</span>}
+                              </td>
+                              <td className="whitespace-nowrap">
+                                <LoginCell emp={emp} />
+                              </td>
+                            </>
+                          ) : (
+                            <>
+                              <td className="whitespace-nowrap">
+                                <div className="text-body">{shortDate(emp.dismissal_date || emp.dismissed_at || '')}</div>
+                                {emp.dismissal_type && (
+                                  <div className="text-xs text-muted-foreground">
+                                    {DISMISSAL_TYPE_LABELS[emp.dismissal_type as DismissalType] || emp.dismissal_type}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="max-w-md">
+                                <div className="line-clamp-2 text-body" title={emp.dismissal_reason || ''}>{emp.dismissal_reason || '—'}</div>
+                                {emp.dismissed_by_name && <div className="text-xs text-muted-foreground">оформил: {emp.dismissed_by_name}</div>}
+                              </td>
+                            </>
+                          )}
+                          <td onClick={(e) => e.stopPropagation()} className="text-right">
+                            <RowMenu busy={busyId === emp.id} actions={menuFor(emp)} />
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Карточки — на телефоне */}
+              <div className="divide-y divide-border md:hidden">
+                {rows.map((emp) => {
+                  const key = empKey(emp)
+                  const selected = selectedIds.has(key)
+                  return (
+                    <div
+                      key={key}
+                      onClick={() => openProfile(emp)}
+                      className={cn('flex items-start gap-3 p-4', selected && 'bg-amber-500/[0.06]')}
+                    >
+                      <div onClick={(e) => e.stopPropagation()} className="pt-2">
+                        <Checkbox checked={selected} onChange={() => toggleSelected(key)} label={`Выделить ${emp.full_name}`} />
+                      </div>
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <PersonCell emp={emp} />
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                          {emp.role && <span className="text-body">{emp.role}</span>}
+                          {tab === 'active' ? (
+                            <>
+                              {emp.monthly_salary ? <span className="tabular-nums">{money(emp.monthly_salary)}</span> : null}
+                              <LoginCell emp={emp} />
+                            </>
+                          ) : (
+                            <span>уволен {shortDate(emp.dismissal_date || emp.dismissed_at || '')}</span>
+                          )}
+                        </div>
+                        {tab === 'active' ? (
+                          <CompanyChips ids={emp.company_ids} name={companyName} />
+                        ) : emp.dismissal_reason ? (
+                          <div className="text-xs italic text-muted-foreground">«{emp.dismissal_reason}»</div>
+                        ) : null}
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <Contacts emp={emp} />
+                        </div>
+                      </div>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <RowMenu busy={busyId === emp.id} actions={menuFor(emp)} />
+                      </div>
+                    </div>
                   )
                 })}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      ) : (
-        <div className="space-y-5">
-          {groups.map((group) => (
-            <div key={group.key}>
-              {group.label && (
-                <div className="flex items-center gap-2 mb-2 px-1">
-                  <h3 className="text-xs uppercase tracking-wider text-slate-400 font-semibold">{group.label}</h3>
-                  <span className="text-xs text-slate-600">·</span>
-                  <span className="text-xs text-slate-500">{group.items.length}</span>
-                  <div className="flex-1 h-px bg-slate-200 dark:bg-slate-800 ml-2" />
-                </div>
-              )}
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                {group.items.map((emp) => {
-            const busy = busyId === emp.id
-            // dismissed = либо явно уволен, либо просто архивный (is_active=false)
-            const dismissed = !!emp.dismissed_at || !emp.is_active
-            const empKey = `${emp.kind}-${emp.id}`
-            const isSelected = selectedIds.has(empKey)
-            return (
-              <Card
-                key={empKey}
-                className={`p-5 flex items-start justify-between gap-4 border shadow-sm transition ${
-                  isSelected
-                    ? 'bg-amber-500/10 border-amber-500/50'
-                    : dismissed
-                      ? 'bg-red-500/5 border-red-500/25'
-                      : 'bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 hover:border-amber-500/40 hover:bg-slate-50 dark:hover:bg-slate-900/80'
-                }`}
-              >
-                <button
-                  onClick={() => toggleSelected(empKey)}
-                  className="mt-0.5 shrink-0 text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors"
-                  title={isSelected ? 'Снять выделение' : 'Выделить'}
-                >
-                  {isSelected ? <CheckSquare className="w-4 h-4 text-amber-400" /> : <Square className="w-4 h-4" />}
-                </button>
-                <Avatar
-                  name={emp.full_name || '?'}
-                  photoUrl={emp.photo_url}
-                  status={emp.kind === 'operator' ? (emp.has_login === false ? 'no-login' : null) : null}
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold">{emp.full_name || '—'}</span>
-                    <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded border ${
-                      (emp as any).is_hybrid
-                        ? 'border-amber-500/40 text-amber-400 bg-amber-500/10'
-                        : emp.kind === 'operator'
-                          ? 'border-blue-500/40 text-blue-400 bg-blue-500/10'
-                          : 'border-amber-500/40 text-amber-400 bg-amber-500/10'
-                    }`}>
-                      {(emp as any).is_hybrid ? 'Hybrid' : emp.kind === 'operator' ? 'Оператор' : 'Админ'}
-                    </span>
-                    {emp.role && !dismissed && canEdit ? (
-                      <>
-                        <span className="text-slate-600">·</span>
-                        <InlineRoleDropdown
-                          current={emp.role}
-                          positions={positions}
-                          onChange={(newRole) => changeRoleInline(emp, newRole)}
-                        />
-                      </>
-                    ) : emp.role ? (
-                      <span className="text-[10px] uppercase text-muted-foreground">· {emp.role}</span>
-                    ) : null}
-                    {emp.position && (
-                      <span className="text-[10px] uppercase text-muted-foreground">· {emp.position}</span>
-                    )}
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-                    {emp.phone && (
-                      <a href={`tel:${emp.phone}`} className="hover:text-amber-600 dark:hover:text-amber-300 transition-colors">📞 {emp.phone}</a>
-                    )}
-                    {emp.email && (
-                      <a href={`mailto:${emp.email}`} className="hover:text-amber-600 dark:hover:text-amber-300 transition-colors truncate">✉ {emp.email}</a>
-                    )}
-                    {emp.telegram_chat_id && (
-                      <a href={`tg://user?id=${emp.telegram_chat_id}`} className="hover:text-amber-600 dark:hover:text-amber-300 transition-colors">📨 Telegram</a>
-                    )}
-                    {emp.monthly_salary != null && emp.monthly_salary > 0 && (
-                      <span>💰 {emp.monthly_salary.toLocaleString('ru-RU')} ₸/мес</span>
-                    )}
-                    {emp.last_login && (
-                      <span className="text-slate-500" title={emp.last_login}>
-                        🕒 {formatRelative(emp.last_login)}
-                      </span>
-                    )}
-                  </div>
-                  {dismissed && (
-                    <div className="mt-2 p-2 rounded-md bg-red-500/10 border border-red-500/30 text-xs">
-                      <div className="text-red-700 dark:text-red-300 font-medium flex flex-wrap gap-x-2">
-                        <span>Уволен: {shortDate(emp.dismissal_date || emp.dismissed_at!)}</span>
-                        {emp.dismissed_by_name && <span>· кем: {emp.dismissed_by_name}</span>}
-                        {emp.dismissal_type && (
-                          <span className="px-1.5 py-0.5 rounded border border-red-500/40 text-[10px] uppercase">
-                            {DISMISSAL_TYPE_LABELS[emp.dismissal_type as DismissalType] || emp.dismissal_type}
-                          </span>
-                        )}
-                      </div>
-                      {emp.dismissal_reason && (
-                        <div className="text-muted-foreground italic mt-1">«{emp.dismissal_reason}»</div>
-                      )}
-                    </div>
-                  )}
-
-                  {canViewHistory && (
-                    <div className="mt-3">
-                      <button
-                        type="button"
-                        onClick={() => toggleHistory(emp)}
-                        className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500 transition"
-                      >
-                        {historyOpen[`${emp.kind}-${emp.id}`] ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                        История действий
-                      </button>
-                    </div>
-                  )}
-
-                  {canViewHistory && historyOpen[`${emp.kind}-${emp.id}`] && (
-                    <div className="mt-2 pl-2 border-l border-border text-xs space-y-1">
-                      {historyLoading[`${emp.kind}-${emp.id}`] ? (
-                        <div className="space-y-1.5 py-0.5">
-                          <Skeleton className="h-3 w-2/3" />
-                          <Skeleton className="h-3 w-1/2" />
-                        </div>
-                      ) : (historyData[`${emp.kind}-${emp.id}`] || []).length === 0 ? (
-                        <div className="text-slate-500 italic">Нет записей</div>
-                      ) : (
-                        (historyData[`${emp.kind}-${emp.id}`] || []).map((h) => (
-                          <div key={h.id} className="text-muted-foreground">
-                            <span className="text-body">{ACTION_LABEL[h.action] || h.action}</span>
-                            <span className="text-slate-500"> · {new Date(h.created_at).toLocaleString('ru-RU')}</span>
-                            {h.actor_name && <span className="text-slate-500"> · {h.actor_name}</span>}
-                            {h.action === 'dismiss' && h.payload?.reason && (
-                              <div className="italic text-slate-500 ml-2">
-                                {h.payload?.dismissal_type && DISMISSAL_TYPE_LABELS[h.payload.dismissal_type as DismissalType] && (
-                                  <>[{DISMISSAL_TYPE_LABELS[h.payload.dismissal_type as DismissalType]}] </>
-                                )}
-                                «{h.payload.reason}»
-                              </div>
-                            )}
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </div>
-                <div className="shrink-0">
-                  <RowMenu
-                    busy={busy}
-                    actions={[
-                      {
-                        label: 'Открыть профиль',
-                        icon: Pencil,
-                        onClick: () => setSelectedEmp(emp as unknown as PanelEmployee),
-                        hidden: dismissed || !canEdit,
-                      },
-                      {
-                        label: 'Восстановить',
-                        icon: UserCheck,
-                        tone: 'success',
-                        onClick: () => restore(emp),
-                        hidden: !dismissed || !canRestore,
-                      },
-                      {
-                        label: 'Уволить',
-                        icon: UserMinus,
-                        tone: 'danger',
-                        onClick: () => openDismiss(emp),
-                        hidden: dismissed || !canDismiss,
-                      },
-                    ]}
-                  />
-                </div>
-              </Card>
-            )
-                })}
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            </Card>
+          )}
         </>
       )}
 
-      {dismissTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={() => { if (!busyId) setDismissTarget(null) }}>
-          <div className="bg-card border border-border rounded-2xl p-5 w-full max-w-md max-h-[calc(100vh-2rem)] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold mb-1 text-foreground">Уволить сотрудника</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              {dismissTarget.full_name} ({dismissTarget.kind === 'operator' ? 'оператор' : 'админ'})
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-              <div>
-                <label className="block text-sm font-medium mb-1 text-foreground">Дата увольнения</label>
-                <DatePicker value={dismissDate} onChange={setDismissDate} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1 text-foreground">Тип</label>
-                <select
-                  value={dismissType}
-                  onChange={(e) => setDismissType(e.target.value as DismissalType)}
-                  className="w-full h-10 px-3 rounded-lg border border-border bg-card text-sm"
+      {/* Панель массовых действий */}
+      {peopleTab && selectedIds.size > 0 && (
+        <div className="fixed inset-x-0 bottom-4 z-40 flex justify-center px-4">
+          <div className="flex w-full max-w-3xl flex-wrap items-center gap-2 rounded-2xl border border-border bg-popover p-2 pl-4 shadow-2xl">
+            <span className="text-sm font-medium text-foreground">
+              Выбрано: {selectedIds.size}
+            </span>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              {tab === 'active' && canEdit && positions.length > 0 && (
+                <NativeSelect
+                  defaultValue=""
+                  disabled={bulkBusy}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    e.target.value = ''
+                    if (v) void bulkChangeRole(v)
+                  }}
+                  className="h-8 w-auto text-sm"
                 >
-                  {(Object.keys(DISMISSAL_TYPE_LABELS) as DismissalType[]).map((t) => (
-                    <option key={t} value={t}>{DISMISSAL_TYPE_LABELS[t]}</option>
+                  <option value="" disabled>
+                    Сменить должность…
+                  </option>
+                  {positions.map((p) => (
+                    <option key={p.name} value={p.name}>{p.label || p.name}</option>
                   ))}
-                </select>
-              </div>
-            </div>
-            <label className="block text-sm font-medium mb-1 text-foreground">Причина увольнения</label>
-            <textarea
-              value={dismissReason}
-              onChange={(e) => setDismissReason(e.target.value)}
-              placeholder="Укажите причину (минимум 5 символов)"
-              rows={4}
-              className="w-full px-3 py-2 rounded-lg border border-border bg-card text-sm mb-4"
-            />
-            {pairedLoading ? (
-              <div className="mb-4 text-xs text-slate-500">Проверяем парную запись…</div>
-            ) : pairedRecord ? (
-              <label className="mb-4 flex items-start gap-3 rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-900 dark:text-amber-100">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 h-4 w-4 accent-amber-400"
-                  checked={cascadeDismiss}
-                  onChange={(e) => setCascadeDismiss(e.target.checked)}
-                />
-                <span>
-                  <span className="font-semibold text-foreground">
-                    У сотрудника также есть запись «{pairedRecord.name}»
-                    {' '}({pairedRecord.kind === 'operator' ? 'оператор' : 'админ'}).
-                  </span>
-                  <span className="block text-xs text-amber-700 dark:text-amber-200/80 mt-0.5">
-                    Уволить и её одной операцией. Это безопасно: иначе парная запись останется
-                    активной и сотрудник продолжит висеть в /structure и /salary.
-                  </span>
-                </span>
-              </label>
-            ) : null}
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setDismissTarget(null)} disabled={!!busyId}>Отмена</Button>
-              <Button variant="destructive" onClick={confirmDismiss} disabled={busyId === dismissTarget.id}>
-                {busyId === dismissTarget.id ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <UserMinus className="w-4 h-4 mr-2" />}
-                Уволить
+                </NativeSelect>
+              )}
+              {canExport && (
+                <Button size="sm" variant="outline" onClick={exportCSV}>
+                  <Download className="mr-1 h-3.5 w-3.5" /> CSV
+                </Button>
+              )}
+              {tab === 'active' && canDismiss && (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  disabled={bulkBusy}
+                  onClick={() => {
+                    setBulkDismissReason('')
+                    setBulkDismissOpen(true)
+                  }}
+                >
+                  {bulkBusy ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <UserMinus className="mr-1 h-3.5 w-3.5" />}
+                  Уволить
+                </Button>
+              )}
+              <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())} aria-label="Снять выделение">
+                <XIcon className="h-4 w-4" />
               </Button>
             </div>
           </div>
         </div>
       )}
 
+      <HireModal open={hireOpen} onClose={() => setHireOpen(false)} onCreated={() => load()} />
+
+      {/* Увольнение одного сотрудника */}
+      <AppModal
+        open={!!dismissTarget}
+        onClose={() => { if (!busyId) setDismissTarget(null) }}
+        title="Уволить сотрудника"
+        description={dismissTarget ? `${dismissTarget.full_name} · ${kindLabel(dismissTarget).toLowerCase()}` : undefined}
+        maxWidth="max-w-md"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setDismissTarget(null)} disabled={!!busyId}>Отмена</Button>
+            <Button variant="destructive" onClick={() => void confirmDismiss()} disabled={!!dismissTarget && busyId === dismissTarget.id}>
+              {dismissTarget && busyId === dismissTarget.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserMinus className="mr-2 h-4 w-4" />}
+              Уволить
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="block space-y-1 text-sm">
+              <span className="font-medium text-foreground">Дата увольнения</span>
+              <DatePicker value={dismissDate} onChange={setDismissDate} />
+            </label>
+            <label className="block space-y-1 text-sm">
+              <span className="font-medium text-foreground">Основание</span>
+              <NativeSelect value={dismissType} onChange={(e) => setDismissType(e.target.value as DismissalType)} className="h-[46px] rounded-xl">
+                {(Object.keys(DISMISSAL_TYPE_LABELS) as DismissalType[]).map((t) => (
+                  <option key={t} value={t}>{DISMISSAL_TYPE_LABELS[t]}</option>
+                ))}
+              </NativeSelect>
+            </label>
+          </div>
+          <label className="block space-y-1 text-sm">
+            <span className="font-medium text-foreground">Причина</span>
+            <textarea
+              value={dismissReason}
+              onChange={(e) => setDismissReason(e.target.value)}
+              placeholder="Минимум 5 символов"
+              rows={3}
+              className="w-full rounded-xl border border-input bg-transparent px-3 py-2 text-sm text-foreground outline-none focus-visible:border-ring dark:bg-input/30"
+            />
+          </label>
+          {pairedLoading ? (
+            <div className="text-xs text-muted-foreground">Проверяем вторую запись сотрудника…</div>
+          ) : pairedRecord ? (
+            <label className="flex items-start gap-3 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 accent-amber-500"
+                checked={cascadeDismiss}
+                onChange={(e) => setCascadeDismiss(e.target.checked)}
+              />
+              <span>
+                <span className="font-medium text-foreground">
+                  Уволить и вторую запись «{pairedRecord.name}» ({pairedRecord.kind === 'operator' ? 'оператор' : 'администрация'})
+                </span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  Иначе она останется активной, и человек продолжит числиться в структуре и зарплате.
+                </span>
+              </span>
+            </label>
+          ) : null}
+        </div>
+      </AppModal>
+
+      {/* Массовое увольнение */}
       <AppModal
         open={bulkDismissOpen}
         onClose={() => { if (!bulkBusy) { setBulkDismissOpen(false); setBulkDismissReason('') } }}
-        title={`Уволить ${selectedIds.size} ${selectedIds.size === 1 ? 'сотрудника' : 'сотрудников'}?`}
+        title={`Уволить ${selectedIds.size} ${plural(selectedIds.size, 'сотрудника', 'сотрудников', 'сотрудников')}?`}
         maxWidth="max-w-md"
         footer={
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => { setBulkDismissOpen(false); setBulkDismissReason('') }} disabled={bulkBusy}>
               Отмена
             </Button>
-            <Button variant="destructive" onClick={bulkDismiss} disabled={bulkBusy}>
-              {bulkBusy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <UserMinus className="w-4 h-4 mr-2" />}
+            <Button variant="destructive" onClick={() => void bulkDismiss()} disabled={bulkBusy}>
+              {bulkBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserMinus className="mr-2 h-4 w-4" />}
               Уволить
             </Button>
           </div>
         }
       >
-        <label className="block text-sm font-medium mb-1 text-foreground">Причина увольнения</label>
-        <textarea
-          value={bulkDismissReason}
-          onChange={(e) => setBulkDismissReason(e.target.value)}
-          placeholder="Укажите причину (минимум 5 символов)"
-          rows={4}
-          className="w-full px-3 py-2 rounded-lg border border-border bg-card text-sm"
-        />
+        <label className="block space-y-1 text-sm">
+          <span className="font-medium text-foreground">Причина</span>
+          <textarea
+            value={bulkDismissReason}
+            onChange={(e) => setBulkDismissReason(e.target.value)}
+            placeholder="Минимум 5 символов"
+            rows={3}
+            className="w-full rounded-xl border border-input bg-transparent px-3 py-2 text-sm text-foreground outline-none focus-visible:border-ring dark:bg-input/30"
+          />
+        </label>
         <p className="mt-2 text-xs text-muted-foreground">
-          Причина будет записана всем выбранным сотрудникам, дата увольнения — сегодняшняя.
+          Причина запишется всем выбранным, дата увольнения — сегодняшняя, основание — по собственному желанию.
         </p>
       </AppModal>
 
-      <EmployeePanel
-        employee={selectedEmp}
-        onClose={() => setSelectedEmp(null)}
-        onUpdated={() => load()}
-      />
+      {/* История действий */}
+      <AppModal
+        open={!!historyFor}
+        onClose={() => setHistoryFor(null)}
+        title="История действий"
+        description={historyFor?.full_name}
+        icon={<History className="h-5 w-5" />}
+        maxWidth="max-w-lg"
+      >
+        {historyLoading && historyFor && !historyCache[empKey(historyFor)] ? (
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-2/3" />
+            <Skeleton className="h-4 w-1/2" />
+            <Skeleton className="h-4 w-3/5" />
+          </div>
+        ) : historyFor && (historyCache[empKey(historyFor)] || []).length > 0 ? (
+          <ol className="relative space-y-4 border-l border-border pl-5">
+            {(historyCache[empKey(historyFor)] || []).map((h) => (
+              <li key={h.id} className="relative">
+                <span className="absolute -left-[25px] top-1.5 h-2 w-2 rounded-full bg-amber-500" />
+                <div className="text-sm font-medium text-foreground">{ACTION_LABEL[h.action] || h.action}</div>
+                <div className="text-xs text-muted-foreground">
+                  {new Date(h.created_at).toLocaleString('ru-RU')}
+                  {h.actor_name ? ` · ${h.actor_name}` : ''}
+                </div>
+                {h.action === 'dismiss' && h.payload?.reason && (
+                  <div className="mt-1 text-xs italic text-muted-foreground">
+                    {DISMISSAL_TYPE_LABELS[h.payload?.dismissal_type as DismissalType]
+                      ? `${DISMISSAL_TYPE_LABELS[h.payload.dismissal_type as DismissalType]}: `
+                      : ''}
+                    «{h.payload.reason}»
+                  </div>
+                )}
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <div className="text-sm text-muted-foreground">Записей нет</div>
+        )}
+      </AppModal>
+
+      <EmployeePanel employee={selectedEmp} onClose={() => setSelectedEmp(null)} onUpdated={() => load()} />
     </div>
   )
 }
 
-function MiniStat({
+// ─── Мелкие компоненты ───────────────────────────────────────────────
+
+function SummaryTile({
   label,
   value,
-  tone = 'indigo',
+  hint,
+  tone = 'default',
+  onClick,
+  loading,
+  className,
 }: {
   label: string
   value: number | string
-  tone?: 'indigo' | 'emerald' | 'blue' | 'orange' | 'gray'
+  hint?: string
+  tone?: 'default' | 'warn'
+  onClick?: () => void
+  loading?: boolean
+  className?: string
 }) {
-  const toneMap = {
-    indigo: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-    emerald: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-    blue: 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300',
-    orange: 'border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-300',
-    gray: 'border-border bg-slate-50 dark:bg-slate-900/40 text-muted-foreground',
-  }
+  const Tag = onClick ? 'button' : 'div'
   return (
-    <div className={`px-3 py-2 rounded-lg border ${toneMap[tone]}`}>
-      <div className="text-[10px] uppercase tracking-wider opacity-90">{label}</div>
-      <div className="text-base font-bold text-foreground mt-0.5 truncate">{value}</div>
+    <Tag
+      type={onClick ? 'button' : undefined}
+      onClick={onClick}
+      className={cn(
+        'rounded-2xl border border-border bg-card px-4 py-3 text-left',
+        onClick && 'transition-colors hover:border-orange-500/40',
+        tone === 'warn' && 'border-orange-500/30',
+        className,
+      )}
+    >
+      <div className="text-xs text-muted-foreground">{label}</div>
+      {loading ? (
+        <Skeleton className="mt-1.5 h-6 w-16" />
+      ) : (
+        <div className={cn('mt-0.5 text-xl font-semibold tabular-nums', tone === 'warn' ? 'text-orange-600 dark:text-orange-300' : 'text-foreground')}>
+          {value}
+        </div>
+      )}
+      {hint && <div className="mt-0.5 truncate text-[11px] text-muted-foreground">{hint}</div>}
+    </Tag>
+  )
+}
+
+function Checkbox({ checked, onChange, label }: { checked: boolean; onChange: () => void; label: string }) {
+  return (
+    <input
+      type="checkbox"
+      checked={checked}
+      onChange={onChange}
+      aria-label={label}
+      className="h-4 w-4 cursor-pointer rounded border-border accent-amber-500"
+    />
+  )
+}
+
+function PersonCell({ emp }: { emp: HrEmployee }) {
+  return (
+    <div className="flex min-w-0 items-center gap-3">
+      <Avatar
+        name={emp.full_name || '?'}
+        photoUrl={emp.photo_url}
+        status={emp.kind === 'operator' && emp.has_login === false ? 'no-login' : null}
+      />
+      <div className="min-w-0">
+        <div className="truncate font-medium text-foreground">{emp.full_name || '—'}</div>
+        <div className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
+          {emp.is_hybrid ? <Briefcase className="h-3 w-3 shrink-0 text-amber-500" /> : null}
+          <span>{kindLabel(emp)}</span>
+          {emp.short_name && emp.short_name !== emp.full_name && <span>· {emp.short_name}</span>}
+        </div>
+      </div>
     </div>
   )
 }
 
-function Chip({
-  active,
-  onClick,
-  count,
-  tone = 'indigo',
-  children,
-}: {
-  active?: boolean
-  onClick?: () => void
-  count?: number
-  tone?: 'indigo' | 'orange' | 'purple'
-  children: React.ReactNode
-}) {
-  const toneMap = {
-    indigo: 'border-amber-500/40 text-amber-700 dark:text-amber-300 bg-amber-500/10',
-    orange: 'border-orange-500/40 text-orange-700 dark:text-orange-300 bg-orange-500/10',
-    purple: 'border-amber-500/40 text-amber-700 dark:text-amber-300 bg-amber-500/10',
-  }
+function CompanyChips({ ids, name }: { ids?: string[]; name: (id: string) => string }) {
+  if (!ids || ids.length === 0) return <span className="text-xs text-muted-foreground">—</span>
   return (
-    <button
-      onClick={onClick}
-      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition flex items-center gap-1.5 ${
-        active ? toneMap[tone] + ' ring-1 ring-current/20' : 'border-border text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
-      }`}
-    >
-      <span>{children}</span>
-      {count != null && (
-        <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${active ? 'bg-amber-500/20 dark:bg-white/10' : 'bg-slate-100 dark:bg-slate-800'}`}>
-          {count}
+    <div className="flex flex-wrap gap-1">
+      {ids.slice(0, 3).map((id) => (
+        <span key={id} className="rounded-md bg-surface-muted px-2 py-0.5 text-xs text-body">
+          {name(id)}
         </span>
+      ))}
+      {ids.length > 3 && <span className="px-1 text-xs text-muted-foreground">+{ids.length - 3}</span>}
+    </div>
+  )
+}
+
+function Contacts({ emp }: { emp: HrEmployee }) {
+  if (!emp.phone && !emp.email && !emp.telegram_chat_id) return <span className="text-xs text-muted-foreground">—</span>
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
+      {emp.phone && (
+        <a href={`tel:${emp.phone}`} className="whitespace-nowrap text-body hover:text-amber-600 dark:hover:text-amber-300">
+          {emp.phone}
+        </a>
       )}
-    </button>
+      {emp.telegram_chat_id && (
+        <a
+          href={`tg://user?id=${emp.telegram_chat_id}`}
+          title="Написать в Telegram"
+          className="inline-flex items-center gap-1 text-muted-foreground hover:text-sky-500"
+        >
+          <Send className="h-3 w-3" /> TG
+        </a>
+      )}
+      {emp.email && !emp.phone && <span className="max-w-[180px] truncate text-muted-foreground">{emp.email}</span>}
+    </div>
+  )
+}
+
+function LoginCell({ emp }: { emp: HrEmployee }) {
+  if (emp.has_login === false) {
+    return <span className="rounded-md bg-orange-500/10 px-2 py-0.5 text-xs text-orange-600 dark:text-orange-300">нет логина</span>
+  }
+  if (!emp.last_login) return <span className="text-xs text-muted-foreground">не входил</span>
+  return (
+    <span className="text-xs text-muted-foreground" title={new Date(emp.last_login).toLocaleString('ru-RU')}>
+      {formatRelative(emp.last_login)}
+    </span>
   )
 }
