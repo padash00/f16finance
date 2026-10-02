@@ -60,7 +60,8 @@ const GOOD = 'text-emerald-700 dark:text-emerald-400'
 const BAD = 'text-rose-600 dark:text-rose-400'
 const tone = (v: number) => (Math.round(v) < 0 ? BAD : GOOD)
 /** Рост расхода — плохо, рост выручки и прибыли — хорошо */
-const changeTone = (delta: number, expense: boolean) => (Math.round(delta) === 0 ? 'text-muted-foreground' : (delta > 0) !== expense ? GOOD : BAD)
+const deltaTone = (delta: number, expense: boolean): 'good' | 'bad' | '' => (Math.round(delta) === 0 ? '' : (delta > 0) !== expense ? 'good' : 'bad')
+const changeTone = (delta: number, expense: boolean) => ({ good: GOOD, bad: BAD, '': 'text-muted-foreground' })[deltaTone(delta, expense)]
 
 const th = 'px-3 py-2 text-left text-xs font-medium text-muted-foreground'
 const thr = 'px-3 py-2 text-right text-xs font-medium text-muted-foreground'
@@ -99,15 +100,44 @@ const OFF_CHAIN: Array<{ key: PnlLineKey; label: string; get: (p: PnlMonth) => n
 const visibleChain = (posLabel: string, current: PnlMonth, previous: PnlMonth | null) =>
   chain(posLabel).filter((row) => row.kind === 'total' || row.key === 'revenue' || Math.round(row.get(current)) !== 0 || (previous && Math.round(row.get(previous)) !== 0))
 
-function Section({ title, subtitle, icon, children }: { title: string; subtitle?: ReactNode; icon?: ReactNode; children: ReactNode }) {
+/** Статьи строки ОПиУ; у выручки — способы оплаты */
+const partsOf = (key: PnlLineKey | 'revenue', p: PnlMonth | null, posLabel: string): CategoryAmount[] =>
+  !p
+    ? []
+    : key === 'revenue'
+      ? [
+          { name: 'Наличные', amount: p.income.cash },
+          { name: posLabel, amount: p.income.kaspi },
+          { name: 'Карта', amount: p.income.card },
+          { name: 'Онлайн', amount: p.income.online },
+        ]
+      : p.categories[key] || []
+
+/** Статьи обоих месяцев одним списком, по сумме этого месяца */
+const mergedParts = (key: PnlLineKey | 'revenue', current: PnlMonth, previous: PnlMonth | null, posLabel: string) => {
+  const cur = new Map(partsOf(key, current, posLabel).map((c) => [c.name, c.amount]))
+  const prev = new Map(partsOf(key, previous, posLabel).map((c) => [c.name, c.amount]))
+  const names = Array.from(new Set([...cur.keys(), ...prev.keys()]))
+  return names
+    .map((name) => ({ name, cur: cur.get(name) || 0, prev: prev.get(name) || 0 }))
+    .filter((r) => Math.round(r.cur) !== 0 || Math.round(r.prev) !== 0)
+    .sort((a, b) => b.cur - a.cur || b.prev - a.prev)
+}
+
+const leftover = (p: PnlMonth) => p.netProfit - p.capex - p.profitDistribution
+
+function Section({ title, subtitle, icon, action, children }: { title: string; subtitle?: ReactNode; icon?: ReactNode; action?: ReactNode; children: ReactNode }) {
   return (
     <Card className="gap-0 p-5">
-      <div className="mb-4">
-        <h2 className="flex items-center gap-2 text-base font-semibold">
-          {icon}
-          {title}
-        </h2>
-        {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="flex items-center gap-2 text-base font-semibold">
+            {icon}
+            {title}
+          </h2>
+          {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
+        </div>
+        {action}
       </div>
       {children}
     </Card>
@@ -156,6 +186,34 @@ export default function ProfitabilityPage() {
   const pointName = pointId ? companies.find((c) => c.id === pointId)?.name || point?.name || 'точка' : null
   const extraNames = report?.extra.names || []
   const incomplete = (report?.incompleteMonths || []).filter((m) => !pointId || m.companyId === pointId)
+
+  const [exporting, setExporting] = useState(false)
+  /** Общий срез на первой странице, дальше по странице на точку; выбрана точка — только она */
+  const exportDetailed = async () => {
+    if (!report) return
+    setExporting(true)
+    try {
+      const pages: PnlPdfPage[] = []
+      const several = report.companies.length > 1
+      if (!pointId && report.months[0]) {
+        const scope = includeExtra && extraNames.length ? `с ${extraNames.join(', ')}` : undefined
+        pages.push(pnlPdfPage(several ? 'Все точки' : report.companies[0]?.name || 'Все точки', report.months[0], report.previous, cashLabels.pos, scope))
+      }
+      for (const c of report.companies) {
+        if (pointId ? c.id !== pointId : !several) continue
+        const cur = c.months[0]
+        if (!cur || (isEmptyMonth(cur) && (!c.previous || isEmptyMonth(c.previous)))) continue
+        pages.push(pnlPdfPage(c.name, cur, c.previous, cashLabels.pos, c.isExtra && !c.inTotals ? 'не входит в общий итог' : undefined))
+      }
+      if (!pages.length) throw new Error('За этот месяц нет данных')
+      const tail = pointName ? `_${pointName.replace(/[^\p{L}\p{N}]+/gu, '_').slice(0, 40)}` : ''
+      await downloadReportPdf('pnl', { meta: { title: 'ОПиУ', period: monthLabel(month), generated: new Date().toLocaleString('ru-RU') }, pages }, `OPiU_${month}${tail}`)
+    } catch (e: any) {
+      toast({ title: 'Не удалось сформировать PDF', description: e?.message, variant: 'destructive' })
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <div className="app-page-wide space-y-5">
@@ -214,6 +272,13 @@ export default function ProfitabilityPage() {
                 title={`${monthLabel(month)}${pointName ? ` — ${pointName}` : ''}`}
                 subtitle={previous ? `Рядом — ${monthLabel(previous.month).toLowerCase()} и насколько изменилось. Нажмите на строку, чтобы увидеть статьи.` : 'Нажмите на строку, чтобы увидеть статьи.'}
                 icon={<Landmark className="h-4 w-4 text-emerald-500" />}
+                action={
+                  can('profitability.export_pdf') ? (
+                    <Button variant="outline" size="sm" disabled={exporting || loading} onClick={() => void exportDetailed()}>
+                      {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} PDF развёрнуто
+                    </Button>
+                  ) : null
+                }
               >
                 <PnlTable current={current} previous={previous} labels={cashLabels} />
               </Section>
@@ -253,28 +318,6 @@ function PnlTable({ current, previous, labels }: { current: PnlMonth; previous: 
       return next
     })
 
-  const revenueParts = (p: PnlMonth | null): CategoryAmount[] =>
-    p
-      ? [
-          { name: 'Наличные', amount: p.income.cash },
-          { name: labels.pos, amount: p.income.kaspi },
-          { name: 'Карта', amount: p.income.card },
-          { name: 'Онлайн', amount: p.income.online },
-        ]
-      : []
-  const partsOf = (key: PnlLineKey | 'revenue', p: PnlMonth | null) => (key === 'revenue' ? revenueParts(p) : p?.categories[key as PnlLineKey] || [])
-
-  /** Статьи обоих месяцев одним списком, по сумме этого месяца */
-  const mergedParts = (key: PnlLineKey | 'revenue') => {
-    const cur = new Map(partsOf(key, current).map((c) => [c.name, c.amount]))
-    const prev = new Map(partsOf(key, previous).map((c) => [c.name, c.amount]))
-    const names = Array.from(new Set([...cur.keys(), ...prev.keys()]))
-    return names
-      .map((name) => ({ name, cur: cur.get(name) || 0, prev: prev.get(name) || 0 }))
-      .filter((r) => Math.round(r.cur) !== 0 || Math.round(r.prev) !== 0)
-      .sort((a, b) => b.cur - a.cur || b.prev - a.prev)
-  }
-
   const revenue = current.revenue
   const share = (v: number) => (revenue > 0 ? `${((v / revenue) * 100).toFixed(1)}%` : '—')
 
@@ -296,7 +339,7 @@ function PnlTable({ current, previous, labels }: { current: PnlMonth; previous: 
   }
 
   const lineRows = (key: PnlLineKey | 'revenue', label: string, value: number, prevValue: number | null, expense: boolean) => {
-    const parts = mergedParts(key)
+    const parts = mergedParts(key, current, previous, labels.pos)
     const expandable = parts.length > 0
     const isOpen = open.has(key)
     return (
@@ -330,7 +373,6 @@ function PnlTable({ current, previous, labels }: { current: PnlMonth; previous: 
   }
 
   const offRows = OFF_CHAIN.filter((row) => Math.round(row.get(current)) !== 0 || (previous && Math.round(row.get(previous)) !== 0))
-  const leftover = (p: PnlMonth) => p.netProfit - p.capex - p.profitDistribution
 
   return (
     <div className="overflow-x-auto rounded-xl border border-border">
@@ -510,6 +552,86 @@ function PointsTable({ report, onSelect }: { report: ProfitabilityReport; onSele
       </table>
     </div>
   )
+}
+
+// ─── PDF развёрнуто ─────────────────────────────────────────────────────────
+
+type PnlPdfRow = { kind: 'line' | 'part' | 'total' | 'final' | 'sep'; label: string; cur?: string; share?: string; prev?: string; delta?: string; curTone?: string; deltaTone?: string; expense?: boolean }
+type PnlPdfPage = {
+  title: string
+  subtitle?: string
+  curLabel: string
+  prevLabel?: string
+  kpis: Array<{ label: string; value: string; tone?: string; sub?: string; subTone?: string }>
+  rows: PnlPdfRow[]
+  note?: string
+}
+
+const isEmptyMonth = (p: PnlMonth) => Math.round(p.revenue) === 0 && Math.round(p.netProfit) === 0 && Math.round(p.capex + p.profitDistribution) === 0
+
+/** Страница PDF: все строки ОПиУ раскрыты до статей, рядом прошлый месяц — как таблица на экране */
+function pnlPdfPage(title: string, current: PnlMonth, previous: PnlMonth | null, posLabel: string, subtitle?: string): PnlPdfPage {
+  const share = (v: number) => (current.revenue > 0 ? `${((v / current.revenue) * 100).toFixed(1)}%` : '—')
+  const pair = (value: number, prevValue: number | null, expense: boolean, sign = expense) => ({
+    cur: money(sign ? -value : value),
+    share: share(value),
+    prev: prevValue == null ? undefined : money(sign ? -prevValue : prevValue),
+    delta: prevValue == null ? undefined : signed(value - prevValue),
+    deltaTone: prevValue == null ? '' : deltaTone(value - prevValue, expense),
+  })
+  const valueTone = (v: number) => (Math.round(v) < 0 ? 'bad' : 'good')
+
+  const rows: PnlPdfRow[] = []
+  const line = (key: PnlLineKey | 'revenue', label: string, value: number, prevValue: number | null, expense: boolean) => {
+    rows.push({ kind: 'line', label, expense, ...pair(value, prevValue, expense) })
+    // Статьи — без минуса, как в раскрытой строке на экране
+    for (const part of mergedParts(key, current, previous, posLabel)) rows.push({ kind: 'part', label: part.name, ...pair(part.cur, previous ? part.prev : null, expense, false) })
+  }
+
+  for (const row of visibleChain(posLabel, current, previous)) {
+    const prevValue = previous ? row.get(previous) : null
+    if (row.kind === 'line') line(row.key, row.label, row.get(current), prevValue, row.expense)
+    else rows.push({ kind: row.final ? 'final' : 'total', label: row.label, ...pair(row.get(current), prevValue, false), curTone: row.final ? valueTone(row.get(current)) : '' })
+  }
+  const off = OFF_CHAIN.filter((row) => Math.round(row.get(current)) !== 0 || (previous && Math.round(row.get(previous)) !== 0))
+  if (off.length) {
+    rows.push({ kind: 'sep', label: 'После чистой прибыли — в ОПиУ не входят' })
+    for (const row of off) line(row.key, row.label, row.get(current), previous ? row.get(previous) : null, true)
+    rows.push({ kind: 'total', label: 'Остаётся после покупок и выплат', ...pair(leftover(current), previous ? leftover(previous) : null, false), curTone: valueTone(leftover(current)) })
+  }
+
+  // Карточки: «было X · ±разница», цвет по смыслу — рост расходов красный
+  const kpi = (label: string, get: (p: PnlMonth) => number, expense: boolean, colorValue = false) => {
+    const v = get(current)
+    const pv = previous ? get(previous) : null
+    return {
+      label,
+      value: money(v),
+      tone: colorValue ? valueTone(v) : '',
+      sub: pv == null ? undefined : `было ${money(pv)} · ${signed(v - pv)}`,
+      subTone: pv == null ? '' : deltaTone(v - pv, expense),
+    }
+  }
+  const hasRevenue = current.revenue > 0
+  return {
+    title,
+    subtitle,
+    curLabel: monthLabel(current.month),
+    prevLabel: previous ? monthLabel(previous.month) : undefined,
+    kpis: [
+      kpi('Выручка', (p) => p.revenue, false),
+      kpi('Расходы', (p) => p.revenue - p.netProfit, true),
+      kpi('Чистая прибыль', (p) => p.netProfit, false, true),
+      {
+        label: 'Маржа',
+        value: hasRevenue ? `${current.netMargin.toFixed(1)}%` : '—',
+        tone: hasRevenue ? valueTone(current.netMargin) : '',
+        sub: previous && previous.revenue > 0 ? `было ${previous.netMargin.toFixed(1)}%` : undefined,
+      },
+    ],
+    rows,
+    note: previous ? undefined : 'За прошлый месяц данных нет — сравнивать не с чем.',
+  }
 }
 
 // ─── PDF-отчёты ─────────────────────────────────────────────────────────────

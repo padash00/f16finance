@@ -6,6 +6,7 @@ import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { renderFinReportHTML, PDF_OPTIONS as FIN_OPTIONS } from '@/lib/reports/orda-finreport-pdf'
 import { renderTableHTML, PDF_OPTIONS as TABLE_OPTIONS } from '@/lib/reports/orda-table-pdf'
 import { renderPremiumHTML, PDF_OPTIONS as PREMIUM_OPTIONS } from '@/lib/reports/orda-premium-pdf'
+import { renderPnlHTML, PDF_OPTIONS as PNL_OPTIONS } from '@/lib/reports/orda-pnl-pdf'
 
 // Единый рендер PDF из переданных клиентом данных: финансовый отчёт или таблица.
 export const maxDuration = 60
@@ -32,7 +33,7 @@ export async function POST(req: Request) {
     if (denied) return denied
 
     const body = (await req.json().catch(() => null)) as { kind?: string; data?: any } | null
-    const kind = body?.kind === 'table' ? 'table' : body?.kind === 'premium' ? 'premium' : 'finreport'
+    const kind = body?.kind === 'table' ? 'table' : body?.kind === 'premium' ? 'premium' : body?.kind === 'pnl' ? 'pnl' : 'finreport'
     const data = body?.data
     if (!data || typeof data !== 'object') return json({ error: 'data обязателен' }, 400)
 
@@ -41,8 +42,10 @@ export async function POST(req: Request) {
         ? renderTableHTML(data, { fontCss: FONT_CSS })
         : kind === 'premium'
           ? renderPremiumHTML(data, { fontCss: FONT_CSS })
-          : renderFinReportHTML(data, { fontCss: FONT_CSS })
-    const options = kind === 'table' ? TABLE_OPTIONS : kind === 'premium' ? PREMIUM_OPTIONS : FIN_OPTIONS
+          : kind === 'pnl'
+            ? renderPnlHTML(data, { fontCss: FONT_CSS })
+            : renderFinReportHTML(data, { fontCss: FONT_CSS })
+    const options = kind === 'table' ? TABLE_OPTIONS : kind === 'premium' ? PREMIUM_OPTIONS : kind === 'pnl' ? PNL_OPTIONS : FIN_OPTIONS
 
     const [{ default: puppeteer }, { default: chromium }] = await Promise.all([
       import('puppeteer-core'),

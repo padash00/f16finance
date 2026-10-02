@@ -67,7 +67,7 @@ function finishPdfBusy(state: 'done' | 'error', text: string) {
 }
 
 export async function downloadReportPdf(
-  kind: 'finreport' | 'table' | 'premium',
+  kind: 'finreport' | 'table' | 'premium' | 'pnl',
   data: unknown,
   filename: string,
 ): Promise<void> {
